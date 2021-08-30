@@ -7,7 +7,7 @@ use QBitcoin::Accessors qw(new mk_accessors);
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::ORM qw(:types find create update delete);
-use QBitcoin::Crypto qw(hash256);
+use QBitcoin::Crypto qw(hash256 scrypt_hash);
 use Role::Tiny::With;
 with 'QBitcoin::Block::MerkleTree';
 
@@ -85,6 +85,13 @@ sub difficulty {
         0xffff / ($self->bits & 0xffffff) / (1 << (8*(($self->bits >> 24) - 29)));
 }
 
+sub pow_hash {
+    my $self = shift;
+    my $data = pack("V", $self->version) . $self->prev_hash . $self->merkle_root .
+        pack("VVV", $self->time, $self->bits, $self->nonce);
+    return scrypt_hash($data);
+}
+
 sub validate {
     my $self = shift;
     # compare hash with bits
@@ -92,12 +99,13 @@ sub validate {
     my $bits_expo = $self->bits >> 24;
     my $zero_bytes = 32-$bits_expo;
     # hash must have first 8*(32-$bits_expo) zero bits
-    if (substr($self->hash, -$zero_bytes) ne "\x00" x $zero_bytes) {
-        Warningf("PoW bytes: block hash %s, bits %u, coef %u, expo %u", unpack("H*", reverse $self->hash), $self->bits, $bits_expo, $bits_coef);
+    my $pow_hash = $self->pow_hash;
+    if (substr($pow_hash, -$zero_bytes) ne "\x00" x $zero_bytes) {
+        Warningf("PoW bytes: block hash %s, bits %u, coef %u, expo %u", unpack("H*", reverse $pow_hash), $self->bits, $bits_expo, $bits_coef);
         return 0;
     }
-    if (unpack("V", substr($self->hash, -$zero_bytes-4, 4)) >= $bits_coef * 256) {
-        Warningf("PoW value fail: block hash %s, bits %u, coef %u, expo %u", unpack("H*", reverse $self->hash), $self->bits, $bits_expo, $bits_coef);
+    if (unpack("V", substr($pow_hash, -$zero_bytes-4, 4)) >= $bits_coef * 256) {
+        Warningf("PoW value fail: block hash %s, bits %u, coef %u, expo %u", unpack("H*", reverse $pow_hash), $self->bits, $bits_expo, $bits_coef);
         return 0;
     }
     return 1;
