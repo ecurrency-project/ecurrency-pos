@@ -17,7 +17,7 @@ RUN apk add --no-cache \
 # pqclean does not build with alpine gcc due to musl; clang is ok
 RUN ln -s -f /usr/bin/clang /usr/bin/cc
 
-RUN cpan -i Encode::Base58::GMP Math::GMPz Crypt::PK::ECC::Schnorr Crypt::PQClean::Sign
+RUN cpan -i Encode::Base58::GMP Math::GMPz Crypt::PK::ECC::Schnorr Crypt::PQClean::Sign Crypt::Digest::Scrypt
 
 # Run tests
 RUN apk add --no-cache \
