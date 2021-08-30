@@ -17,10 +17,13 @@ our @EXPORT_OK = qw(
     pk_import
     pk_alg
     generate_keypair
+    scrypt_hash
 );
 
 use Digest::SHA qw(sha1 sha256);
 use Crypt::Digest::RIPEMD160 qw(ripemd160);
+use Crypt::PK::ECC;
+use Crypt::Digest::Scrypt qw(scrypt_1024_1_1_256);
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::Log;
@@ -65,6 +68,11 @@ sub hash160 {
 sub hash256 {
     my ($data) = @_;
     return sha256(sha256($data));
+}
+
+sub scrypt_hash {
+    my ($data) = @_;
+    return scrypt_1024_1_1_256($data);
 }
 
 sub checksum32 {
