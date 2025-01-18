@@ -1,0 +1,16 @@
+[Unit]
+Description=QECurrency address notification service
+After=qecurrencyd.service
+BindsTo=qecurrencyd.service
+
+[Service]
+ExecStart=/usr/local/bin/qecurrency-notify
+User=qecurrency
+Group=qecurrency
+ProtectSystem=full
+PrivateTmp=true
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
