@@ -85,7 +85,7 @@ sub get_or_create {
         getservbyname(lc PROTOCOL2NAME->{$args->{type_id}}, 'tcp') //
         ($args->{type_id} == PROTOCOL_QBITCOIN ?
             ($config->{testnet}     ? PORT_TESTNET     : PORT    ) :
-            ($config->{btc_testnet} ? BTC_PORT_TESTNET : BTC_PORT));
+            ($config->{ecr_testnet} ? ECR_PORT_TESTNET : ECR_PORT));
     $class->load();
     my @peers;
     foreach my $ip (@ip) {

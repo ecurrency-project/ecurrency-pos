@@ -32,9 +32,9 @@ mk_accessors(qw(transactions));
 
 sub genesis_hash() {
     my $self = shift;
-    return $config->{regtest} ? undef : $config->{btc_testnet} ?
-        ( $self->can('BTC_GENESIS_TESTNET') ? BTC_GENESIS_TESTNET() : undef ) :
-        ( $self->can('BTC_GENESIS')         ? BTC_GENESIS()         : undef ) ;
+    return $config->{regtest} ? undef : $config->{ecr_testnet} ?
+        ( $self->can('ECR_GENESIS_TESTNET') ? ECR_GENESIS_TESTNET() : undef ) :
+        ( $self->can('ECR_GENESIS')         ? ECR_GENESIS()         : undef ) ;
 }
 
 sub genesis_hash_hex {

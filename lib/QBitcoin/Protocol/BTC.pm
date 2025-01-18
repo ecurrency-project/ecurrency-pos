@@ -73,7 +73,7 @@ sub cmd_btcgetheader {
         $self->send_message("btcblockhdr", $block->serialize);
     }
     else {
-        Warningf("I have no btc block with hash %s requested by peer %s", unpack("H*", scalar reverse $hash), $self->peer->id);
+        Warningf("I have no ecr-pow block with hash %s requested by peer %s", unpack("H*", scalar reverse $hash), $self->peer->id);
     }
     return 0;
 }
@@ -84,16 +84,16 @@ sub cmd_btcblockhdr {
     my $data = Bitcoin::Serialized->new($payload);
     my $block = Bitcoin::Block->deserialize($data);
     if (!$block) {
-        Err("BTC block deserialization error");
+        Err("ECR-PoW block deserialization error");
         $self->abort("bad_btcblockhdr");
         return -1;
     }
     if (!$block->validate) {
-        Errf("BTC block %s validation error", $block->hash_hex);
+        Errf("ECR-PoW block %s validation error", $block->hash_hex);
         $self->abort("bad_btcblockhdr");
         return -1;
     }
-    Debugf("Received btc block header: %s, prev_hash %s", $block->hash_hex, $block->prev_hash_hex);
+    Debugf("Received ecr-pow block header: %s, prev_hash %s", $block->hash_hex, $block->prev_hash_hex);
     return 0 if Bitcoin::Block->find(hash => $block->hash);
     my $db_transaction = QBitcoin::ORM::Transaction->new;
     if ($self->process_btc_block($block)) {
@@ -182,16 +182,16 @@ sub cmd_btcheaders {
     for (my $i = 0; $i < $num; $i++) {
         my $block = Bitcoin::Block->deserialize($data);
         if (!$block) {
-            Errf("Bad btc block header, deserializes error");
+            Errf("Bad ecr-pow block header, deserializes error");
             $self->abort("bad_block_header");
             return -1;
         }
         elsif (!$block->validate) {
-            Errf("Bad btc block %s header, validate error", $block->hash_hex);
+            Errf("Bad ecr-pow block %s header, validate error", $block->hash_hex);
             $self->abort("bad_block_header");
             return -1;
         }
-        Debugf("Received btc block header: %s, prev_hash %s", $block->hash_hex, $block->prev_hash_hex);
+        Debugf("Received ecr-pow block header: %s, prev_hash %s", $block->hash_hex, $block->prev_hash_hex);
         my $existing = Bitcoin::Block->find(hash => $block->hash);
         if ($existing) {
             $known_block = $existing;
@@ -235,7 +235,7 @@ sub cmd_btcheaders {
         }
         else {
             # This block is not in our best brunch, request blocks started on it
-            # We have no orphan btc blocks in our database
+            # We have no orphan ecr-pow blocks in our database
             my @hashes = ($known_block->hash);
             push @hashes, $known_block->prev_hash if $known_block->prev_hash ne ZERO_HASH;
             $self->send_message("btcgethdrs", pack("V", PROTOCOL_VERSION) .

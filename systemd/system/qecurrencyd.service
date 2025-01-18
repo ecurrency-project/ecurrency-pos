@@ -1,5 +1,5 @@
 [Unit]
-Description=QBitcoin core
+Description=QEcurrency core
 After=network.target
 After=mysqld.service
 StartLimitInterval=180
@@ -7,10 +7,10 @@ StartLimitBurst=3
 
 [Service]
 PermissionsStartOnly=true
-ExecStart=/usr/local/bin/qbitcoind
-ExecStartPre=/usr/local/bin/qbitcoin-init
-User=qbitcoin
-Group=qbitcoin
+ExecStart=/usr/local/bin/qecurrencyd
+ExecStartPre=/usr/local/bin/qecurrency-init
+User=qecurrency
+Group=qecurrency
 ProtectSystem=full
 PrivateTmp=true
 TasksMax=infinity

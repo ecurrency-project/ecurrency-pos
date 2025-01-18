@@ -1,0 +1,23 @@
+[Unit]
+Description=QEcurrency core
+After=network.target
+Requires=docker.service
+StartLimitInterval=180
+StartLimitBurst=3
+
+[Service]
+ExecStartPre=-/bin/sh -c "/usr/bin/docker rm -f qecurrency 2>/dev/null"
+ExecStart=/usr/bin/docker run -e debug=0 --mount type=bind,source=/etc/qecurrency.conf,target=/etc/qecurrency.conf,readonly --volume /home/qecurrency/database:/database --read-only --rm -p 9666:9666 --name qecurrency qecurrency
+#ExecStart=/usr/bin/docker run -e debug=0 -e dbi=mysql --mount type=bind,source=/etc/qecurrency.conf,target=/etc/qecurrency.conf,readonly --mount type=bind,source=/var/run/mysqld/mysqld.sock,target=/var/lib/mysql.sock --read-only --rm -p 9666:9666 --name qecurrency qecurrency
+ExecStop=/usr/bin/docker stop qecurrency
+ExecStopPost=-/bin/sh -c "/usr/bin/docker rm -f qecurrency 2>/dev/null"
+StandardOutput=append:/var/log/qecurrency.log
+User=qecurrency
+Group=qecurrency
+ProtectSystem=full
+PrivateTmp=true
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

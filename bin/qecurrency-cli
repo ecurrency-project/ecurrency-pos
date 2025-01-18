@@ -35,8 +35,8 @@ sub main {
 }
 
 sub usage {
-    print "QBitcoin Core RPC Client version " . VERSION . "\n";
-    print "Usage:  qbitcoin-cli [options] <command> [<params>]\n";
+    print "QEcurrency Core RPC Client version " . VERSION . "\n";
+    print "Usage:  qecurrency-cli [options] <command> [<params>]\n";
     print "Options:\n";
     print "   -h, -? --help           - print this help message and exit,\n";
     print "   -f, --config <file>     - config file, 'key = value' format (default " . CONFIG_DIR . "/" . CONFIG_NAME . "),\n";

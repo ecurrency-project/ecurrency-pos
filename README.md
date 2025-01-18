@@ -1,21 +1,21 @@
-QBitcoin Node Installation
-==========================
+eCurrency Node Installation
+===========================
 
-QBitcoin Node is the core service for running and maintaining the QBitcoin blockchain.
+eCurrency Node is the core service for running and maintaining the eCurrency blockchain.
 It can be built and deployed using Docker or installed locally via `make`.
 
 ## Source code
 
 ```bash
-git clone https://github.com/qbitcoin-project/qbitcoin.git
-cd qbitcoin
+git clone https://github.com/ecurrency-project/ecurrency-pos.git
+cd ecurrency-pos
 ```
 
 ---
 
 ## Installation method 1: Docker image
 
-If you have **Docker** or **Podman** installed, you can build the node container directly from the `qbitcoin` directory:
+If you have **Docker** or **Podman** installed, you can build the node container directly from the `ecurrency-pos` directory:
 
 ```bash
 make docker
@@ -26,19 +26,19 @@ make docker
 
 An example of a **systemd service** for running the container can be found at:
 ```
-systemd/system/qbitcoin-docker.service
+systemd/system/qecurrency-docker.service
 ```
 
 Once the service is running inside a Docker container, you can define a convenient alias:
 
 ```bash
-alias qbitcoin-cli='docker exec qbitcoin qbitcoin-cli'
+alias qecurrency-cli='docker exec qecurrency qecurrency-cli'
 ```
 
 Then you can verify the node is responding:
 
 ```bash
-qbitcoin-cli help
+qecurrency-cli help
 ```
 
 This should print the list of available node commands.
@@ -50,15 +50,15 @@ This should print the list of available node commands.
 The node uses the following network ports:
 
 - **9666** — peer-to-peer communication between nodes  
-- **9667** — management interface for `qbitcoin-cli` (by default bound to `localhost`)
+- **9667** — management interface for `qecurrency-cli` (by default bound to `localhost`)
 
 Make sure these ports are open in your firewall if required.
 
 ### Basic CLI commands
 
 ```bash
-qbitcoin-cli help
-qbitcoin-cli help <command>
+qecurrency-cli help
+qecurrency-cli help <command>
 ```
 
 Main commands:
@@ -84,7 +84,7 @@ you will see your balance increase over time.
 ---
 
 
-**QBitcoin Project** — https://github.com/qbitcoin-project
+**eCurrency Project** — https://github.com/ecurrency-project
 
 
 

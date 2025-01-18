@@ -42,7 +42,7 @@ sub process_btc_block {
         $prev_block = $LAST_BLOCK if $LAST_BLOCK && $LAST_BLOCK->hash eq $block->prev_hash;
         $prev_block //= Bitcoin::Block->find(hash => $block->prev_hash);
         if ($prev_block) {
-            if (!$config->{btc_testnet}) {
+            if (!$config->{ecr_testnet}) {
                 # check difficulty, it should not be less than max(last N blocks)/4 for mainnet
                 # it's only for prevent spam by many blocks with small difficulty
                 my $prev_difficulty = max map { $_->difficulty } $prev_block, Bitcoin::Block->find(hash => $prev_block->prev_hash);

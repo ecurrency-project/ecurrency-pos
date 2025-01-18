@@ -26,7 +26,7 @@ sub main {
         'help|h|?'        => \$help,
         'peer|p=s'        => \@peer_hosts,
         'fallback-peer=s' => \@fallback_peers,
-        'btcnode|B=s'     => \@btc_hosts,
+        'ecrnode|E=s'     => \@btc_hosts,
         'verbose|v'       => \$opts{verbose},
         'debug|d'         => \$opts{debug},
         'bind|b=s'        => \$opts{bind},
@@ -62,8 +62,8 @@ sub main {
     # command-line options override config values
     $config->set($_ => $opts{$_}) foreach grep { defined $opts{$_} } keys %opts;
     $config->set(peer    => @peer_hosts) if @peer_hosts;
-    $config->set(btcnode => @btc_hosts)  if @btc_hosts;
-    $config->set(btc_testnet => 1) if $opts{testnet} && !defined $config->{btc_testnet};
+    $config->set(ecrnode => @btc_hosts)  if @btc_hosts;
+    $config->set(ecr_testnet => 1) if $opts{testnet} && !defined $config->{ecr_testnet};
     $config->set(fallback_peer => @fallback_peers) if @fallback_peers;
 
     if ($config->{daemonize}) {
@@ -104,8 +104,8 @@ sub daemonize {
 }
 
 sub usage {
-    print "QBitcoin Core Daemon version " . VERSION . "\n";
-    print "Usage:  qbitcoind [options]\n";
+    print "QEcurrency Core Daemon version " . VERSION . "\n";
+    print "Usage:  qecurrencyd [options]\n";
     print "Options:\n";
     print "   -h, -? --help               - print this help message and exit,\n";
     print "   -v, --verbose               - output logs to stdout,\n";
@@ -113,7 +113,7 @@ sub usage {
     print "   -f, --config <file>         - config file, 'key = value' format (default " . CONFIG_DIR . "/" . CONFIG_NAME . "),\n";
     print "   -p, --peer <host[:port]>    - connect to peer <host> and <port> (default port " . PORT . "),\n";
     if (UPGRADE_POW) {
-        print "   -B, --btcnode <host[:port]> - connect to btc node <host>:<port> (default port " . BTC_PORT . "),\n";
+        print "   -E, --ecrnode <host[:port]> - connect to ecr node <host>:<port> (default port " . ECR_PORT . "),\n";
     }
     print "   -b, --bind <addr[:port]>    - bind to local <address> and <port> (default " . BIND_ADDR . ":" . PORT . "),\n";
     print "   -J, --rpc <addr[:port]>     - respond to JSON RPC API on <address> and <port> (default " . RPC_ADDR . ":" . RPC_PORT . "),\n";

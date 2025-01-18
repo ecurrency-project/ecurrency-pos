@@ -24,8 +24,8 @@ use constant {
     #PROTOCOL_FEATURES   => 0x409,
     PROTOCOL_FEATURES   => 0x1,
     # https://en.bitcoin.it/wiki/Protocol_documentation#Message_structure
-    MAGIC               => pack("V", 0xD9B4BEF9),
-    MAGIC_TESTNET       => pack("V", 0x0709110B ),
+    MAGIC               => pack("V", 0xDBB6C0FB),
+    MAGIC_TESTNET       => pack("V", 0xDBB6C0FB),
     MAX_BTC_HEADERS     => 2000,
     MAX_BTC_LOCATORS    => 101,
 };
@@ -179,7 +179,7 @@ sub cmd_headers {
             $self->abort("bad_block_header");
             return -1;
         }
-        Debugf("Received btc block header: %s, prev_hash %s", $block->hash_hex, $block->prev_hash_hex);
+        Debugf("Received ecr-pow block header: %s, prev_hash %s", $block->hash_hex, $block->prev_hash_hex);
         my $existing = Bitcoin::Block->find(hash => $block->hash);
         if ($existing) {
             $known_block = $existing;
@@ -227,7 +227,7 @@ sub cmd_headers {
         }
         else {
             # This block is not in our best brunch, request blocks started on it
-            # We have no orphan btc blocks in our database
+            # We have no orphan ecr-pow blocks in our database
             my @hashes = ($known_block->hash);
             push @hashes, $known_block->prev_hash if $known_block->prev_hash ne ZERO_HASH;
             $self->send_message("getheaders", pack("V", PROTOCOL_VERSION) .
@@ -254,7 +254,7 @@ sub request_transactions {
             $self->syncing(0);
         }
         if (!btc_synced()) {
-            Infof("BTC syncing done");
+            Infof("ERC-PoW syncing done");
             btc_synced(1);
             foreach my $connection (QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN)) {
                 blockchain_synced() ? $connection->protocol->request_mempool : $connection->protocol->request_new_block();
