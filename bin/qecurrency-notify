@@ -102,8 +102,8 @@ sub read_config {
 }
 
 sub usage {
-    print "QBitcoin Address Notification Service\n";
-    print "Usage:  qbitcoin-notify [options]\n";
+    print "ECurrency Address Notification Service\n";
+    print "Usage:  qecurrency-notify [options]\n";
     print "Options:\n";
     print "   -h, -? --help              - print this help message and exit,\n";
     print "   --source-file <path>       - read events from file or named pipe,\n";
