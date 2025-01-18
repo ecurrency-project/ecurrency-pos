@@ -169,30 +169,30 @@ sub validate {
     my $self = shift;
     my ($btc_block) = Bitcoin::Block->find(hash => $self->btc_block_hash);
     if (!$btc_block || !$btc_block->height) {
-        # unset btc_synced() if last btc block older than COINBASE_CONFIRM_TIME
+        # unset btc_synced() if last ecr-pow block older than COINBASE_CONFIRM_TIME
         # otherwise assume this is not correct coinbase
         ($btc_block) = Bitcoin::Block->find(-sortby => 'height DESC', -limit => 1);
         if (!$btc_block || $btc_block->time < time() - COINBASE_CONFIRM_TIME) {
-            # TODO: request btc blocks
+            # TODO: request ecr-pow blocks
             btc_synced(0);
             # TODO: set this tx as pending
-            Warningf("BTC blockchain not synced, can't validate coinbase");
+            Warningf("ECR-PoW blockchain not synced, can't validate coinbase");
             return -1;
         }
-        Warningf("Incorrect coinbase transaction based on unexistent btc block %s", unpack("H*", $self->btc_block_hash));
+        Warningf("Incorrect coinbase transaction based on unexistent ecr-pow block %s", unpack("H*", $self->btc_block_hash));
         return -1;
     }
     if ($btc_block->time < ($config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME)) {
-        Warningf("Incorrect coinbase transaction based on early btc block %s time %u", $btc_block->hash_str, $btc_block->time);
+        Warningf("Incorrect coinbase transaction based on early ecr-pow block %s time %u", $btc_block->hash_str, $btc_block->time);
         return -1;
     }
     if ($btc_block->height >= UPGRADE_MAX_BLOCKS) {
-        Warningf("Incorrect coinbase transaction based on late btc block %s height %u", $btc_block->hash_str, $btc_block->height);
+        Warningf("Incorrect coinbase transaction based on late ecr-pow block %s height %u", $btc_block->hash_str, $btc_block->height);
         return -1;
     }
     # Check merkle path (but ignore mismatch for produced upgrades)
     if (!$btc_block->check_merkle_path($self->btc_tx_hash, $self->btc_tx_num, $self->merkle_path)) {
-        Warningf("Merkle path check failed for btc upgrade transaction %s in block %s",
+        Warningf("Merkle path check failed for ecr-pow upgrade transaction %s in block %s",
             unpack("H*", scalar reverse $self->btc_tx_hash), $btc_block->hash_hex);
         return -1;
     }
@@ -342,21 +342,21 @@ sub deserialize {
     my $btc_out_num = $data->get_varint() // return undef;
     my $btc_tx_data = $data->get_string() // return undef;
     my $merkle_path = $data->get_string() // return undef;
-    # Deserialize btc transaction for get upgrade data (value, scripthash)
+    # Deserialize ecr-pow transaction for get upgrade data (value, scripthash)
     my $btc_tx_data_obj = Bitcoin::Serialized->new($btc_tx_data);
     my $transaction = Bitcoin::Transaction->deserialize($btc_tx_data_obj);
     if (!$transaction || $btc_tx_data_obj->length) {
-        Warningf("Incorrect btc upgrade transaction data");
+        Warningf("Incorrect ecr-pow upgrade transaction data");
         return undef;
     }
     my $out = $transaction->out->[$btc_out_num];
     if (!$out) {
-        Warningf("Incorrect btc upgrade transaction data %s, no output %u", $transaction->hash_str, $btc_out_num);
+        Warningf("Incorrect ecr-pow upgrade transaction data %s, no output %u", $transaction->hash_str, $btc_out_num);
         return undef;
     }
     my $scripthash = $class->get_scripthash($transaction, $btc_out_num);
     if (!$scripthash) {
-        Warningf("Incorrect btc upgrade transaction %s output open_script", $transaction->hash_str);
+        Warningf("Incorrect ecr-pow upgrade transaction %s output open_script", $transaction->hash_str);
         return undef unless $config->{fake_coinbase};
         $scripthash = ZERO_HASH;
     }
@@ -385,7 +385,7 @@ sub deserialize {
 sub btc_block_hash {
     my $self = shift;
     if (!defined $self->{btc_block_hash}) {
-        defined($self->{btc_block_height}) or die "BTC block unknown for coinbase\n";
+        defined($self->{btc_block_height}) or die "ECR-PoW block unknown for coinbase\n";
         my ($btc_block) = Bitcoin::Block->find(height => $self->{btc_block_height});
         $self->{btc_block_hash} = $btc_block->hash if $btc_block;
     }
