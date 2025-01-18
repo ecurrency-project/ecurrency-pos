@@ -22,7 +22,7 @@ const describeError = (e: unknown): string => {
     const httpStatus = typeof err?.status === 'number' ? err.status : err?.originalStatus;
 
     if (httpStatus === 409) {
-        return 'The wallet is locked — unlock it by enabling staking (or via qbitcoin-cli walletunlock) and try again.';
+        return 'The wallet is locked — unlock it by enabling staking (or via qecurrency-cli walletunlock) and try again.';
     }
 
     if (typeof err?.data === 'string' && err.data.trim()) {

@@ -33,7 +33,7 @@ mk_accessors(qw(transactions));
 
 sub genesis_hash() {
     my $self = shift;
-    return $config->{regtest} ? undef : BTC_GENESIS;
+    return $config->{regtest} ? undef : ECR_GENESIS;
 }
 
 sub genesis_hash_hex {
