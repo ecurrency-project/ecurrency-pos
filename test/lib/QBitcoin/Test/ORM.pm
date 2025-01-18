@@ -13,7 +13,7 @@ our @EXPORT_OK = qw(dbh);
 $config->{dbi} = "sqlite";
 $config->{dsn} = "DBI:SQLite::memory:";
 
-my $schema = "$Bin/../db/qbitcoin.sql";
+my $schema = "$Bin/../db/qecurrency.sql";
 
 sub create_database {
     local $/ = undef;
