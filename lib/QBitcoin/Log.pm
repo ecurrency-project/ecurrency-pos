@@ -32,7 +32,7 @@ sub init {
     else {
         $config->set(log => 'syslog') unless defined $config->{log};
         if ($config->{log} eq 'syslog') {
-            openlog('qbitcoin', 'nofatal,pid', LOG_LOCAL0);
+            openlog('qecurrency', 'nofatal,pid', LOG_LOCAL0);
         }
     }
     $| = 1 unless $config->{daemonize};
@@ -48,7 +48,7 @@ sub Logf {
     if ($prio <= $loglevel) {
         state $log = $config->{log};
         if ($log eq 'syslog') {
-            state $syslog = openlog('qbitcoin', 'nofatal,pid', LOG_LOCAL0); # call once before first syslog()
+            state $syslog = openlog('qecurrency', 'nofatal,pid', LOG_LOCAL0); # call once before first syslog()
             syslog($prio, $format, @args);
         }
         else {

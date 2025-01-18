@@ -55,12 +55,12 @@ my $sent = substr($conn_out->sendbuf, 24); # skip the message header
 is(substr($sent, 0, 4), pack("V", QBitcoin::Protocol::PROTOCOL_VERSION), "version message sent");
 my ($sent_software) = unpack("C/a*", substr($sent, 20 + 26 + 8));
 is($sent_software, QBitcoin::Protocol::SOFTWARE, "version message contains our software id");
-like($sent_software, qr(^/QBitcoinCore:\Q${\VERSION}\E/$), "software id is BIP14-like name:version");
+like($sent_software, qr(^/QECurrencyCore:\Q${\VERSION}\E/$), "software id is BIP14-like name:version");
 
 # Software from the peer is stored in the peer record
 my $conn = make_connection();
-is(recv_version($conn, software => "/QBitcoinCore:9.9/"), 0, "version with software greeted");
-is($conn->peer->software, "/QBitcoinCore:9.9/", "peer software stored");
+is(recv_version($conn, software => "/QECurrencyCore:9.9/"), 0, "version with software greeted");
+is($conn->peer->software, "/QECurrencyCore:9.9/", "peer software stored");
 
 # Non-printable characters are stripped before logging / storing
 $conn = make_connection();
