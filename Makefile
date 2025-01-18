@@ -20,7 +20,7 @@ installdeps::
 	done
 
 docker:: Dockerfile
-	docker build --rm -t qbitcoin:latest . && docker image prune --force --filter label=stage=builder
+	docker build --rm -t qecurrency:latest . && docker image prune --force --filter label=stage=builder
 
 PM_FILES := $(shell find lib -type f -name '*.pm')
 

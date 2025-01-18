@@ -53,7 +53,7 @@ sub send_block {
     my ($height, $hash, $prev_hash, $weight, $tx) = @_;
     my @tx = ref($tx) eq "ARRAY" ? @$tx : ($tx);
     my $block = QBitcoin::Block->new(
-        time         => GENESIS_TIME + $height * BLOCK_INTERVAL * FORCE_BLOCKS,
+        time         => GENESIS_TIME + ($height - STAKE_MATURITY) * BLOCK_INTERVAL * FORCE_BLOCKS,
         hash         => $hash,
         prev_hash    => $prev_hash,
         transactions => \@tx,
