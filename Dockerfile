@@ -1,8 +1,8 @@
 # It's highly recommended to run the docker container with volume /database mounted to external directory
 # for save blockchain and wallet data on restart container
 # Example for run container from this image:
-# docker run --volume $(pwd)/database:/database --read-only --rm --detach -p 9555:9555 --name qbitcoin qbitcoin
-# then you can run "docker exec qbitcoin qbitcoin-cli help"
+# docker run --volume $(pwd)/database:/database --read-only --rm --detach -p 9666:9666 --name qecurrency qecurrency
+# then you can run "docker exec qecurrency qecurrency-cli help"
 FROM alpine:latest AS builder
 LABEL stage=builder
 
@@ -30,19 +30,19 @@ RUN apk add --no-cache \
 
 COPY --from=builder /usr/local/lib/perl5 /usr/local/lib/perl5
 COPY --from=builder /usr/local/share/perl5 /usr/local/share/perl5
-COPY . /qbitcoin
+COPY . /qecurrency
 
-ENV PERL5LIB=/qbitcoin/lib
-ENV PATH=${PATH}:/qbitcoin/bin
+ENV PERL5LIB=/qecurrency/lib
+ENV PATH=${PATH}:/qecurrency/bin
 ENV dbi=sqlite
-ENV database=qbitcoin
+ENV database=qecurrency
 ENV debug=
 
 CMD if mount | grep -q " on /database "; then \
-      /qbitcoin/bin/qbitcoin-init --dbi=${dbi} --database=${database} /qbitcoin/db && \
-      exec /qbitcoin/bin/qbitcoind --peer=node.qbitcoin.net --dbi=${dbi} --database=${database} \
+      /qecurrency/bin/qecurrency-init --dbi=${dbi} --database=${database} /qecurrency/db && \
+      exec /qecurrency/bin/qecurrencyd --peer=seed.ecurrency.org --dbi=${dbi} --database=${database} \
          --log=/dev/null --verbose ${debug:+$( [ "$debug" = "0" ] || echo --debug )}; \
     else echo "Please mount /database as external volume"; \
     fi
 
-EXPOSE 9555
+EXPOSE 9666
