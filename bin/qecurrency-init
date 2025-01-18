@@ -9,8 +9,8 @@ use QBitcoin::Config qw($config read_config);
 use QBitcoin::ORM qw(dbh);
 
 sub usage {
-    print "Initialize or update qbitcoin database\n";
-    print "Usage: qbitcoin-init [options] <db-dir>\n";
+    print "Initialize or update qecurrency database\n";
+    print "Usage: qecurrency-init [options] <db-dir>\n";
     print "Options:\n";
     print "   --database=<database>  - db name,\n";
     print "   --dbi=<dbms>           - dbms (by default 'mysql'),\n";
@@ -45,7 +45,7 @@ sub main {
     }
     if ($dbh->err) {
         # Database was not initialized, create new by schema
-        apply_file("$db_dir/qbitcoin.sql");
+        apply_file("$db_dir/qecurrency.sql");
         $dbh->do("insert into version (version) values (?)", undef, DB_VERSION);
         $dbh->disconnect;
         print "Database initialized\n";
