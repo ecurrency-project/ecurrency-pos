@@ -6,18 +6,18 @@ use constant VERSION            => "0.1";
 
 use constant QBITCOIN_CONST => {
     VERSION                 => VERSION,
-    SOFTWARE                => "/QBitcoinCore:" . VERSION . "/",
+    SOFTWARE                => "/QECurrencyCore:" . VERSION . "/",
     DB_VERSION              => 2,
     BLOCK_INTERVAL          => 10, # sec
     FORCE_BLOCKS            => 100, # generate each 100th block even if empty
     INCORE_LEVELS           => 6,
     INCORE_TIME             => 60,
-    MAX_VALUE               => 21000000 * 100000000, # 21M
+    MAX_VALUE               => 333333333 * 100000000, # ~333M
     DENOMINATOR             => 100000000,
     MAX_COMMAND_LENGTH      => 256,
     READ_BUFFER_SIZE        => 16*1024*1024, # Must be more than MAX_BLOCK_SIZE
     WRITE_BUFFER_SIZE       => 16*1024*1024, # Must be more than MAX_BLOCK_SIZE
-    SERVICE_NAME            => "qbitcoin",
+    SERVICE_NAME            => "qecurrency",
     SELECT_TIMEOUT          => 10, # sec
     RPC_TIMEOUT             => 4,  # sec
     REST_TIMEOUT            => 4,  # sec
@@ -46,7 +46,7 @@ use constant QBITCOIN_CONST => {
     MAX_EMPTY_TX_SIZE       => 32768, # Disable huge transactions with zero fee to prevent spam
     MAX_MEMPOOL_SIZE        => 100*1024*1024, # 100 MB total size of limited tx types in mempool
     MAX_MEMPOOL_ZERO_FEE_TX => 1024,          # max zero-fee txs in mempool
-    COINBASE_CONFIRM_TIME   => 2*3600,  # 2 hours
+    COINBASE_CONFIRM_TIME   => 900,     # 15 minutes
     COINBASE_CONFIRM_BLOCKS => 6,
     COINBASE_WEIGHT_TIME    => 365*24*3600, # 1 year
     # Slashing: penalty for a validator that signs two conflicting blocks (same
@@ -61,7 +61,7 @@ use constant QBITCOIN_CONST => {
     # equivocation buried deeper can no longer be profitably slashed anyway.
     SLASHING_WINDOW         => 6 + 100, # INCORE_LEVELS + FORCE_BLOCKS
     CONFIG_DIR              => "/etc",
-    CONFIG_NAME             => "qbitcoin.conf",
+    CONFIG_NAME             => "qecurrency.conf",
     ZERO_HASH               => "\x00" x 32,
     IPV6_V4_PREFIX          => "\x00" x 10 . "\xff" x 2,
     MIN_CONNECTIONS         => 5,
@@ -170,7 +170,7 @@ use constant TOKEN_TXO_TYPES;
 use constant TOKEN_PERMISSION_BITS;
 
 use constant PROTOCOL2NAME => {
-    map { s/BITCOIN/Bitcoin/r } map { s/PROTOCOL_//r } reverse %{&PROTOCOL_CONST}
+    map { s/BITCOIN/ECurrency/ir } map { s/PROTOCOL_//r } reverse %{&PROTOCOL_CONST}
 };
 
 sub timeslot($) {

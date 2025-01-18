@@ -119,14 +119,14 @@ $peer->failed_connect() foreach 1 .. 3;
 
 my ($listed) = grep { $_->{addr} eq "10.1.2.3:9555" } @{rpc('listpeers')->_rpc_result};
 ok($listed, "listpeers: known peer listed") or BAIL_OUT("peer not listed");
-is($listed->{protocol},        "QBitcoin",      "listpeers: protocol");
+is($listed->{protocol},        "QECurrency",    "listpeers: protocol");
 is($listed->{failed_connects}, 3,               "listpeers: failed connects counted");
 is($listed->{connected},       JSON::XS::false, "listpeers: not connected");
 is($listed->{connect_allowed}, JSON::XS::false, "listpeers: in failed-connects backoff");
 ok($listed->{last_fail_time},                   "listpeers: last fail time set");
 
 my $reset = rpc('resetpeer', "10.1.2.3");
-like($reset->_rpc_result, qr/^Reset failed connects for QBitcoin peer 10\.1\.2\.3$/, "resetpeer: result message");
+like($reset->_rpc_result, qr/^Reset failed connects for QECurrency peer 10\.1\.2\.3$/, "resetpeer: result message");
 is($peer->failed_connects, 0,     "resetpeer: failed connects counter reset");
 is($peer->last_fail_time,  undef, "resetpeer: last fail time cleared");
 ok($peer->is_connect_allowed,     "resetpeer: outgoing connection allowed again");

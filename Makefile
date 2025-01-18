@@ -23,7 +23,7 @@ DOCKER = $(shell (docker -h >/dev/null 2>&1 && echo docker) || (podman -h >/dev/
 
 docker:: Dockerfile
 	@[ -n "$(DOCKER)" ] || { echo "Neither docker nor podman found" >&2; exit 1; }
-	$(DOCKER) build --rm -t qbitcoin:latest . && $(DOCKER) image prune --force --filter label=stage=builder
+	$(DOCKER) build --rm -t qecurrency:latest . && $(DOCKER) image prune --force --filter label=stage=builder
 
 PM_FILES := $(shell find lib -type f -name '*.pm')
 

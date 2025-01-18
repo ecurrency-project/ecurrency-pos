@@ -86,7 +86,7 @@ sub get_or_create {
     }
     my $port = $args->{port} //
         getservbyname(lc PROTOCOL2NAME->{$args->{type_id}}, 'tcp') //
-        ($args->{type_id} == PROTOCOL_QBITCOIN ? PORT : BTC_PORT);
+        ($args->{type_id} == PROTOCOL_QBITCOIN ? PORT : ECR_PORT);
     $class->load();
     my @peers;
     foreach my $ip (@ip) {
