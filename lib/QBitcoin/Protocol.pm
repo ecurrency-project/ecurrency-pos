@@ -55,8 +55,8 @@ use Role::Tiny::With;
 with 'QBitcoin::Protocol::BTC' if UPGRADE_POW;
 
 use constant {
-    MAGIC             => "QBTC",
-    MAGIC_TESTNET     => "QBTT",
+    MAGIC             => "QECR",
+    MAGIC_TESTNET     => "QECT",
     PROTOCOL_VERSION  => 1,
     PROTOCOL_FEATURES => 0,
 };
