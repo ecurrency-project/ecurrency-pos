@@ -640,7 +640,7 @@ sub set_pinned_peers {
 
     if (!UPGRADE_FINISHED) {
         my %btc_peers = map { $_->ip => $_ } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN);
-        foreach my $peer_host ($config->get_all('btcnode')) {
+        foreach my $peer_host ($config->get_all('ecrnode')) {
             my @peers = QBitcoin::Peer->get_or_create(
                 host    => $peer_host,
                 type_id => PROTOCOL_BITCOIN,
