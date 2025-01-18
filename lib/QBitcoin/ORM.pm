@@ -7,7 +7,7 @@ use DBI;
 use QBitcoin::Config;
 use QBitcoin::Log;
 
-use constant DB_NAME => 'qbitcoin';
+use constant DB_NAME => 'qecurrency';
 
 use constant DB_TYPES => {
     NUMERIC   => 1,
