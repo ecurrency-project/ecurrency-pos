@@ -93,7 +93,7 @@ Result:
 null    (json null)
 
 Examples:
-> qbitcoin-cli ping
+> qecurrency-cli ping
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "ping", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_ping {
@@ -114,13 +114,13 @@ Result:
   "bestblocktime" : n,                    (numeric) time for the current best block
   "initialblockdownload" : true|false,    (boolean) (debug information) estimate of whether this node is in Initial Block Download mode
   "total_coins" : n,                      (numeric) total number of generated (upgraded) coins
-  "btc_headers" : n,                      (numeric) number of processed btc block headers
-  "btc_scanned" : n,                      (numeric) number of scanned btc blocks
-  "btc_synced" : true|false,              (bookean) is btc blockchain fully synced or is in initial block download mode
+  "pow_headers" : n,                      (numeric) number of processed ecr-pow block headers
+  "pow_scanned" : n,                      (numeric) number of scanned ecr-pow blocks
+  "pow_synced" : true|false,              (bookean) is ecr-pow blockchain fully synced or is in initial block download mode
 }
 
 Examples:
-> qbitcoin-cli getblockchaininfo
+> qecurrency-cli getblockchaininfo
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getblockchaininfo", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getblockchaininfo {
@@ -152,9 +152,9 @@ sub cmd_getblockchaininfo {
                 ($btc_scanned) = Bitcoin::Block->find(scanned => 1, -sortby => 'height DESC', -limit => 1);
             }
         }
-        $response->{btc_synced}  = btc_synced() ? TRUE : FALSE,
-        $response->{btc_headers} = $btc_block   ? $btc_block->height+0   : 0,
-        $response->{btc_scanned} = $btc_scanned ? $btc_scanned->height+0 : 0,
+        $response->{pow_synced}  = btc_synced() ? TRUE : FALSE,
+        $response->{pow_headers} = $btc_block   ? $btc_block->height+0   : 0,
+        $response->{pow_scanned} = $btc_scanned ? $btc_scanned->height+0 : 0,
     }
     return $self->response_ok($response);
 }
@@ -167,7 +167,7 @@ Result:
 "hex"    (string) the block hash, hex-encoded
 
 Examples:
-> qbitcoin-cli getbestblockhash
+> qecurrency-cli getbestblockhash
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getbestblockhash", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getbestblockhash {
@@ -226,7 +226,7 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli getblockheader "00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09"
+> qecurrency-cli getblockheader "00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09"
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getblockheader", "params": ["00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getblockheader {
@@ -261,7 +261,7 @@ Result:
 n    (numeric) The current block count
 
 Examples:
-> qbitcoin-cli getblockcount
+> qecurrency-cli getblockcount
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getblockcount", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getblockcount {
@@ -308,7 +308,7 @@ Result (for verbosity = 2):
 }
 
 Examples:
-> qbitcoin-cli getblock "00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09"
+> qecurrency-cli getblock "00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09"
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getblock", "params": ["00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getblock {
@@ -354,7 +354,7 @@ Result:
 "hex"    (string) The block hash
 
 Examples:
-> qbitcoin-cli getblockhash 1000
+> qecurrency-cli getblockhash 1000
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getblockhash", "params": [1000]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getblockhash {
@@ -400,8 +400,8 @@ Result (if verbose is not set or is set to true):
   ],
   "out" : [                          (json array)
     {                                (json object)
-      "value" : n,                   (numeric) The value in BTC
-      "address" : "str",             (string) qbitcoin address
+      "value" : n,                   (numeric) The value in ECR
+      "address" : "str",             (string) ecurrency address
       "data" : "hex",                (string, optional) The data in hex (if a data output)
     },
     ...
@@ -409,12 +409,12 @@ Result (if verbose is not set or is set to true):
   "blockhash" : "hex",               (string) the block hash
   "confirmations" : n,               (numeric) The confirmations
   "blocktime" : xxx,                 (numeric) The block time expressed in UNIX epoch time
-  "fee" : n                          (numeric) The transaction fee in BTC
+  "fee" : n                          (numeric) The transaction fee in ECR
 }
 
 Examples:
-> qbitcoin-cli getrawtransaction "mytxid"
-> qbitcoin-cli getrawtransaction "mytxid" true
+> qecurrency-cli getrawtransaction "mytxid"
+> qecurrency-cli getrawtransaction "mytxid" true
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getrawtransaction", "params": ["mytxid", true]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getrawtransaction {
@@ -474,7 +474,7 @@ Arguments:
 2. outputs                     (json array, required) The outputs (key-value pairs)
      [
        {                       (json object)
-         "address": amount,      (numeric or string, required) A key-value pair. The key (string) is the qbitcoin address, the value (float or string) is the amount in BTC
+         "address": amount,      (numeric or string, required) A key-value pair. The key (string) is the ecurrency address, the value (float or string) is the amount in ECR
          "token_id": "hex",      (numeric or string, optional) Token id, txid of the token creation transaction or empty for new token
          "token_amount": amount, (numeric or string, optional) Amount in tokens
          "token_permissions": [ "mint", ... ], (json array, optional) Token permissions
@@ -489,7 +489,7 @@ Result:
 "hex"    (string) hex string of the transaction
 
 Examples:
-> qbitcoin-cli createrawtransaction '[{"txid":"myid","vout":0}]' '[{"address":0.01}]'
+> qecurrency-cli createrawtransaction '[{"txid":"myid","vout":0}]' '[{"address":0.01}]'
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "createrawtransaction", "params": ['[{"txid":"myid","vout":0}]', '[{"address":0.01}]"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_createrawtransaction {
@@ -544,12 +544,12 @@ Result:
 Examples:
 
 Create a transaction
-> qbitcoin-cli createrawtransaction '[{"txid" : "mytxid","vout":0}]" "{"myaddress":0.01}'
+> qecurrency-cli createrawtransaction '[{"txid" : "mytxid","vout":0}]" "{"myaddress":0.01}'
 Sign the transaction, and get back the hex
-> qbitcoin-cli signrawtransactionwithkey "myhex" '["myprivatekey"]'
+> qecurrency-cli signrawtransactionwithkey "myhex" '["myprivatekey"]'
 
 Send the transaction (signed hex)
-> qbitcoin-cli sendrawtransaction "signedhex"
+> qecurrency-cli sendrawtransaction "signedhex"
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "sendrawtransaction", "params": ["signedhex"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -632,7 +632,7 @@ tokens to the outputs), it is signed anyway and the response contains a top-leve
 "warning" field describing the burned tokens.
 
 Examples:
-> qbitcoin-cli signrawtransactionwithkey "myhex" '["key1","key2"]'
+> qecurrency-cli signrawtransactionwithkey "myhex" '["key1","key2"]'
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "signrawtransactionwithkey", "params": ["myhex", ["key1","key2"]]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_signrawtransactionwithkey {
@@ -709,7 +709,7 @@ sub cmd_signrawtransactionwithkey {
     my $fee_per_kb = ($input_amount - $output_amount) * 1024 / length($tx_data);
     my $max_fee_per_kb = $self->max_fee_per_kb;
     if ($max_fee_per_kb && $fee_per_kb > $max_fee_per_kb) {
-        return $self->response_error("Transaction fee too high: " . $fee_per_kb / DENOMINATOR . " > " . $max_fee_per_kb / DENOMINATOR . " BTC/kb", ERR_INVALID_REQUEST);
+        return $self->response_error("Transaction fee too high: " . $fee_per_kb / DENOMINATOR . " > " . $max_fee_per_kb / DENOMINATOR . " ECR/kb", ERR_INVALID_REQUEST);
     }
 
     my ($token_err, $token_warning) = check_tx_tokens_balance($tx);
@@ -729,7 +729,7 @@ sub max_fee_per_kb {
     my $self = shift;
     return $config->{max_fee_per_kb} if defined $config->{max_fee_per_kb};
     return 0 if $config->{testnet} || $config->{regtest};
-    return 100000; # 0.001 BTC
+    return 10000000; # 0.1 ECR
 }
 
 $PARAMS{decoderawtransaction} = "hexstring";
@@ -767,7 +767,7 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli decoderawtransaction "hexstring"
+> qecurrency-cli decoderawtransaction "hexstring"
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "decoderawtransaction", "params": ["hexstring"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_decoderawtransaction {
@@ -795,7 +795,7 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli getmempoolinfo
+> qecurrency-cli getmempoolinfo
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getmempoolinfo", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getmempoolinfo {
@@ -835,7 +835,7 @@ Result (for verbose = true):
 }
 
 Examples:
-> qbitcoin-cli getrawmempool true
+> qecurrency-cli getrawmempool true
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getrawmempool", "params": [true]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getrawmempool {
@@ -849,7 +849,7 @@ $PARAMS{validateaddress} = "address";
 $HELP{validateaddress} = qq(
 validateaddress "address"
 
-Return information about the given qbitcoin address.
+Return information about the given ecurrency address.
 
 Arguments:
 1. address    (string, required) The address to validate
@@ -857,12 +857,12 @@ Arguments:
 Result:
 {                               (json object)
   "isvalid" : true|false,       (boolean) If the address is valid or not. If not, this is the only property returned.
-  "address" : "str",            (string) The qbitcoin address validated
+  "address" : "str",            (string) The ecurrency address validated
   "scriptHash" : "hex",         (string) The hex-encoded scriptHash generated by the address
 }
 
 Examples:
-> qbitcoin-cli validateaddress "myaddress"
+> qecurrency-cli validateaddress "myaddress"
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "validateaddress", "params": ["myaddress"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_validateaddress {
@@ -904,7 +904,7 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli getnetworkinfo
+> qecurrency-cli getnetworkinfo
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getnetworkinfo", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getnetworkinfo {
@@ -948,7 +948,7 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli getindexinfo
+> qecurrency-cli getindexinfo
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getindexinfo", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getindexinfo {
@@ -983,7 +983,7 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli getchaintxstats
+> qecurrency-cli getchaintxstats
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getchaintxstats", "params": [2016]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getchaintxstats {
@@ -1063,8 +1063,8 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli getblockstats '"00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09"'
-> qbitcoin-cli getblockstats 1000
+> qecurrency-cli getblockstats '"00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09"'
+> qecurrency-cli getblockstats 1000
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getblockstats", "params": ["00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getblockstats", "params": [1000]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
@@ -1125,12 +1125,12 @@ Arguments:
 Result:
 {                                       (json object)
   "size" : n,                           (numeric) transaction size in bytes
-  "fee"  : n,                           (numeric) transaction fee in BTC
+  "fee"  : n,                           (numeric) transaction fee in ECR
   "time" : xxx,                         (numeric) local time transaction entered pool in seconds since 1 Jan 1970 GMT
 }
 
 Examples:
-> qbitcoin-cli getmempoolentry "mytxid"
+> qecurrency-cli getmempoolentry "mytxid"
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getmempoolentry", "params": ["mytxid"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getmempoolentry {
@@ -1163,13 +1163,13 @@ null    (json null)
 Examples:
 
 Dump a private key
-> qbitcoin-cli dumpprivkey "myaddress"
+> qecurrency-cli dumpprivkey "myaddress"
 
 Import the private key
-> qbitcoin-cli importprivkey "mykey"
+> qecurrency-cli importprivkey "mykey"
 
 Import as schnorr key
-> qbitcoin-cli importprivkey "mykey" "schnorr"
+> qecurrency-cli importprivkey "mykey" "schnorr"
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "importprivkey", "params": ["mykey"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -1224,15 +1224,15 @@ Transactions to this address will be tracked and generate notifications
 if a notification channel is configured.
 
 Arguments:
-1. address    (string, required) The qbitcoin address to watch
+1. address    (string, required) The ecurrency address to watch
 2. tag        (string, optional) A tag for grouping notifications
 
 Result:
 "str"    (string) Result message
 
 Examples:
-> qbitcoin-cli importaddress "bqXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-> qbitcoin-cli importaddress "bqXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" "exchange"
+> qecurrency-cli importaddress "ECXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+> qecurrency-cli importaddress "ECXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" "exchange"
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "importaddress", "params": ["address"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -1268,15 +1268,15 @@ Sets or clears the tag for an address in the wallet.
 If tag is empty or omitted, the tag is cleared.
 
 Arguments:
-1. address    (string, required) The qbitcoin address
+1. address    (string, required) The ecurrency address
 2. tag        (string, optional) The tag to set (omit or "" to clear)
 
 Result:
 "str"    (string) Result message
 
 Examples:
-> qbitcoin-cli setaddresstag "bqXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" "exchange"
-> qbitcoin-cli setaddresstag "bqXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+> qecurrency-cli setaddresstag "ECXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" "exchange"
+> qecurrency-cli setaddresstag "ECXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 );
 sub cmd_setaddresstag {
     my $self = shift;
@@ -1306,7 +1306,7 @@ dumpprivkey "address"
 Reveals the private key corresponding to 'address'.
 Then the importprivkey can be used with this output
 
-If a wallet password is set the command requires it (qbitcoin-cli prompts for it
+If a wallet password is set the command requires it (qecurrency-cli prompts for it
 and retries); an encrypted key is returned decrypted, whether or not the wallet
 is unlocked.
 
@@ -1317,8 +1317,8 @@ Result:
 "str"    (string) The private key
 
 Examples:
-> qbitcoin-cli dumpprivkey "myaddress"
-> qbitcoin-cli importprivkey "mykey"
+> qecurrency-cli dumpprivkey "myaddress"
+> qecurrency-cli importprivkey "mykey"
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "dumpprivkey", "params": ["myaddress"], "password": "mysecret"}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_dumpprivkey {
@@ -1360,13 +1360,13 @@ Result:
     "pingtime" : n,                   (numeric) ping time (if available)
     "minping" : n,                    (numeric) minimum observed ping time (if any at all)
     "inbound" : true|false,           (boolean) Inbound (true) or Outbound (false)
-    "protocol" : "str",               (string) Protocol (qbitcoin, bitcoin)
+    "protocol" : "str",               (string) Protocol (qecurrency, ecurrency)
     "software" : "str",               (string) Name and version of the peer software (user agent)
   },
 ]
 
 Examples:
-> qbitcoin-cli getpeerinfo
+> qecurrency-cli getpeerinfo
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getpeerinfo", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getpeerinfo {
@@ -1422,7 +1422,7 @@ Result:
 ]
 
 Examples:
-> qbitcoin-cli listpeers
+> qecurrency-cli listpeers
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "listpeers", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_listpeers {
@@ -1467,7 +1467,7 @@ Result:
 "str"    (string) Result message
 
 Examples:
-> qbitcoin-cli resetpeer "192.168.0.6"
+> qecurrency-cli resetpeer "192.168.0.6"
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "resetpeer", "params": ["192.168.0.6"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_resetpeer {
@@ -1494,22 +1494,22 @@ getaddressbalance "address" ( minconf )
 Returns the total amount on the given address in transactions with at least minconf confirmations.
 
 Arguments:
-1. address    (string, required) The qbitcoin address for transactions.
+1. address    (string, required) The ecurrency address for transactions.
 2. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
 
 Result:
-n    (numeric) The total amount in BTC unspent at this address.
+n    (numeric) The total amount in ECR unspent at this address.
 
 Examples:
 
 The amount from transactions with at least 1 confirmation
-> qbitcoin-cli getaddressbalance "myaddress"
+> qecurrency-cli getaddressbalance "myaddress"
 
 The amount including unconfirmed transactions, zero confirmations
-> qbitcoin-cli getaddressbalance "myaddress" 0
+> qecurrency-cli getaddressbalance "myaddress" 0
 
 The amount with at least 6 confirmations
-> qbitcoin-cli getaddressbalance "myaddress" 6
+> qecurrency-cli getaddressbalance "myaddress" 6
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getaddressbalance", "params": ["myaddress", 6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -1533,22 +1533,22 @@ getreceivedbyaddress "address" ( minconf )
 Returns the total received amount on the given address in transactions with at least minconf confirmations.
 
 Arguments:
-1. address    (string, required) The qbitcoin address for transactions.
+1. address    (string, required) The ecurrency address for transactions.
 2. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
 
 Result:
-n    (numeric) The total amount in BTC received at this address.
+n    (numeric) The total amount in ECR received at this address.
 
 Examples:
 
 The amount from transactions with at least 1 confirmation
-> qbitcoin-cli getaddressbalance "myaddress"
+> qecurrency-cli getaddressbalance "myaddress"
 
 The amount including unconfirmed transactions, zero confirmations
-> qbitcoin-cli getreceivedbyaddress "myaddress" 0
+> qecurrency-cli getreceivedbyaddress "myaddress" 0
 
 The amount with at least 6 confirmations
-> qbitcoin-cli getreceivedbyaddress "myaddress" 6
+> qecurrency-cli getreceivedbyaddress "myaddress" 6
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getreceivedbyaddress", "params": ["myaddress", 6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -1572,7 +1572,7 @@ listunspent address ( minconf )
 Returns array of unspent transaction outputs on the given address with at least minconf confirmations.
 
 Arguments:
-1. address    (string, required) The qbitcoin address for transactions.
+1. address    (string, required) The ecurrency address for transactions.
 2. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
 
 Result:
@@ -1580,16 +1580,16 @@ Result:
   {                              (json object)
     "txid" : "hex",              (string) the transaction id
     "vout" : n,                  (numeric) the vout value
-    "address" : "str",           (string) the qbitcoin address
-    "amount" : n,                (numeric) the transaction output amount in BTC
+    "address" : "str",           (string) the ecurrency address
+    "amount" : n,                (numeric) the transaction output amount in ECR
     "confirmations" : n,         (numeric) The number of confirmations
   },
   ...
 ]
 
 Examples:
-> qbitcoin-cli listunspent "myaddress"
-> qbitcoin-cli listunspent "myaddress" 6
+> qecurrency-cli listunspent "myaddress"
+> qecurrency-cli listunspent "myaddress" 6
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "listunspent", "params": ["myaddress",6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 };
 sub cmd_listunspent {
@@ -1647,14 +1647,14 @@ listtransactions address ( minconf )
 Returns array of all transaction (inputs and outputs) on the given address with at least minconf confirmations.
 
 Arguments:
-1. address    (string, required) The qbitcoin address for transactions.
+1. address    (string, required) The ecurrency address for transactions.
 2. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
 
 Result:
 [                                (json array)
   {                              (json object)
     "txid" : "hex",              (string) the transaction id
-    "amount" : n,                (numeric) the received (positive) or sent (negative) amount in BTC
+    "amount" : n,                (numeric) the received (positive) or sent (negative) amount in ECR
     "height" : n,                (numeric) the block height containing the transaction (or -1 if unconfirmed)
     "confirmations" : n,         (numeric) The number of confirmations
   },
@@ -1662,8 +1662,8 @@ Result:
 ]
 
 Examples:
-> qbitcoin-cli listtransactions "myaddress"
-> qbitcoin-cli listtransactions "myaddress" 6
+> qecurrency-cli listtransactions "myaddress"
+> qecurrency-cli listtransactions "myaddress" 6
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "listtransactions", "params": ["myaddress",6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 };
 sub cmd_listtransactions {
@@ -1716,8 +1716,8 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli listmyaddresses
-> qbitcoin-cli listmyaddresses false
+> qecurrency-cli listmyaddresses
+> qecurrency-cli listmyaddresses false
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "listmyaddresses", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_listmyaddresses {
@@ -1740,16 +1740,16 @@ $PARAMS{getaddressinfo} = "address";
 $HELP{getaddressinfo} = qq(
 getaddressinfo "address"
 
-Return information about the given qbitcoin address.
+Return information about the given ecurrency address.
 Some of the information is present only if the address is in the wallet
 (see listmyaddresses).
 
 Arguments:
-1. address    (string, required) The qbitcoin address for which to get information
+1. address    (string, required) The ecurrency address for which to get information
 
 Result:
 {                               (json object)
-  "address" : "str",            (string) The qbitcoin address
+  "address" : "str",            (string) The ecurrency address
   "scripthash" : "hex",         (string) The hex-encoded scripthash generated by the address
   "ismine" : true|false,        (boolean) If the wallet has the private key for the address
   "iswatchonly" : true|false,   (boolean) If the address is watch-only (in the wallet without private key)
@@ -1760,7 +1760,7 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli getaddressinfo "myaddress"
+> qecurrency-cli getaddressinfo "myaddress"
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getaddressinfo", "params": ["myaddress"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getaddressinfo {
@@ -1794,11 +1794,11 @@ getbalance ( minconf )
 Returns total balance of the addresses in the wallet with at least minconf confirmations.
 
 Result:
-n    (numeric) The total amount in BTC in the wallet.
+n    (numeric) The total amount in ECR in the wallet.
 
 Examples:
-> qbitcoin-cli getbalance
-> qbitcoin-cli getbalance 6
+> qecurrency-cli getbalance
+> qecurrency-cli getbalance 6
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getbalance", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getbalance {
@@ -1829,7 +1829,7 @@ $PARAMS{getnewaddress} = "address_type?";
 $HELP{getnewaddress} = qq(
 getnewaddress ( address_type )
 
-Returns a new qbitcoin address and private key.
+Returns a new ecurrency address and private key.
 Private key is not stored in the wallet and can be imported using importprivkey.
 
 Arguments:
@@ -1837,12 +1837,12 @@ Arguments:
 
 Result:
 {
-    "address",     (string) The new qbitcoin address
+    "address",     (string) The new ecurrency address
     "private_key", (string) The private key for the new address
 }
 
 Examples:
-> qbitcoin-cli getnewaddress
+> qecurrency-cli getnewaddress
 > curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getnewaddress", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getnewaddress {
@@ -1873,7 +1873,7 @@ Arguments:
 
 Result:
 {                   (json object)
-  "feerate" : n,    (numeric, optional) estimate fee rate in BTC/kB (only present if no errors were encountered)
+  "feerate" : n,    (numeric, optional) estimate fee rate in ECR/kB (only present if no errors were encountered)
   "errors" : [      (json array, optional) Errors encountered during processing (if there are any)
     "str",          (string) error
     ...
@@ -1881,7 +1881,7 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli estimatesmartfee 6
+> qecurrency-cli estimatesmartfee 6
 > curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "estimatesmartfee", "params": [6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_estimatesmartfee {
@@ -1903,14 +1903,14 @@ stakeaddress address
 Set address to be used for staking (block validation).
 
 Arguments:
-1. address    (string, required) The qbitcoin address to be used for staking.
+1. address    (string, required) The ecurrency address to be used for staking.
               Must be already in the wallet (imported using importprivkey).
 
 null    (json null)
 
 Examples:
 
-> qbitcoin-cli stakeaddress "myaddress"
+> qecurrency-cli stakeaddress "myaddress"
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "stakeaddress", "params": ["myaddress"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -1938,13 +1938,13 @@ unstakeaddress address
 Disable staking (block validation) by this address.
 
 Arguments:
-1. address    (string, required) The qbitcoin address that is using for staking.
+1. address    (string, required) The ecurrency address that is using for staking.
 
 null    (json null)
 
 Examples:
 
-> qbitcoin-cli unstakeaddress "myaddress"
+> qecurrency-cli unstakeaddress "myaddress"
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "unstakeaddress", "params": ["myaddress"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -1970,7 +1970,7 @@ gettokensbalance "address" "token_id" ( minconf )
 Returns the total amount of tokens on the given address in transactions with at least minconf confirmations.
 
 Arguments:
-1. address    (string, required) The qbitcoin address for transactions.
+1. address    (string, required) The ecurrency address for transactions.
 2. token_id   (string, required) The token identifier (create transaction).
 3. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
 
@@ -1980,13 +1980,13 @@ n    (numeric) The total amount of tokens unspent at this address.
 Examples:
 
 The amount of tokens from transactions with at least 1 confirmation
-> qbitcoin-cli gettokensbalance "myaddress" "token_id"
+> qecurrency-cli gettokensbalance "myaddress" "token_id"
 
 The amount including unconfirmed transactions, zero confirmations
-> qbitcoin-cli gettokensbalance "myaddress" "token_id" 0
+> qecurrency-cli gettokensbalance "myaddress" "token_id" 0
 
 The amount with at least 6 confirmations
-> qbitcoin-cli gettokensbalance "myaddress" "token_id" 6
+> qecurrency-cli gettokensbalance "myaddress" "token_id" 6
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensbalance", "params": ["myaddress", "token_id", 6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -2015,7 +2015,7 @@ gettokensreceived "address" "token_id" ( minconf )
 Returns the total received amount of tokens on the given address in transactions with at least minconf confirmations.
 
 Arguments:
-1. address    (string, required) The qbitcoin address for transactions.
+1. address    (string, required) The ecurrency address for transactions.
 2. token_id   (string, required) The token identifier (create transaction).
 3. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
 
@@ -2025,13 +2025,13 @@ n    (numeric) The total amount of tokens received at this address.
 Examples:
 
 The received amount of tokens from transactions with at least 1 confirmation
-> qbitcoin-cli gettokensreceived "myaddress" "token_id"
+> qecurrency-cli gettokensreceived "myaddress" "token_id"
 
 The received amount including unconfirmed transactions, zero confirmations
-> qbitcoin-cli gettokensreceived "myaddress" "token_id" 0
+> qecurrency-cli gettokensreceived "myaddress" "token_id" 0
 
 The received amount with at least 6 confirmations
-> qbitcoin-cli gettokensreceived "myaddress" "token_id" 6
+> qecurrency-cli gettokensreceived "myaddress" "token_id" 6
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensreceived", "params": ["myaddress", "token_id", 6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -2068,7 +2068,7 @@ n    (numeric) The total amount of tokens received at this address.
 Examples:
 
 The received amount of tokens from transactions with at least 1 confirmation
-> qbitcoin-cli gettokensinfo "token_id"
+> qecurrency-cli gettokensinfo "token_id"
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensinfo", "params": ["token_id"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -2107,14 +2107,14 @@ configuration file, encrypts the wallet private keys stored in the database
 When no password is set yet this command works unconditionally, so it is the
 recommended way to protect the wallet right after installing the node.
 
-The password may be passed as an argument, but for safety qbitcoin-cli also reads
+The password may be passed as an argument, but for safety qecurrency-cli also reads
 it from standard input when the argument is omitted (so it does not appear in the
 process list or shell history):
 
-    qbitcoin-cli setwalletpassword            # prompts on a terminal
-    echo -n "mysecret" | qbitcoin-cli setwalletpassword
+    qecurrency-cli setwalletpassword            # prompts on a terminal
+    echo -n "mysecret" | qecurrency-cli setwalletpassword
 
-Changing an already set password requires the current one (qbitcoin-cli prompts
+Changing an already set password requires the current one (qecurrency-cli prompts
 for it and retries the request with a top-level "password" field). Running the
 command with the current password also converges the key encryption state to the
 'encrypted_private_keys' policy, so it may be run with the same password to
@@ -2122,7 +2122,7 @@ encrypt or decrypt the stored keys after changing that option.
 
 Resetting a FORGOTTEN password is possible only with 'allow_password_reset'
 enabled in the configuration file and PERMANENTLY DESTROYS all encrypted private
-keys (they cannot be decrypted without the old password; qbitcoin-cli asks for an
+keys (they cannot be decrypted without the old password; qecurrency-cli asks for an
 explicit confirmation and retries with a top-level "force" field):
 
     allow_password_reset = 1
@@ -2134,7 +2134,7 @@ Result:
 null    (json null)
 
 Examples:
-> qbitcoin-cli setwalletpassword "mysecret"
+> qecurrency-cli setwalletpassword "mysecret"
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "setwalletpassword", "params": ["newsecret"], "password": "oldsecret"}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_setwalletpassword {
@@ -2182,14 +2182,14 @@ private keys can be used for signing; block generation (staking) resumes
 automatically if enabled. The wallet stays unlocked until walletlock or a node
 restart.
 
-Requires the wallet password: qbitcoin-cli prompts for it and retries the
+Requires the wallet password: qecurrency-cli prompts for it and retries the
 request with a top-level "password" field.
 
 Result:
 null    (json null)
 
 Examples:
-> qbitcoin-cli walletunlock
+> qecurrency-cli walletunlock
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "walletunlock", "params": [], "password": "mysecret"}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_walletunlock {
@@ -2216,7 +2216,7 @@ Result:
 null    (json null)
 
 Examples:
-> qbitcoin-cli walletlock
+> qecurrency-cli walletlock
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "walletlock", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_walletlock {
@@ -2248,7 +2248,7 @@ Result:
 }
 
 Examples:
-> qbitcoin-cli getwalletinfo
+> qecurrency-cli getwalletinfo
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getwalletinfo", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getwalletinfo {
