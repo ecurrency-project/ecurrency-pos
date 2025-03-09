@@ -35,7 +35,6 @@ use constant FIELDS => {
 };
 
 mk_accessors(keys %{&FIELDS});
-mk_accessors(qw(value_btc));
 
 my %COINBASE; # just short-live cache for recently produced entries
 
@@ -83,6 +82,16 @@ sub store_published {
         or die "Can't store coinbase " . for_log($self->btc_tx_hash) . ":" . $self->btc_out_num . " as processed: " . (dbh->errstr // "no error") . "\n";
 }
 
+sub value_btc {
+    my $self = shift; # object or hashref
+    return $self->{value_btc} if defined $self->{value_btc};
+    my $btc_tx_data_obj = Bitcoin::Serialized->new($self->{btc_tx_data});
+    my $btc_transaction = Bitcoin::Transaction->deserialize($btc_tx_data_obj);
+    my $out = $btc_transaction->out->[$self->{btc_out_num}];
+    $self->{value_btc} = $out->{value} if ref($self) eq __PACKAGE__;
+    return $out->{value};
+}
+
 sub get_new {
     my $class = shift;
     my ($time) = @_;
@@ -110,10 +119,7 @@ sub get_new {
     while (my $hash = $sth->fetchrow_hashref()) {
         my $key = $hash->{btc_tx_hash} . $hash->{btc_out_num};
         next if $COINBASE{$key}; # transaction for this coinbase already generated (but not stored yet)
-        my $btc_tx_data_obj = Bitcoin::Serialized->new($hash->{btc_tx_data});
-        my $btc_transaction = Bitcoin::Transaction->deserialize($btc_tx_data_obj);
-        my $out = $btc_transaction->out->[$hash->{btc_out_num}];
-        $hash->{value_btc} = $out->{value};
+        $hash->{value_btc} = value_btc($hash);
         my $coinbase = $class->new($hash);
         $COINBASE{$key} = $coinbase;
         weaken($COINBASE{$key});
