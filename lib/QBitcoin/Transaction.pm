@@ -965,19 +965,33 @@ sub pre_load {
     if (!$TRANSACTION{$attr->{hash}}) {
         # Load TXO for inputs and outputs
         my @outputs = QBitcoin::TXO->load_stored_outputs($attr->{id}, $attr->{hash});
-        my @inputs;
-        foreach my $txo (QBitcoin::TXO->load_stored_inputs($attr->{id}, $attr->{hash})) {
-            push @inputs, {
-                txo     => $txo,
-                siglist => $txo->siglist,
-            };
-        }
-        $attr->{in}  = \@inputs;
         $attr->{out} = \@outputs;
-        my $upgrade = QBitcoin::Coinbase->load_stored_coinbase($attr->{id}, $attr->{hash});
-        if ($upgrade) {
-            $attr->{up} = $upgrade;
-            $attr->{upgrade_level} = $upgrade->upgrade_level;
+        if ($attr->{tx_type} == TX_TYPE_COINBASE) {
+            if (UPGRADE_POW) {
+                my $upgrade = QBitcoin::Coinbase->load_stored_coinbase($attr->{id}, $attr->{hash});
+                if ($upgrade) {
+                    $attr->{up} = $upgrade;
+                    $attr->{upgrade_level} = $upgrade->upgrade_level;
+                    $attr->{up_value} = $upgrade->value;
+                }
+                else {
+                    Errf("No coinbase for transaction %s", lc unpack("H*", substr($attr->{hash}, 0, 4)));
+                }
+            }
+            else {
+                $attr->{coins_created} = sum0(map { $_->value } @outputs) - $attr->{fee};
+            }
+            $attr->{in} = [];
+        }
+        else {
+            my @inputs;
+            foreach my $txo (QBitcoin::TXO->load_stored_inputs($attr->{id}, $attr->{hash})) {
+                push @inputs, {
+                    txo     => $txo,
+                    siglist => $txo->siglist,
+                };
+            }
+            $attr->{in} = \@inputs;
         }
     }
     return $attr;
@@ -1000,9 +1014,6 @@ sub on_load {
         $self = $TRANSACTION{$hash};
     }
     else {
-        if (!UPGRADE_POW && !@{$self->in}) {
-            $self->{coins_created} = sum0(map { $_->value } @{$self->out}) - $self->fee;
-        }
         $self->calculate_hash;
         if ($self->hash ne $hash) {
             Errf("Incorrect hash for loaded transaction %s != %s", $self->hash_str, $self->hash_str($hash));
@@ -1158,7 +1169,7 @@ sub coinbase_weight {
 
 sub up_value {
     my $self = shift;
-    return $self->up->get_value($self->upgrade_level);
+    return $self->{up_value} //= $self->up->get_value($self->upgrade_level);
 }
 
 sub coinbase_value {
