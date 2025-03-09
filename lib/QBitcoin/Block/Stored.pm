@@ -26,7 +26,7 @@ sub store {
 sub transactions {
     my $self = shift;
     if (@_) {
-        $self->transactions = $_[0];
+        $self->{transactions} = $_[0];
     }
     elsif (!$self->{transactions}) {
         if ($self->{tx_by_hash}) {
