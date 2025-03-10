@@ -576,9 +576,9 @@ sub cmd_getblks {
                     $new_block = $prev_block;
                 }
                 if (!$block) {
-                    $block = QBitcoin::Block->find(time => { '<=' => $low_time }, -sortby => 'HEIGHT DESC', -limit => 1);
-                    if (!$new_block || $new_block->height != $block->height+1) {
-                        $new_block = QBitcoin::Block->find(time => { '>' => $low_time }, -sortby => 'HEIGHT ASC', -limit => 1);
+                    $block = QBitcoin::Block->find(time => { '<=' => $low_time }, -sortby => 'height DESC', -limit => 1);
+                    if (!$new_block || !$block || $new_block->height != $block->height+1) {
+                        $new_block = QBitcoin::Block->find(time => { '>' => $low_time }, -sortby => 'height ASC', -limit => 1);
                     }
                 }
                 push @blocks, $block if $block;
