@@ -20,6 +20,9 @@ sub validate {
     my $now = Time::HiRes::time();
     $now >= $block->time
         or return "Block time " . $block->time . " is too early for now";
+    my $merkle_root = $block->calculate_merkle_root;
+    $block->merkle_root eq $merkle_root
+        or return "Incorrect merkle root " . unpack("H*", $block->merkle_root) . " expected " . unpack("H*", $merkle_root);
     if (!$block->prev_hash || $block->prev_hash eq ZERO_HASH) {
         if (!$config->{regtest}) {
             my $genesis_hash = $config->{testnet} ? GENESIS_HASH_TESTNET : GENESIS_HASH;
@@ -33,9 +36,6 @@ sub validate {
     if (!@{$block->transactions} && (timeslot($block->time) - $genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS) {
         return "Empty block";
     }
-    my $merkle_root = $block->calculate_merkle_root;
-    $block->merkle_root eq $merkle_root
-        or return "Incorrect merkle root " . unpack("H*", $block->merkle_root) . " expected " . unpack("H*", $merkle_root);
     my $fee = 0;
     my $fee_coinbase = 0;
     my %tx_in_block;
