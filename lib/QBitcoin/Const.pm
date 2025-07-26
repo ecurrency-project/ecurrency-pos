@@ -11,7 +11,7 @@ use constant QBT_BURN_SCRIPT    => OP_DUP . OP_HASH160 . pack("C", length(QBT_BU
 
 use constant QBITCOIN_CONST => {
     VERSION                 => "0.1",
-    DB_VERSION              => 1,
+    DB_VERSION              => 2,
     ADDRESS_VER             => "\x80",
     ADDR_MAGIC              => "\x0b\x2b",
     PRIVATE_KEY_RE          => qr/^[5KL][1-9A-HJ-NP-Za-km-z]{50,51}$/,
