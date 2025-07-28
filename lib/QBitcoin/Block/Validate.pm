@@ -114,7 +114,17 @@ sub validate {
     }
     # After UPGRADE_FINISHED we can have no btc blocks and do not know when the upgrade was stopped,
     # so trust the stake reward in this case (until checkpoint)
-    my $block_reward = skip_scripts() ? $stake_reward : (ref $block)->reward($block->prev_block, $fee, $block->timeslot);
+    my $block_reward;
+    if (skip_scripts()) {
+        $block_reward = $stake_reward;
+    }
+    elsif (!$config->{regtest} && $block->time < 1752962400) { # 2025-07-20
+        my $coinbase_fee = sum0 map { $_->fee } grep { $_->is_coinbase } @{$block->transactions};
+        $block_reward = (ref $block)->reward($block->prev_block, $coinbase_fee, $block->timeslot) + $fee - $coinbase_fee;
+    }
+    else {
+        $block_reward = (ref $block)->reward($block->prev_block, $fee, $block->timeslot);
+    }
     # There are no block rewards for empty blocks
     if ($empty_tx >= @{$block->transactions} - 1 && (timeslot($block->time) - $genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS) {
         $block_reward = 0;
