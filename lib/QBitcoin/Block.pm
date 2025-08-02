@@ -102,10 +102,6 @@ sub self_weight {
         else {
             $self->{self_weight} = 0;
         }
-        # The forced block bonus is already a part of the header weight
-        if (!$header_weight && defined($self->{self_weight}) && (timeslot($self->time) - GENESIS_TIME) / BLOCK_INTERVAL % FORCE_BLOCKS == 0) {
-            $self->{self_weight} += 1;
-        }
     }
     return $self->{self_weight};
 }
