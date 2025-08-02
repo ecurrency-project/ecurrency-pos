@@ -93,10 +93,6 @@ sub self_weight {
         else {
             $self->{self_weight} = 0;
         }
-        state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
-        if (defined($self->{self_weight}) && (timeslot($self->time) - $genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS == 0) {
-            $self->{self_weight} += 1;
-        }
     }
     return $self->{self_weight};
 }
