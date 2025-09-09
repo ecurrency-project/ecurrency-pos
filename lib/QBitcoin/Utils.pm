@@ -7,7 +7,6 @@ use strict;
 use Exporter qw(import);
 our @EXPORT_OK = qw(get_address_txo);
 
-use Tie::IxHash;
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(scripthash_by_address);
 use QBitcoin::RedeemScript;
@@ -15,52 +14,56 @@ use QBitcoin::TXO;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
 
+use constant MAX_TXO_PER_ADDRESS => 1000;
+
 sub get_address_txo {
     my ($address) = @_;
     my $scripthash = eval { scripthash_by_address($address) }
         or return ();
     my %txo_chain;
-    tie %txo_chain, "Tie::IxHash"; # preserve order of keys
+    my $txo_cnt = 0;
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
-        foreach my $txo (dbh->selectall_array("SELECT tx.hash, num, tx_out, value FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx ON (tx_in = tx.id) WHERE scripthash = ? ORDER BY block_height ASC, block_pos ASC", undef, $script->id)) {
-            $txo_chain{$txo->[0]}->[$txo->[1]] = [ $txo->[2], $txo->[3] ];
+        foreach my $txo (dbh->selectall_array("SELECT tx_in.hash, num, value, tx_in.block_height, tx_in.block_pos, tx_out.hash, tx_out.block_height, tx_out.block_pos FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) LEFT JOIN `" . QBitcoin::Transaction->TABLE . "` tx_out ON (tx_out = tx_out.id) WHERE scripthash = ? ORDER BY tx_in.block_height DESC, tx_in.block_pos DESC LIMIT ?", undef, $script->id, MAX_TXO_PER_ADDRESS)) {
+            $txo_chain{$txo->[0]}->[$txo->[1]] = [ $txo->[2], $txo->[3], $txo->[4], $txo->[5], $txo->[6], $txo->[7] ]; # [ value, block_height, block_pos, spent_hash, spent_height, spent_block_pos ]
+            $txo_cnt++;
         }
     }
     for (my $height = QBitcoin::Block->max_db_height + 1; $height <= QBitcoin::Block->blockchain_height; $height++) {
         my $block = QBitcoin::Block->best_block($height)
             or next;
         foreach my $tx (@{$block->transactions}) {
-            foreach my $in (@{$tx->in}) {
-                next if $in->{txo}->scripthash ne $scripthash;
-                $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num]->[0] = $tx->hash;
-            }
             for (my $num = 0; $num < @{$tx->out}; $num++) {
                 my $out = $tx->out->[$num];
                 next if $out->scripthash ne $scripthash;
-                $txo_chain{$tx->hash}->[$num] = [ undef, $out->value ];
+                $txo_chain{$tx->hash}->[$num] = [ $out->value, $height, $tx->block_pos ];
+            }
+            foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+                @{ $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num] }[3,4,5] = ( $tx->hash, $height, $tx->block_pos );
             }
         }
     }
     my %txo_mempool;
-    tie %txo_mempool, "Tie::IxHash";
     foreach my $tx (QBitcoin::Transaction->mempool_list()) {
-        foreach my $in (@{$tx->in}) {
-            next if $in->{txo}->scripthash ne $scripthash;
-            if ($txo_mempool{$in->{txo}->tx_in}) {
-                $txo_mempool{$in->{txo}->tx_in}->[$in->{txo}->num]->[0] = $tx->hash;
-            }
-            elsif ($txo_chain{$in->{txo}->tx_in}) {
-                # Unconfirmed spent display as spent
-                $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num]->[0] = $tx->hash;
-            }
-        }
         for (my $num = 0; $num < @{$tx->out}; $num++) {
             my $out = $tx->out->[$num];
             next if $out->scripthash ne $scripthash;
-            $txo_mempool{$tx->hash}->[$num] = [ undef, $out->value ];
+            $txo_mempool{$tx->hash}->[$num] = [ $out->value, undef ];
+        }
+        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+            if ($txo_mempool{$in->{txo}->tx_in}) {
+                $txo_mempool{$in->{txo}->tx_in}->[$in->{txo}->num]->[3] = $tx->hash;
+            }
+            elsif ($txo_chain{$in->{txo}->tx_in}) {
+                # Unconfirmed spent displayed as spent
+                $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num]->[3] = $tx->hash;
+            }
         }
     }
-    return (\%txo_chain, \%txo_mempool);
+    if ($txo_cnt >= MAX_TXO_PER_ADDRESS) {
+        # TODO: load TXO that were spent in the loaded transactions to avoid incorrect tx balance
+    }
+
+    return wantarray ? (\%txo_chain, \%txo_mempool) : \%txo_chain;
 }
 
 1;

@@ -332,15 +332,21 @@ sub tx_obj {
     my ($tx) = @_;
     my $block = defined($tx->block_height) ? block_by_height($tx->block_height) : undef;
     return {
-        txid        => unpack("H*", $tx->hash),
-        fee         => $tx->fee,
-        size        => $tx->size,
-        value       => sum0(map { $_->value } @{$tx->out}) + $tx->fee,
-        is_coinbase => $tx->is_coinbase ? TRUE : FALSE,
-        status      => {
-            confirmed => defined($tx->block_height) ? TRUE : FALSE,
+        txid          => unpack("H*", $tx->hash),
+        fee           => $tx->fee,
+        size          => $tx->size,
+        value         => sum0(map { $_->value } @{$tx->out}) + $tx->fee,
+        is_coinbase   => $tx->is_coinbase ? TRUE : FALSE,
+        received_time => $tx->received_time // undef,
+        status        => {
+            defined($tx->block_height) ? (
+                block_height => $tx->block_height,
+                block_pos    => $tx->block_pos,
+                confirmed    => TRUE,
+            ) : (
+                confirmed => FALSE,
+            ),
             defined($block) ? (
-                block_height => $block->height,
                 block_time   => $block->time,
                 block_hash   => unpack("H*", $block->hash),
             ) : (),
@@ -371,9 +377,9 @@ sub txo_stats {
     return {
         tx_count         => scalar(keys %$txo),
         funded_txo_count => scalar(grep { defined($_) } map { @$_ } values %$txo),
-        funded_txo_sum   => sum0(map { $_->[1] } grep { defined($_) } map { @$_ } values %$txo),
-        spent_txo_count  => scalar(grep { defined($_) && defined($_->[0]) } map { @$_ } values %$txo),
-        spent_txo_sum    => sum0(map { $_->[1] } grep { defined($_) && defined($_->[0]) } map { @$_ } values %$txo),
+        funded_txo_sum   => sum0(map { $_->[0] } grep { defined($_) } map { @$_ } values %$txo),
+        spent_txo_count  => scalar(grep { defined($_) && defined($_->[3]) } map { @$_ } values %$txo),
+        spent_txo_sum    => sum0(map { $_->[0] } grep { defined($_) && defined($_->[3]) } map { @$_ } values %$txo),
     };
 }
 
@@ -395,12 +401,13 @@ sub get_address_txs {
         or return $self->http_response(404, "Incorrect address");
     my @tx;
     if ($mempool_cnt) {
-        foreach my $txid (reverse keys %$txo_mempool) {
+        foreach my $txid (keys %$txo_mempool) {
             my $tx = QBitcoin::Transaction->get($txid)
                 or next;
             push @tx, tx_obj($tx);
             last unless --$mempool_cnt;
         }
+        @tx = sort { ($b->{received_time} // 0) <=> ($a->{received_time} // 0) } @tx;
     }
     if ($chain_cnt) {
         my $skip_until_tx;
@@ -410,7 +417,7 @@ sub get_address_txs {
                 $skip_until_tx = $last_seen_bin;
             }
         }
-        foreach my $txid (reverse keys %$txo_chain) {
+        foreach my $txid (sort { $txo_chain->{$b}->{height} <=> $txo_chain->{$a}->{height} || $txo_chain->{$b}->{block_pos} <=> $txo_chain->{$a}->{block_pos} } keys %$txo_chain) {
             if ($skip_until_tx) {
                 $skip_until_tx = undef if $skip_until_tx eq $txid;
                 next;
@@ -433,21 +440,25 @@ sub get_address_utxo {
     foreach my $txid (keys %$txo_chain) {
         for (my $vout = 0; $vout < @{$txo_chain->{$txid}}; $vout++) {
             push @utxo, {
-                txid   => $txid,
-                vout   => $vout,
-                value  => $txo_chain->{$txid}->[$vout]->[1],
-                status => "confirmed",
-            } if $txo_chain->{$txid}->[$vout] && !defined($txo_chain->{$txid}->[$vout]->[0]);
+                txid      => $txid,
+                vout      => $vout,
+                value     => $txo_chain->{$txid}->[$vout]->[0],
+                height    => $txo_chain->{$txid}->[$vout]->[1],
+                block_pos => $txo_chain->{$txid}->[$vout]->[2],
+                status    => "confirmed",
+            } if $txo_chain->{$txid}->[$vout] && !defined($txo_chain->{$txid}->[$vout]->[3]);
         }
     }
-    foreach my $txid (keys %$txo_mempool) {
+    @utxo = sort { $a->{height} <=> $b->{height} || $a->{block_pos} <=> $b->{block_pos} } @utxo;
+    foreach my $txid (keys %$txo_mempool) { # TODO: sort by received_time
+        my @mempool_utxo;
         for (my $vout = 0; $vout < @{$txo_mempool->{$txid}}; $vout++) {
-            push @utxo, {
+            push @mempool_utxo, {
                 txid   => $txid,
                 vout   => $vout,
-                value  => $txo_mempool->{$txid}->[$vout]->[1],
+                value  => $txo_mempool->{$txid}->[$vout]->[0],
                 status => "unconfirmed",
-            } if $txo_mempool->{$txid}->[$vout] && !defined($txo_mempool->{$txid}->[$vout]->[0]);
+            } if $txo_mempool->{$txid}->[$vout] && !defined($txo_mempool->{$txid}->[$vout]->[3]);
         }
     }
     return $self->http_ok(\@utxo);
