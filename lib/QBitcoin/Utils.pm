@@ -23,8 +23,8 @@ sub get_address_txo {
     my %txo_chain;
     my $txo_cnt = 0;
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
-        foreach my $txo (dbh->selectall_array("SELECT tx_in.hash, num, value, tx_in.block_height, tx_in.block_pos, tx_out.hash, tx_out.block_height FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) LEFT JOIN `" . QBitcoin::Transaction->TABLE . "` tx_out ON (tx_out = tx_out.id) WHERE scripthash = ? ORDER BY tx_in.block_height DESC, tx_in.block_pos DESC LIMIT ?", undef, $script->id, MAX_TXO_PER_ADDRESS)) {
-            $txo_chain{$txo->[0]}->[$txo->[1]] = [ $txo->[2], $txo->[3], $txo->[4], $txo->[5], $txo->[6] ]; # [ value, block_height, block_pos, spent_hash, spent_height ]
+        foreach my $txo (dbh->selectall_array("SELECT tx_in.hash, num, value, tx_in.block_height, tx_in.block_pos, tx_out.hash, tx_out.block_height, tx_out.block_pos FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) LEFT JOIN `" . QBitcoin::Transaction->TABLE . "` tx_out ON (tx_out = tx_out.id) WHERE scripthash = ? ORDER BY tx_in.block_height DESC, tx_in.block_pos DESC LIMIT ?", undef, $script->id, MAX_TXO_PER_ADDRESS)) {
+            $txo_chain{$txo->[0]}->[$txo->[1]] = [ $txo->[2], $txo->[3], $txo->[4], $txo->[5], $txo->[6], $txo->[7] ]; # [ value, block_height, block_pos, spent_hash, spent_height, spent_block_pos ]
             $txo_cnt++;
         }
     }
@@ -38,7 +38,7 @@ sub get_address_txo {
                 $txo_chain{$tx->hash}->[$num] = [ $out->value, $height ];
             }
             foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
-                @{ $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num] }[3,4] = ( $tx->hash, $tx->block_height );
+                @{ $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num] }[3,4,5] = ( $tx->hash, $tx->block_height, $tx->block_pos );
             }
         }
     }
