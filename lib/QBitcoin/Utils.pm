@@ -5,7 +5,7 @@ use strict;
 # Utility functions for QBitcoin REST and RPC interfaces
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(get_address_txo);
+our @EXPORT_OK = qw(get_address_txo get_address_utxo);
 
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(scripthash_by_address);
@@ -61,6 +61,57 @@ sub get_address_txo {
     }
     if ($txo_cnt >= MAX_TXO_PER_ADDRESS) {
         # TODO: load TXO that were spent in the loaded transactions to avoid incorrect tx balance
+    }
+
+    return wantarray ? (\%txo_chain, \%txo_mempool) : \%txo_chain;
+}
+
+sub get_address_utxo {
+    my ($address) = @_;
+    my $scripthash = eval { scripthash_by_address($address) }
+        or return ();
+    my %txo_chain;
+    my $txo_cnt = 0;
+    if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
+        foreach my $txo (dbh->selectall_array("SELECT tx_in.hash, num, value, tx_in.block_height, tx_in.block_pos FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) WHERE tx_out IS NULL and scripthash = ? ORDER BY tx_in.block_height DESC, tx_in.block_pos DESC LIMIT ?", undef, $script->id, MAX_TXO_PER_ADDRESS)) {
+            $txo_chain{$txo->[0]}->[$txo->[1]] = [ $txo->[2], $txo->[3], $txo->[4] ]; # [ value, block_height, block_pos ]
+            $txo_cnt++;
+        }
+    }
+    for (my $height = QBitcoin::Block->max_db_height + 1; $height <= QBitcoin::Block->blockchain_height; $height++) {
+        my $block = QBitcoin::Block->best_block($height)
+            or next;
+        foreach my $tx (@{$block->transactions}) {
+            for (my $num = 0; $num < @{$tx->out}; $num++) {
+                my $out = $tx->out->[$num];
+                next if $out->scripthash ne $scripthash;
+                $txo_chain{$tx->hash}->[$num] = [ $out->value, $height, $tx->block_pos ] if $out->unspent;
+            }
+            foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+                if (@{ $txo_chain{$in->{txo}->tx_in} }) {
+                    delete $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num];
+                    delete $txo_chain{$in->{txo}->tx_in} unless @{ $txo_chain{$in->{txo}->tx_in} };
+                }
+            }
+        }
+    }
+    my %txo_mempool;
+    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+        for (my $num = 0; $num < @{$tx->out}; $num++) {
+            my $out = $tx->out->[$num];
+            next if $out->scripthash ne $scripthash;
+            $txo_mempool{$tx->hash}->[$num] = [ $out->value ] if $out->unspent;
+        }
+        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+            if (@{ $txo_chain{$in->{txo}->tx_in} }) {
+                delete $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num];
+                delete $txo_chain{$in->{txo}->tx_in} unless @{ $txo_chain{$in->{txo}->tx_in} };
+            }
+            elsif (@{ $txo_mempool{$in->{txo}->tx_in} }) {
+                delete $txo_mempool{$in->{txo}->tx_in}->[$in->{txo}->num];
+                delete $txo_mempool{$in->{txo}->tx_in} unless @{ $txo_mempool{$in->{txo}->tx_in} };
+            }
+        }
     }
 
     return wantarray ? (\%txo_chain, \%txo_mempool) : \%txo_chain;

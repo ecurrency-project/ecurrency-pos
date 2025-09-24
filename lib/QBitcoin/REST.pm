@@ -17,7 +17,7 @@ use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::Transaction;
 use QBitcoin::Block;
-use QBitcoin::Utils qw(get_address_txo);
+use QBitcoin::Utils qw(get_address_txo get_address_utxo);
 use parent qw(QBitcoin::HTTP);
 
 use constant {
@@ -129,7 +129,7 @@ sub process_request {
         elsif ($path[2] eq "utxo") {
             @path == 3
                 or return $self->http_response(404, "Unknown request");
-            return $self->get_address_utxo($path[1]);
+            return $self->get_address_unspent($path[1]);
         }
     }
     elsif ($path[0] eq "address-prefix") {
@@ -431,10 +431,11 @@ sub get_address_txs {
     return $self->http_ok(\@tx);
 }
 
-sub get_address_utxo {
+sub get_address_unspent {
     my $self = shift;
     my ($address) = @_;
-    my ($txo_chain, $txo_mempool) = get_address_txo($address)
+
+    my ($txo_chain, $txo_mempool) = get_address_utxo($address)
         or return $self->http_response(404, "Incorrect address");
     my @utxo;
     foreach my $txid (keys %$txo_chain) {
@@ -446,19 +447,18 @@ sub get_address_utxo {
                 height    => $txo_chain->{$txid}->[$vout]->[1],
                 block_pos => $txo_chain->{$txid}->[$vout]->[2],
                 status    => "confirmed",
-            } if $txo_chain->{$txid}->[$vout] && !defined($txo_chain->{$txid}->[$vout]->[3]);
+            } if $txo_chain->{$txid}->[$vout];
         }
     }
     @utxo = sort { $a->{height} <=> $b->{height} || $a->{block_pos} <=> $b->{block_pos} } @utxo;
-    foreach my $txid (keys %$txo_mempool) { # TODO: sort by received_time
-        my @mempool_utxo;
+    foreach my $txid (sort { $a cmp $b } keys %$txo_mempool) { # TODO: sort by received_time
         for (my $vout = 0; $vout < @{$txo_mempool->{$txid}}; $vout++) {
-            push @mempool_utxo, {
+            push @utxo, {
                 txid   => $txid,
                 vout   => $vout,
                 value  => $txo_mempool->{$txid}->[$vout]->[0],
                 status => "unconfirmed",
-            } if $txo_mempool->{$txid}->[$vout] && !defined($txo_mempool->{$txid}->[$vout]->[3]);
+            } if $txo_mempool->{$txid}->[$vout];
         }
     }
     return $self->http_ok(\@utxo);
