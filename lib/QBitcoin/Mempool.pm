@@ -35,12 +35,18 @@ sub choose_for_block {
     my ($size, $block_time, $prev_block, $can_consume) = @_;
     my $block_height = $prev_block ? $prev_block->height+1 : 0;
     my $upgraded_total = $prev_block ? $prev_block->upgraded : 0;
-    my @mempool = sort { compare_tx($a, $b) }
+    my @mempool =
         grep { defined($_->min_tx_block_height) && $_->min_tx_block_height <= $block_height &&
                defined($_->min_tx_time) && $_->min_tx_time <= $block_time }
-            QBitcoin::Transaction->mempool_list()
-                or return ();
-    Debugf("Mempool: %s", join(',', map { $_->hash_str } @mempool));
+            QBitcoin::Transaction->mempool_list();
+    Debugf("Mempool: %s", join(',', map { $_->hash_str } @mempool)) if @mempool;
+    if ($block_height) {
+        for (my $block = $prev_block->next_block; $block; $block = $block->next_block) {
+            push @mempool, @{$block->transactions};
+        }
+    }
+    return () unless @mempool;
+    @mempool = sort { compare_tx($a, $b) } @mempool;
     if (!$can_consume) {
         @mempool = grep { $_->fee == 0 || $_->coins_created } @mempool;
     }
@@ -78,7 +84,7 @@ sub choose_for_block {
         foreach my $in (@{$mempool[$i]->in}) {
             my $txo = $in->{txo};
             if ($txo->tx_out) {
-                # Already confirmed spent (MB not dropped from mempool b/c it included in some other block in alternate branch)
+                # Already confirmed spent (MB not dropped from mempool b/c it was included in some other block in alternate branch)
                 $skip = 1;
                 last;
             }
@@ -94,6 +100,11 @@ sub choose_for_block {
                 # If the transaction is not cached then it's already stored onto database, so it is in the best branch or dropped
                 if (my $tx_in = QBitcoin::Transaction->get($txo->tx_in)) {
                     if (!defined($tx_in->block_height)) {
+                        $skip = 1;
+                        last;
+                    }
+                    if ($tx_in->block_height >= $block_height) {
+                        # confirmed in block that will be rolled back
                         $skip = 1;
                         last;
                     }
