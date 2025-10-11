@@ -295,7 +295,6 @@ sub generate {
     });
     $generated->weight = $generated->self_weight + ( $prev_block ? $prev_block->weight : 0 );
     $generated->merkle_root = $generated->calculate_merkle_root();
-    my $data = $generated->serialize;
     $generated->hash = $generated->calculate_hash();
     $generated->add_tx($_) foreach @transactions;
     QBitcoin::Generate::Control->generated_time($time);
