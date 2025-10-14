@@ -21,6 +21,7 @@ use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
 use QBitcoin::MinFee;
+use QBitcoin::Utils qw(get_address_txo);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
@@ -1342,6 +1343,83 @@ sub cmd_listunspent {
     }, @utxo ]);
 }
 
+$PARAMS{listtransactions} = "address minconf?";
+$HELP{listtransactions} = qq{
+listtransactions address ( minconf )
+
+Returns array of all transaction (inputs and outputs) on the given address with at least minconf confirmations.
+
+Arguments:
+1. address    (string, required) The qbitcoin address for transactions.
+2. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
+
+Result:
+[                                (json array)
+  {                              (json object)
+    "txid" : "hex",              (string) the transaction id
+    "amount" : n,                (numeric) the received (positive) or sent (negative) amount in BTC
+    "height" : n,                (numeric) the block height containing the transaction (or -1 if unconfirmed)
+    "confirmations" : n,         (numeric) The number of confirmations
+  },
+  ...
+]
+
+Examples:
+> qbitcoin-cli listtransactions "myaddress"
+> qbitcoin-cli listtransactions "myaddress" 6
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "listtransactions", "params": ["myaddress",6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+};
+sub cmd_listtransactions {
+    my $self = shift;
+    my $address = $self->args->[0];
+    my $minconf = $self->args->[1] // 1;
+    blockchain_synced() && mempool_synced()
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+    my ($txo_chain, $txo_mempool) = get_address_txo($address);
+    my $best_height = QBitcoin::Block->blockchain_height
+        or return $self->response_ok([]);
+    $txo_mempool = {} if $minconf > 0;
+    my %tx;
+    foreach my $txo_data ($txo_chain, $txo_mempool) {
+        foreach my $txid (keys %$txo_data) {
+            my $tx_in = $tx{$txid} //= { value => 0 };
+            for (my $i = 0; $i < @{$txo_data->{$txid}}; $i++) {
+                my $txo = $txo_chain->{$txid}->[$i]
+                    or next;
+                next if $minconf > 1 && ($txo->[1] // $best_height + 1) > $best_height - $minconf + 1;
+                $tx_in->{value} += $txo->[0];
+                if (!defined($tx_in->{height})) {
+                    if (defined($txo->[1])) {
+                        $tx_in->{height} = $txo->[1];
+                        $tx_in->{block_pos} = $txo->[2];
+                    }
+                }
+                if (defined($txo->[3])) {
+                    next if $minconf > 1 && ($txo->[4] // $best_height + 1) > $best_height - $minconf + 1;
+                    my $tx_out = $tx{$txo->[3]} //= { value => 0 };
+                    $tx_out->{value} -= $txo->[0];
+                    if (!defined($tx_out->{height})) {
+                        if (defined($txo->[4])) {
+                            $tx_out->{height} = $txo->[4];
+                            $tx_out->{block_pos} = $txo->[5];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return $self->response_ok([
+        map +{
+            txid          => unpack("H*", $_),
+            amount        => $tx{$_}->{value} / DENOMINATOR,
+            height        => $tx{$_}->{height} // -1,
+            confirmations => ( defined($tx{$_}->{height}) ? $best_height - $tx{$_}->{height} + 1 : 0 ),
+        },
+        sort { ($tx{$b}->{height} // $best_height+1) <=> ($tx{$a}->{height} // $best_height+1) || ($tx{$b}->{block_pos} // 0) <=> ($tx{$a}->{block_pos} // 0) }
+        keys %tx
+    ]);
+}
+
 $PARAMS{listmyaddresses} = "";
 $HELP{listmyaddresses} = qq(
 Returns the list of addresses in the wallet.
@@ -1519,6 +1597,5 @@ sub cmd_estimatesmartfee {
 # getaddressinfo
 
 # listreceivedbyaddress
-# listtransactions
 
 1;
