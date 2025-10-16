@@ -352,19 +352,4 @@ sub address {
     return address_by_hash($self->scripthash);
 }
 
-# Get all cached txo for the scripthash
-sub get_scripthash_txo {
-    my $class = shift;
-    my ($scripthash) = @_;
-    return grep { $_->scripthash eq $scripthash } values %TXO;
-}
-
-# Get all cached utxo for the scripthash
-# UTXO is TXO which was not confirmed in the current best branch (but may be spent in mempool)
-sub get_scripthash_utxo {
-    my $class = shift;
-    my ($scripthash) = @_;
-    return grep { $_->scripthash eq $scripthash && $_->unspent } values %TXO;
-}
-
 1;
