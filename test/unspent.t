@@ -14,6 +14,8 @@ use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::Block;
 use QBitcoin::Revalidate qw(revalidate);
+use QBitcoin::Address qw(address_by_hash);
+use QBitcoin::Utils qw(get_address_utxo);
 
 #$config->{debug} = 1;
 $config->{regtest} = 1;
@@ -41,7 +43,11 @@ pass("Blocks stored successfully");
 my $block = QBitcoin::Block->find(hash => "a1");
 $block->transactions;
 
-my @utxo = QBitcoin::TXO->get_scripthash_utxo($tx->out->[0]->scripthash);
-is(scalar @utxo, 0, "No UTXO found for the transaction");
+my $txo = QBitcoin::TXO->get({ tx_out => $tx->hash, num => 0 });
+is($txo->unspent, 0, "Transaction output is marked as spent");
+
+my ($chain_utxo, $mempool_utxo) = get_address_utxo(address_by_hash($tx->out->[0]->scripthash));
+my @txid = (keys(%$chain_utxo), keys(%$mempool_utxo));
+is(scalar @txid, 0, "No UTXO found for the transaction");
 
 done_testing();
