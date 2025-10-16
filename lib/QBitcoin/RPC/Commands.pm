@@ -1191,7 +1191,7 @@ sub cmd_getaddressbalance {
     my $best_height;
     if ($minconf > 1) {
         $best_height = QBitcoin::Block->blockchain_height
-            or return $self->response_ok("0");
+            or return $self->response_ok(0);
     }
     foreach my $utxo (QBitcoin::TXO->get_scripthash_utxo($scripthash)) {
         if (my $tx = QBitcoin::Transaction->get($utxo->tx_in)) {
@@ -1253,7 +1253,7 @@ sub cmd_getreceivedbyaddress {
     my $best_height;
     if ($minconf > 1) {
         $best_height = QBitcoin::Block->blockchain_height
-            or return $self->response_ok("0");
+            or return $self->response_ok(0);
     }
     foreach my $txo (QBitcoin::TXO->get_scripthash_txo($scripthash)) {
         if (my $tx = QBitcoin::Transaction->get($txo->tx_in)) {
@@ -1475,7 +1475,7 @@ sub cmd_getbalance {
     my $value = 0;
     if ($minconf) {
         my $best_height = QBitcoin::Block->blockchain_height
-            or return $self->response_ok("0");
+            or return $self->response_ok(0);
         foreach my $txo (@my_txo) {
             my $block_height = QBitcoin::Transaction->check_by_hash($txo->tx_in)
                 or next;
