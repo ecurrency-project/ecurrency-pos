@@ -16,6 +16,7 @@ use QBitcoin::Address qw(scripthash_by_address);
 use QBitcoin::MyAddress qw(my_address);
 use QBitcoin::Transaction;
 use QBitcoin::ValueUpgraded qw(level_by_total);
+use QBitcoin::Utils qw(get_address_utxo);
 use QBitcoin::Generate::Control;
 
 sub load_utxo {
@@ -28,27 +29,19 @@ sub load_utxo {
 sub load_address_utxo {
     my $class = shift;
     my ($my_address) = @_;
-    my @scripthash = scripthash_by_address($my_address->address);
     my $count = 0;
     my $value = 0;
-    # add cached utxo as my
-    foreach my $scripthash (@scripthash) {
-        foreach my $utxo (QBitcoin::TXO->get_scripthash_utxo($scripthash)) {
-            # ignore unconfirmed utxo
-            if (my $tx = QBitcoin::Transaction->get($utxo->tx_in)) {
-                next unless $tx->block_height;
-            }
-            else {
-                next if QBitcoin::Transaction->has_pending($utxo->tx_in);
-            }
-            $utxo->add_my_utxo();
-            $count++;
-            $value += $utxo->value;
-        }
-    }
-    if (my @script = QBitcoin::RedeemScript->find(hash => \@scripthash)) {
-        foreach my $utxo (grep { !$_->is_cached } QBitcoin::TXO->find(scripthash => [ map { $_->id } @script ], tx_out => undef)) {
-            $utxo->save();
+    my $scripthash = scripthash_by_address($my_address->address);
+    my $chain_utxo = get_address_utxo($my_address->address);
+    foreach my $txid (keys %$chain_utxo) {
+        for (my $vout = @{$chain_utxo->{$txid}}-1; $vout >= 0; $vout--) {
+            next unless defined $chain_utxo->{$txid}->[$vout];
+            my $utxo = QBitcoin::TXO->new_saved({
+                tx_in      => $txid,
+                num        => $vout,
+                value      => $chain_utxo->{$txid}->[$vout]->[0],
+                scripthash => $scripthash,
+            });
             $utxo->add_my_utxo();
             $count++;
             $value += $utxo->value;
