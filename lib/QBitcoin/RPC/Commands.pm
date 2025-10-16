@@ -21,7 +21,7 @@ use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
 use QBitcoin::MinFee;
-use QBitcoin::Utils qw(get_address_txo);
+use QBitcoin::Utils qw(get_address_txo get_address_utxo);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
@@ -1306,41 +1306,46 @@ Examples:
 };
 sub cmd_listunspent {
     my $self = shift;
-    my $scripthash = scripthash_by_address($self->args->[0])
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not correct");
     blockchain_synced() && mempool_synced()
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+    my $address = $self->args->[0];
     my $minconf = $self->args->[1] // 1;
-    my $best_height;
-    if ($minconf > 1) {
-        $best_height = QBitcoin::Block->blockchain_height
-            or return $self->response_ok([]);
-    }
+    my ($chain_utxo, $mempool_utxo) = get_address_utxo($address);
+    my $best_height = QBitcoin::Block->blockchain_height
+        or return $self->response_ok([]);
     my @utxo;
-    foreach my $utxo (QBitcoin::TXO->get_scripthash_utxo($scripthash)) {
-        if (my $tx = QBitcoin::Transaction->get($utxo->tx_in)) {
-            if (!defined $tx->block_height) {
-                next if $minconf;
-            }
-            elsif ($minconf > 1) {
-                next if $tx->block_height > $best_height - $minconf + 1;
+    foreach my $hash ($minconf ? ($chain_utxo) : ($chain_utxo, $mempool_utxo)) {
+        foreach my $txid (keys %$hash) {
+            for (my $vout = @{$hash->{$txid}}-1; $vout >= 0; $vout--) {
+                my $utxo = $hash->{$txid}->[$vout]
+                    or next;
+                if ($minconf && $utxo->[1] > $best_height - $minconf + 1) {
+                    $vout = 0;
+                    next;
+                }
+                push @utxo, {
+                    txid    => unpack("H*", $txid),
+                    vout    => $vout,
+                    address => $address,
+                    amount  => $utxo->[0] / DENOMINATOR,
+                    defined($utxo->[1]) ? (
+                        confirmations => $best_height - $utxo->[1] + 1,
+                        block_height  => $utxo->[1],
+                        block_pos     => $utxo->[2],
+                    ) : (
+                        confirmations => 0,
+                    ),
+                };
             }
         }
-        else {
-            next if QBitcoin::Transaction->has_pending($utxo->tx_in);
-        }
-        push @utxo, $utxo;
     }
-    if (my ($script) = QBitcoin::RedeemScript->find(hash => $scripthash)) {
-        push @utxo, grep { !$_->is_cached } QBitcoin::TXO->find(scripthash => $script->id, tx_out => undef);
-    }
-    return $self->response_ok([ map +{
-        txid    => unpack("H*", $_->tx_in),
-        vout    => $_->num + 0,
-        address => address_by_hash($_->scripthash),
-        amount  => $_->value / DENOMINATOR,
-        # confirmations => ...
-    }, @utxo ]);
+    @utxo = sort {
+        $b->{confirmations}    <=> $a->{confirmations}    ||
+        ($a->{block_pos} // 0) <=> ($b->{block_pos} // 0) ||
+        $a->{txid} cmp $b->{txid} ||
+        $a->{vout} <=> $b->{vout}
+    } @utxo;
+    return $self->response_ok(\@utxo);
 }
 
 $PARAMS{listtransactions} = "address minconf?";
