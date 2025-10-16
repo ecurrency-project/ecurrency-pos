@@ -386,7 +386,8 @@ sub txo_stats {
 sub get_address_stats {
     my $self = shift;
     my ($address) = @_;
-    my ($txo_chain, $txo_mempool) = get_address_txo($address)
+    my ($txo_chain, $txo_mempool) = get_address_txo($address);
+    $txo_chain
         or return $self->http_response(404, "Incorrect address");
     return $self->http_ok({
         chain_stats   => txo_stats($txo_chain),
@@ -397,7 +398,8 @@ sub get_address_stats {
 sub get_address_txs {
     my $self = shift;
     my ($address, $chain_cnt, $mempool_cnt, $last_seen) = @_;
-    my ($txo_chain, $txo_mempool) = get_address_txo($address)
+    my ($txo_chain, $txo_mempool) = get_address_txo($address);
+    $txo_chain
         or return $self->http_response(404, "Incorrect address");
     my @tx;
     if ($mempool_cnt) {
@@ -435,7 +437,8 @@ sub get_address_unspent {
     my $self = shift;
     my ($address) = @_;
 
-    my ($txo_chain, $txo_mempool) = get_address_utxo($address)
+    my ($txo_chain, $txo_mempool) = get_address_utxo($address);
+    $txo_chain
         or return $self->http_response(404, "Incorrect address");
     my @utxo;
     foreach my $txid (keys %$txo_chain) {

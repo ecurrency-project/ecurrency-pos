@@ -32,7 +32,7 @@ sub load_address_utxo {
     my $count = 0;
     my $value = 0;
     my $scripthash = scripthash_by_address($my_address->address);
-    my $chain_utxo = get_address_utxo($my_address->address);
+    my $chain_utxo = get_address_utxo($my_address->address, 1000);
     foreach my $txid (keys %$chain_utxo) {
         for (my $vout = @{$chain_utxo->{$txid}}-1; $vout >= 0; $vout--) {
             next unless defined $chain_utxo->{$txid}->[$vout];

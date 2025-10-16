@@ -1187,6 +1187,8 @@ sub cmd_getaddressbalance {
     my $address = $self->args->[0];
     my $minconf = $self->args->[1] // 1;
     my ($chain_utxo, $mempool_utxo) = get_address_utxo($address);
+    $chain_utxo
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
     my $best_height;
     if ($minconf > 1) {
         $best_height = QBitcoin::Block->blockchain_height
@@ -1244,6 +1246,8 @@ sub cmd_getreceivedbyaddress {
     my $address = $self->args->[0];
     my $minconf = $self->args->[1] // 1;
     my ($chain_txo, $mempool_txo) = get_address_txo($address);
+    $chain_txo
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
     my $best_height;
     if ($minconf > 1) {
         $best_height = QBitcoin::Block->blockchain_height
@@ -1301,6 +1305,8 @@ sub cmd_listunspent {
     my $address = $self->args->[0];
     my $minconf = $self->args->[1] // 1;
     my ($chain_utxo, $mempool_utxo) = get_address_utxo($address);
+    $chain_utxo
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
     my $best_height = QBitcoin::Block->blockchain_height
         or return $self->response_ok([]);
     my @utxo;
@@ -1371,6 +1377,8 @@ sub cmd_listtransactions {
     blockchain_synced() && mempool_synced()
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
     my ($txo_chain, $txo_mempool) = get_address_txo($address);
+    $txo_chain
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
     my $best_height = QBitcoin::Block->blockchain_height
         or return $self->response_ok([]);
     $txo_mempool = {} if $minconf > 0;
