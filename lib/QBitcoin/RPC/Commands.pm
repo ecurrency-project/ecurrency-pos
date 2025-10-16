@@ -1239,34 +1239,29 @@ As a JSON-RPC call
 };
 sub cmd_getreceivedbyaddress {
     my $self = shift;
-    my $scripthash = scripthash_by_address($self->args->[0])
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not correct");
     blockchain_synced() && mempool_synced()
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+    my $address = $self->args->[0];
     my $minconf = $self->args->[1] // 1;
-    my $value = 0;
+    my ($chain_txo, $mempool_txo) = get_address_txo($address);
     my $best_height;
     if ($minconf > 1) {
         $best_height = QBitcoin::Block->blockchain_height
             or return $self->response_ok(0);
     }
-    foreach my $txo (QBitcoin::TXO->get_scripthash_txo($scripthash)) {
-        if (my $tx = QBitcoin::Transaction->get($txo->tx_in)) {
-            if (!defined $tx->block_height) {
-                next if $minconf;
-            }
-            elsif ($minconf > 1) {
-                next if $tx->block_height > $best_height - $minconf + 1;
+    my $value = 0;
+    foreach my $tx (values %$chain_txo) {
+        foreach my $txo (grep { defined } @$tx) {
+            if ($minconf <= 1 || (defined($txo->[1]) && $txo->[1] <= $best_height - $minconf + 1)) {
+                $value += $txo->[0];
             }
         }
-        else {
-            next if QBitcoin::Transaction->has_pending($txo->tx_in);
-        }
-        $value += $txo->value;
     }
-    if (my ($script) = QBitcoin::RedeemScript->find(hash => $scripthash)) {
-        foreach my $utxo (grep { !$_->is_cached } QBitcoin::TXO->find(scripthash => $script->id)) {
-            $value += $utxo->value;
+    if (!$minconf) {
+        foreach my $tx (values %$mempool_txo) {
+            foreach my $txo (grep { defined } @$tx) {
+                $value += $txo->[0];
+            }
         }
     }
     return $self->response_ok($value/DENOMINATOR);
