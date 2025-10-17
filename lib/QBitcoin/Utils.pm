@@ -15,7 +15,7 @@ use QBitcoin::TXO;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
 
-use constant MAX_TXO_PER_ADDRESS => 1000;
+use constant MAX_TXO_PER_ADDRESS => 10_000;
 
 sub get_address_txo {
     my ($address) = @_;
