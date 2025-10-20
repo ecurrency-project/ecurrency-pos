@@ -419,7 +419,7 @@ sub get_address_txs {
                 $skip_until_tx = $last_seen_bin;
             }
         }
-        foreach my $txid (sort { $txo_chain->{$b}->{height} <=> $txo_chain->{$a}->{height} || $txo_chain->{$b}->{block_pos} <=> $txo_chain->{$a}->{block_pos} } keys %$txo_chain) {
+        foreach my $txid (sort { $txo_chain->{$b}->[1] <=> $txo_chain->{$a}->[1] || $txo_chain->{$b}->[2] <=> $txo_chain->{$a}->[2] } keys %$txo_chain) {
             if ($skip_until_tx) {
                 $skip_until_tx = undef if $skip_until_tx eq $txid;
                 next;
