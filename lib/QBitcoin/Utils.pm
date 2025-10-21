@@ -30,7 +30,7 @@ sub get_address_txo {
         }
         if ($txo_cnt >= MAX_TXO_PER_ADDRESS) {
             Infof("Too many TXO for address %s", $address);
-            return undef;
+            return ();
         }
     }
     for (my $height = QBitcoin::Block->max_db_height + 1; $height <= QBitcoin::Block->blockchain_height; $height++) {
