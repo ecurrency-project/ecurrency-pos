@@ -444,7 +444,7 @@ sub get_address_unspent {
     foreach my $txid (keys %$txo_chain) {
         for (my $vout = 0; $vout < @{$txo_chain->{$txid}}; $vout++) {
             push @utxo, {
-                txid      => $txid,
+                txid      => unpack("H*", $txid),
                 vout      => $vout,
                 value     => $txo_chain->{$txid}->[$vout]->[0],
                 height    => $txo_chain->{$txid}->[$vout]->[1],
@@ -457,7 +457,7 @@ sub get_address_unspent {
     foreach my $txid (sort { $a cmp $b } keys %$txo_mempool) { # TODO: sort by received_time
         for (my $vout = 0; $vout < @{$txo_mempool->{$txid}}; $vout++) {
             push @utxo, {
-                txid   => $txid,
+                txid   => unpack("H*", $txid),
                 vout   => $vout,
                 value  => $txo_mempool->{$txid}->[$vout]->[0],
                 status => "unconfirmed",
