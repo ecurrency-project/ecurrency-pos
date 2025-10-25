@@ -605,7 +605,7 @@ sub cmd_signrawtransactionwithkey {
         return $self->response_error("", ERR_INVALID_REQUEST, "Insufficient funds: $input_amount < $output_amount");
     }
     my $tx_data = $tx->serialize_unsigned;
-    my $fee_per_kb = ($input_amount - $output_amount) * length($tx_data) / 1024;
+    my $fee_per_kb = ($input_amount - $output_amount) * 1024 / length($tx_data);
     my $max_fee_per_kb = $self->max_fee_per_kb;
     if ($max_fee_per_kb && $fee_per_kb > $max_fee_per_kb) {
         return $self->response_error("", ERR_INVALID_REQUEST, "Transaction fee too high: " . $fee_per_kb / DENOMINATOR . " > " . $max_fee_per_kb / DENOMINATOR . " BTC/kb");
