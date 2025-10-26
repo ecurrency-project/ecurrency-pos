@@ -94,9 +94,10 @@ sub get_address_utxo {
                 $txo_chain{$tx->hash}->[$num] = [ $out->value, $height, $tx->block_pos ] if $out->unspent;
             }
             foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
-                if (@{ $txo_chain{$in->{txo}->tx_in} }) {
-                    delete $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num];
-                    delete $txo_chain{$in->{txo}->tx_in} unless @{ $txo_chain{$in->{txo}->tx_in} };
+                my $txid = $in->{txo}->tx_in;
+                if (exists $txo_chain{$txid}) {
+                    $txo_chain{$txid}->[$in->{txo}->num] = undef;
+                    delete $txo_chain{$txid} unless grep { defined } @{ $txo_chain{$txid} };
                 }
             }
         }
@@ -109,13 +110,14 @@ sub get_address_utxo {
             $txo_mempool{$tx->hash}->[$num] = [ $out->value ] if $out->unspent;
         }
         foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
-            if (@{ $txo_chain{$in->{txo}->tx_in} }) {
-                delete $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num];
-                delete $txo_chain{$in->{txo}->tx_in} unless @{ $txo_chain{$in->{txo}->tx_in} };
+            my $txid = $in->{txo}->tx_in;
+            if ($txo_chain{$txid}) {
+                $txo_chain{$txid}->[$in->{txo}->num] = undef;
+                delete $txo_chain{$txid} unless grep { defined } @{ $txo_chain{$txid} };
             }
-            elsif (@{ $txo_mempool{$in->{txo}->tx_in} }) {
-                delete $txo_mempool{$in->{txo}->tx_in}->[$in->{txo}->num];
-                delete $txo_mempool{$in->{txo}->tx_in} unless @{ $txo_mempool{$in->{txo}->tx_in} };
+            elsif ($txo_mempool{$txid}) {
+                $txo_mempool{$txid}->[$in->{txo}->num] = undef;
+                delete $txo_mempool{$txid} unless grep { defined } @{ $txo_mempool{$txid} };
             }
         }
     }
