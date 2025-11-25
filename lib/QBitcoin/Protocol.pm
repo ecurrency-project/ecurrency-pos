@@ -42,6 +42,7 @@ use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced);
 use QBitcoin::Block;
 use QBitcoin::Transaction;
 use QBitcoin::Peer;
+use QBitcoin::Generate::Control;
 use Bitcoin::Serialized;
 
 use Role::Tiny::With;
@@ -407,6 +408,7 @@ sub process_tx {
         $self->abort("bad_tx_data");
         return -1;
     }
+    my $best_was_generated = QBitcoin::Block->best_is_generated;
     if (defined(my $height = QBitcoin::Block->recv_pending_tx($tx))) {
         return -1 if $height == -1;
         # We've got new block on receive this tx, so we should request new blocks as after usual block receiving
@@ -427,6 +429,9 @@ sub process_tx {
                 if ($tx->rcvd && $tx->rcvd ne "\x00"x16 && (!$recv_peer || $recv_peer->ip ne $tx->rcvd)) {
                     my $src_peer = QBitcoin::Peer->get_or_create(type_id => PROTOCOL_QBITCOIN, ip => $tx->rcvd);
                     $src_peer->add_reputation($tx->up ? 100 : 1) if $src_peer;
+                }
+                if ($best_was_generated) {
+                    QBitcoin::Generate::Control->generate_new();
                 }
             }
         }
