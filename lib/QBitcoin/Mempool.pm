@@ -46,7 +46,7 @@ sub choose_for_block {
         }
     }
     return () unless @mempool;
-    @mempool = sort { compare_tx($a, $b) } @mempool;
+    @mempool = sort { compare_tx() } @mempool;
     if (!$can_consume) {
         @mempool = grep { $_->fee == 0 || $_->coins_created } @mempool;
     }
@@ -59,8 +59,10 @@ sub choose_for_block {
     for (my $i=0; $i<=$#mempool; $i++) {
         if (UPGRADE_POW && $mempool[$i]->is_coinbase) {
             my $coinbase = $mempool[$i]->up;
-            if ($coinbase->tx_out) {
-                # Already confirmed spent (MB not dropped from mempool b/c it included in some other block in alternate branch)
+            if ($coinbase->tx_out && $coinbase->tx_out ne $mempool[$i]->hash) {
+                # Already confirmed spent with another upgrade level
+                Debugf("Coinbase tx %s already spent in confirmed tx %s",
+                    $mempool[$i]->hash_str, $coinbase->tx_out_str);
                 $mempool[$i] = undef;
                 next;
             }
@@ -83,8 +85,8 @@ sub choose_for_block {
         my $skip = 0;
         foreach my $in (@{$mempool[$i]->in}) {
             my $txo = $in->{txo};
-            if ($txo->tx_out) {
-                # Already confirmed spent (MB not dropped from mempool b/c it was included in some other block in alternate branch)
+            if ($txo->tx_out && $txo->tx_out ne $mempool[$i]->hash) {
+                # Already confirmed spent
                 $skip = 1;
                 last;
             }
