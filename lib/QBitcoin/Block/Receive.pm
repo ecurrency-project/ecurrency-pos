@@ -120,7 +120,7 @@ sub receive {
         # Incorrect block
         # NB! Incorrect hash is not this case, hash must be checked earlier
         # Drop descendants, it's not possible to receive correct block with the same hash
-        $self->free_block();
+        $self->free();
         if ($self->received_from) {
             if ($self->received_from->connection) {
                 $self->received_from->abort("invalid_block");
@@ -361,7 +361,7 @@ sub cleanup_old_blocks {
                 last;
             }
             # we have only best block on this level without descendants in alternate branches, drop it and cleanup the level
-            free_block($best_block[$free_height]);
+            $best_block[$free_height]->free();
             foreach my $descendant (@descendants) {
                 $descendant->prev_block(undef);
             }
@@ -376,7 +376,7 @@ sub cleanup_old_blocks {
     }
 }
 
-sub free_block {
+sub free {
     my ($block) = @_;
 
     Debugf("Free block %s height %u from memory cache", $block->hash_str, $block->height);
@@ -408,7 +408,7 @@ sub drop_branch {
     }
     while (1) {
         my $prev_block = $cur_block->prev_block;
-        free_block($cur_block);
+        $cur_block->free();
         last if $cur_block->hash eq $block->hash;
         $cur_block = $prev_block;
     }
@@ -461,6 +461,18 @@ sub announce_to_peers {
         next unless $connection->protocol->can('announce_block');
         $connection->protocol->announce_block($self);
     }
+}
+
+sub unconfirm {
+    my $self = shift;
+
+    $self->hash eq $best_block[$HEIGHT]->hash
+        or die "Can unconfirm only best block";
+    foreach my $tx (reverse @{$self->transactions}) {
+        $tx->unconfirm();
+    }
+    $self->free();
+    $HEIGHT--;
 }
 
 1;

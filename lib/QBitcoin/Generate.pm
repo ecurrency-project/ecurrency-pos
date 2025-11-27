@@ -103,7 +103,8 @@ sub my_txo_by_address {
     }
     return (
         sort { $b->[2] <=> $a->[2] || $b->[1] <=> $a->[1] || $a->[0] cmp $b->[0] }
-        map { [ $_, $my{$_}->[0], $my{$_}->[1] ] } keys %my
+            map { [ $_, $my{$_}->[0], $my{$_}->[1] ] }
+                keys %my
     );
 }
 
@@ -201,6 +202,15 @@ sub generate {
             if ($height == 0) {
                 Debugf("Skip regenerating genesis block");
                 return;
+            }
+            if ($prev_block->next_block) {
+                Infof("Skip generating block on too low height %u time %s", $height + 1, $time);
+                return;
+            }
+            # If current best block is our with the same height than unconfirm it for use the same stake amount
+            if (!$prev_block->received_from) {
+                Debugf("Unconfirming our block %s height %u for regenerating", $prev_block->hash_str, $height);
+                $prev_block->unconfirm();
             }
             $height--;
             $prev_block = QBitcoin::Block->best_block($height)
