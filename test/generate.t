@@ -43,12 +43,21 @@ ok($block0, "Genesis block generated");
 my $tx = send_tx();
 my $tx2 = send_tx(0, $tx, $myaddr->redeem_script);
 send_block(1, "a1", "a0", 5, $tx, $tx2);
-is(QBitcoin::Block->blockchain_height, 1, "Block 1 received");
+is(QBitcoin::Block->blockchain_height, 1, "Block a1 received");
 
 block_hash("b1");
 my $block1 = eval { QBitcoin::Generate->generate($time + BLOCK_INTERVAL) };
-ok($block1, "Alternative block 1 generated");
+ok($block1, "Alternative block b1 generated");
 is(scalar(@{$block1->transactions}), 2, "Generated block conrains 2 transactions");
 is(QBitcoin::Block->best_block->hash, "b1", "Block 1 altered");
+$block1->{self_weight} = $block1->{self_weight} - 1;
+$block1->{weight} = $block1->{weight} - 1;
+
+my $tx3 = send_tx(10, undef);
+block_hash("c1");
+my $block2 = eval { QBitcoin::Generate->generate($time + BLOCK_INTERVAL) };
+ok($block2, "Alternative block c1 generated");
+is(scalar(@{$block2->transactions}), 4, "Generated block conrains 4 transactions");
+is(QBitcoin::Block->best_block->hash, "c1", "Block 1 altered");
 
 done_testing();
