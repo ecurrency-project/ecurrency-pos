@@ -41,10 +41,9 @@ my $block0 = QBitcoin::Generate->generate($time);
 ok($block0, "Genesis block generated");
 
 my $tx = send_tx();
-send_block(1, "a1", "a0", 5, $tx);
-is(QBitcoin::Block->blockchain_height, 1, "Block 1 received");
-
 my $tx2 = send_tx(0, $tx, $myaddr->redeem_script);
+send_block(1, "a1", "a0", 5, $tx, $tx2);
+is(QBitcoin::Block->blockchain_height, 1, "Block 1 received");
 
 block_hash("b1");
 my $block1 = eval { QBitcoin::Generate->generate($time + BLOCK_INTERVAL) };
