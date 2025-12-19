@@ -32,6 +32,8 @@ use constant SEQUENCE_LOCKTIME_DISABLE_FLAG  => 1 << 31;
 use constant SEQUENCE_LOCKTIME_TYPE_FLAG     => 1 << 22;
 use constant QBT_SEQUENCE_LOCKTIME_TYPE_FLAG => 1 << 27;
 
+use constant MAX_SCRIPT_EXEC_DEPTH => 16;
+
 # Allow attributes "in1", "in2", etc
 sub MODIFY_CODE_ATTRIBUTES {
     my ($class, $code, @attrs) = @_;
@@ -489,6 +491,55 @@ sub cmd_checksequenceverify($) {
         }
     }
     return undef;
+}
+
+sub cmd_exec {
+    my ($state) = @_;
+    return unless $state->ifstate;
+    $state->execdepth <= MAX_SCRIPT_EXEC_DEPTH
+        or return 0;
+    my $stack = $state->stack;
+    @$stack or return 0;
+    my $script = pop @$stack;
+    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num);
+    $new_state->execdepth = $state->execdepth + 1;
+    return execute($new_state);
+}
+
+# Params: <leaf_hash> <merkle_path> <merkle_root>
+# Verify that the merkle path from leaf_hash leads to merkle_root
+# Result: <leaf_hash> in stack if verified, else error
+sub cmd_mastverify {
+    my ($state) = @_;
+    return unless $state->ifstate;
+    my $stack = $state->stack;
+    @$stack >= 3 or return 0;
+    my ($hash, $merkle_path, $merkle_root) = splice(@$stack, -3);
+    _check_merkle_path($hash, $merkle_path, $merkle_root)
+        or return 0;
+    return undef;
+}
+
+sub _merkle_hash {
+    return hash256($_[0] . $_[1]);
+}
+
+sub _check_merkle_path {
+    my ($hash, $merkle_path, $merkle_root) = @_;
+
+    my $cur_hash = $hash;
+    my $hashlen = length($cur_hash);
+    my $pathlen = length($merkle_path);
+    $hashlen == 32 or return 0;
+    length($merkle_root) == $hashlen or return 0;
+    $pathlen % $hashlen == 0 or return 0;
+    my $ndx = 0;
+    while ($ndx < $pathlen) {
+        my $next_hash = substr($merkle_path, $ndx, $hashlen);
+        $ndx += $hashlen;
+        $cur_hash = _merkle_hash($next_hash lt $cur_hash ? ( $next_hash, $cur_hash ) : ( $cur_hash, $next_hash ));
+    }
+    return $cur_hash eq $merkle_root;
 }
 
 sub execute {

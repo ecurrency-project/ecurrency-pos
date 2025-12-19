@@ -115,6 +115,9 @@ use constant OPCODES => {
     OP_CHECKLOCKTIMEVERIFY => 0xb1, # + previously OP_NOP2
     OP_CHECKSEQUENCEVERIFY => 0xb2, # + previously OP_NOP3
 
+    OP_MASTVERIFY          => 0xb3, # - previously OP_NOP4
+    OP_EXEC                => 0xb4, # - previously OP_NOP5
+
     OP_PUBKEYHASH          => 0xfd, # +
     OP_PUBKEY              => 0xfe, # +
     OP_INVALIDOPCODE       => 0xff, # +
@@ -123,8 +126,6 @@ use constant OPCODES => {
     OP_RESERVED1           => 0x89, # +
     OP_RESERVED2           => 0x8a, # +
     OP_NOP1                => 0xb0, # +
-    OP_NOP4                => 0xb3, # +
-    OP_NOP5                => 0xb4, # +
     OP_NOP6                => 0xb5, # +
     OP_NOP7                => 0xb6, # +
     OP_NOP8                => 0xb7, # +
