@@ -5,8 +5,9 @@ use strict;
 # Utility functions for QBitcoin REST and RPC interfaces
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(get_address_txo get_address_utxo);
+our @EXPORT_OK = qw(get_address_txo get_address_utxo address_received);
 
+use List::Util qw(sum0);
 use QBitcoin::Log;
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(scripthash_by_address);
@@ -66,6 +67,45 @@ sub get_address_txo {
     }
 
     return wantarray ? (\%txo_chain, \%txo_mempool) : \%txo_chain;
+}
+
+sub address_received {
+    my ($address, $minconf) = @_;
+    my $scripthash = eval { scripthash_by_address($address) }
+        or return undef;
+    my $value = 0;
+    my $max_db_height = QBitcoin::Block->max_db_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
+        my $result;
+        if ($minconf && $blockchain_height - $minconf + 1 < $max_db_height) {
+            my $sql = "SELECT SUM(value) FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) WHERE scripthash = ? AND tx_in.block_height <= ?";
+            ($result) = dbh->selectall_array($sql, undef, $script->id, $blockchain_height - $minconf + 1);
+        }
+        else {
+            my $sql = "SELECT SUM(value) FROM `" . QBitcoin::TXO->TABLE . "` WHERE scripthash = ?";
+            ($result) = dbh->selectall_array($sql, undef, $script->id);
+        }
+        $value = $result->[0] // 0;
+    }
+    if ($minconf && $blockchain_height - $minconf + 1 <= $max_db_height) {
+        return $value;
+    }
+
+    for (my $height = $max_db_height + 1; $height <= $blockchain_height - $minconf + 1; $height++) {
+        my $block = QBitcoin::Block->best_block($height)
+            or next;
+        foreach my $tx (@{$block->transactions}) {
+            $value += sum0 map { $_->value } grep { $_->scripthash eq $scripthash } @{$tx->out};
+        }
+    }
+    if (!$minconf) {
+        foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+            $value += sum0 map { $_->value } grep { $_->scripthash eq $scripthash } @{$tx->out};
+        }
+    }
+
+    return $value;
 }
 
 sub get_address_utxo {
