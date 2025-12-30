@@ -17,7 +17,7 @@ use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::Transaction;
 use QBitcoin::Block;
-use QBitcoin::Utils qw(get_address_txo get_address_utxo);
+use QBitcoin::Utils qw(get_address_txo get_address_utxo address_stats);
 use parent qw(QBitcoin::HTTP);
 
 use constant {
@@ -371,28 +371,12 @@ sub block_obj {
     };
 }
 
-sub txo_stats {
-    my ($txo) = @_;
-    # tx_count, funded_txo_count, funded_txo_sum, spent_txo_count and spent_txo_sum
-    return {
-        tx_count         => scalar(keys %$txo),
-        funded_txo_count => scalar(grep { defined($_) } map { @$_ } values %$txo),
-        funded_txo_sum   => sum0(map { $_->[0] } grep { defined($_) } map { @$_ } values %$txo),
-        spent_txo_count  => scalar(grep { defined($_) && defined($_->[3]) } map { @$_ } values %$txo),
-        spent_txo_sum    => sum0(map { $_->[0] } grep { defined($_) && defined($_->[3]) } map { @$_ } values %$txo),
-    };
-}
-
 sub get_address_stats {
     my $self = shift;
     my ($address) = @_;
-    my ($txo_chain, $txo_mempool) = get_address_txo($address);
-    $txo_chain
+    my $stats = address_stats($address)
         or return $self->http_response(404, "Incorrect address");
-    return $self->http_ok({
-        chain_stats   => txo_stats($txo_chain),
-        mempool_stats => txo_stats($txo_mempool),
-    });
+    return $self->http_ok($stats);
 }
 
 sub get_address_txs {

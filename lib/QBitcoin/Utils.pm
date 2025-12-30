@@ -5,7 +5,7 @@ use strict;
 # Utility functions for QBitcoin REST and RPC interfaces
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(get_address_txo get_address_utxo address_received);
+our @EXPORT_OK = qw(get_address_txo get_address_utxo address_received address_stats);
 
 use List::Util qw(sum0);
 use QBitcoin::Log;
@@ -67,6 +67,73 @@ sub get_address_txo {
     }
 
     return wantarray ? (\%txo_chain, \%txo_mempool) : \%txo_chain;
+}
+
+sub address_stats {
+    my ($address) = @_;
+    my $scripthash = eval { scripthash_by_address($address) }
+        or return undef;
+    my ($funded_sum, $funded_cnt, $spent_sum, $spent_cnt, $tx_cnt) = (0,0,0,0,0);
+    my $max_db_height = QBitcoin::Block->max_db_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
+        my $sql = "SELECT IFNULL(SUM(value), 0), COUNT(*), IFNULL(SUM(IF(tx_out IS NULL, 0, value)), 0), COUNT(tx_out), COUNT(DISTINCT tx_in)+COUNT(DISTINCT tx_out) FROM `" . QBitcoin::TXO->TABLE . "` WHERE scripthash = ?";
+        my ($result) = dbh->selectall_array($sql, undef, $script->id);
+        ($funded_sum, $funded_cnt, $spent_sum, $spent_cnt, $tx_cnt) = @$result;
+        # Calculate transactions with both inputs and outputs to this address
+        my ($res2) = dbh->selectall_array("SELECT COUNT(DISTINCT t1.tx_in) FROM `" . QBitcoin::TXO->TABLE . "` t1 JOIN `" . QBitcoin::TXO->TABLE . "` t2 ON (t1.tx_in = t2.tx_out AND t1.scripthash = t2.scripthash) WHERE t1.scripthash = ?", undef, $script->id);
+        $tx_cnt -= $res2->[0];
+    }
+    for (my $height = $max_db_height + 1; $height <= $blockchain_height; $height++) {
+        my $block = QBitcoin::Block->best_block($height)
+            or next;
+        foreach my $tx (@{$block->transactions}) {
+            my $tx_involved = 0;
+            foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+                $spent_sum += $in->{txo}->value;
+                $spent_cnt++;
+                $tx_involved = 1;
+            }
+            foreach my $out (grep { $_->scripthash eq $scripthash } @{$tx->out}) {
+                $funded_sum += $out->value;
+                $funded_cnt++;
+                $tx_involved = 1;
+            }
+            $tx_cnt++ if $tx_involved;
+        }
+    }
+    my ($mempool_funded_sum, $mempool_funded_cnt, $mempool_spent_sum, $mempool_spent_cnt, $mempool_tx_cnt) = (0,0,0,0,0);
+    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+        my $tx_involved = 0;
+        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+            $mempool_spent_sum += $in->{txo}->value;
+            $mempool_spent_cnt++;
+            $tx_involved = 1;
+        }
+        foreach my $out (grep { $_->scripthash eq $scripthash } @{$tx->out}) {
+            $mempool_funded_sum += $out->value;
+            $mempool_funded_cnt++;
+            $tx_involved = 1;
+        }
+        $mempool_tx_cnt++ if $tx_involved;
+    }
+
+    return {
+        chain_stats   => {
+            funded_txo_sum   => $funded_sum,
+            funded_txo_count => $funded_cnt,
+            spent_txo_sum    => $spent_sum,
+            spent_txo_count  => $spent_cnt,
+            tx_count         => $tx_cnt,
+        },
+        mempool_stats => {
+            funded_txo_sum   => $mempool_funded_sum,
+            funded_txo_count => $mempool_funded_cnt,
+            spent_txo_sum    => $mempool_spent_sum,
+            spent_txo_count  => $mempool_spent_cnt,
+            tx_count         => $mempool_tx_cnt,
+        },
+    };
 }
 
 sub address_received {
