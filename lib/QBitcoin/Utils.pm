@@ -5,7 +5,7 @@ use strict;
 # Utility functions for QBitcoin REST and RPC interfaces
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(get_address_txo get_address_utxo address_received address_stats);
+our @EXPORT_OK = qw(get_address_txo get_address_utxo address_received address_balance address_stats);
 
 use List::Util qw(sum0);
 use QBitcoin::Log;
@@ -170,6 +170,72 @@ sub address_received {
         foreach my $tx (QBitcoin::Transaction->mempool_list()) {
             $value += sum0 map { $_->value } grep { $_->scripthash eq $scripthash } @{$tx->out};
         }
+    }
+
+    return $value;
+}
+
+sub address_balance {
+    my ($address, $minconf) = @_;
+    my $scripthash = eval { scripthash_by_address($address) }
+        or return undef;
+    my $value = 0;
+    my $max_db_height = QBitcoin::Block->max_db_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    my $last_tx;
+    my %fresh_inputs;
+    if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
+        my $result;
+        if ($minconf && $blockchain_height - $minconf + 1 < $max_db_height) {
+            ($last_tx) = QBitcoin::Transaction->fetch(block_height => { '<=', $blockchain_height - $minconf + 1 }, -sortby => 'id DESC', -limit => 1);
+            if (defined $last_tx) {
+                my $sql = "SELECT SUM(value) FROM `" . QBitcoin::TXO->TABLE . "` WHERE tx_out IS NULL and scripthash = ? AND tx_in <= ?";
+                ($result) = dbh->selectall_array($sql, undef, $script->id, $last_tx->{id});
+                # Store inputs that have not enough confirmations to exclude them later
+                my $fresh_inputs_sql = "SELECT hash FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` ON (id = tx_in) WHERE scripthash = ? AND tx_out IS NULL AND tx_in > ?";
+                %fresh_inputs = map { $_->[0] => 1 } dbh->selectall_array($fresh_inputs_sql, undef, $script->id, $last_tx->{id});
+            }
+            else {
+                $result = [0];
+            }
+        }
+        else {
+            my $sql = "SELECT SUM(value) FROM `" . QBitcoin::TXO->TABLE . "` WHERE tx_out IS NULL and scripthash = ?";
+            ($result) = dbh->selectall_array($sql, undef, $script->id);
+        }
+        $value = $result->[0] // 0;
+    }
+
+    for (my $height = $max_db_height + 1; $height <= $blockchain_height; $height++) {
+        my $block = QBitcoin::Block->best_block($height)
+            or next;
+        foreach my $tx (@{$block->transactions}) {
+            if (%fresh_inputs) {
+                foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+                    $value -= $in->{txo}->value if exists $fresh_inputs{$in->{txo}->tx_in};
+                }
+            }
+            if (!$minconf || $height <= $blockchain_height - $minconf + 1) {
+                foreach my $out (grep { $_->scripthash eq $scripthash && $_->unspent } @{$tx->out}) {
+                    $value += $out->value;
+                }
+            }
+        }
+    }
+    if (%fresh_inputs || !$minconf) {
+        foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+            if (%fresh_inputs) {
+                foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+                    $value -= $in->{txo}->value if exists $fresh_inputs{$in->{txo}->tx_in};
+                }
+            }
+            if (!$minconf) {
+                foreach my $out (grep { $_->scripthash eq $scripthash && $_->unspent } @{$tx->out}) {
+                    $value += $out->value;
+                }
+            }
+        }
+
     }
 
     return $value;

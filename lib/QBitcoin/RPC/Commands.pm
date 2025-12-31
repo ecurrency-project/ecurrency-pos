@@ -21,7 +21,7 @@ use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
 use QBitcoin::MinFee;
-use QBitcoin::Utils qw(get_address_txo get_address_utxo address_received);
+use QBitcoin::Utils qw(get_address_txo get_address_utxo address_received address_balance);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
@@ -1186,29 +1186,9 @@ sub cmd_getaddressbalance {
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
     my $address = $self->args->[0];
     my $minconf = $self->args->[1] // 1;
-    my ($chain_utxo, $mempool_utxo) = get_address_utxo($address);
-    $chain_utxo
+    my $value = address_balance($address, $minconf);
+    defined $value
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
-    my $best_height;
-    if ($minconf > 1) {
-        $best_height = QBitcoin::Block->blockchain_height
-            or return $self->response_ok(0);
-    }
-    my $value = 0;
-    foreach my $tx (values %$chain_utxo) {
-        foreach my $utxo (grep { defined } @$tx) {
-            if ($minconf <= 1 || (defined($utxo->[1]) && $utxo->[1] <= $best_height - $minconf + 1)) {
-                $value += $utxo->[0];
-            }
-        }
-    }
-    if (!$minconf) {
-        foreach my $tx (values %$mempool_utxo) {
-            foreach my $utxo (grep { defined } @$tx) {
-                $value += $utxo->[0];
-            }
-        }
-    }
     return $self->response_ok($value/DENOMINATOR);
 }
 
