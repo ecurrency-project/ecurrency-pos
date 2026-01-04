@@ -254,7 +254,6 @@ sub get_address_utxo {
         }
         if (!defined($limit) && $txo_cnt >= MAX_TXO_PER_ADDRESS) {
             Infof("Too many UTXO for address %s", $address);
-            return undef;
         }
     }
     for (my $height = QBitcoin::Block->max_db_height + 1; $height <= QBitcoin::Block->blockchain_height; $height++) {
