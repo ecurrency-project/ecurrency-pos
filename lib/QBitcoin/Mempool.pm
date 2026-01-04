@@ -42,7 +42,7 @@ sub choose_for_block {
     Debugf("Mempool: %s", join(',', map { $_->hash_str } @mempool)) if @mempool;
     if ($block_height) {
         for (my $block = $prev_block->next_block; $block; $block = $block->next_block) {
-            push @mempool, @{$block->transactions};
+            push @mempool, grep { $_->fee >= 0 } @{$block->transactions};
         }
     }
     return () unless @mempool;
