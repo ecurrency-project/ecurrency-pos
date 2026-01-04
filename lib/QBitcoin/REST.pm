@@ -17,7 +17,7 @@ use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::Transaction;
 use QBitcoin::Block;
-use QBitcoin::Utils qw(get_address_txo get_address_utxo address_stats);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats);
 use parent qw(QBitcoin::HTTP);
 
 use constant {
@@ -124,7 +124,7 @@ sub process_request {
             return $self->get_address_stats($path[1]);
         }
         elsif ($path[2] eq "txs") {
-            return $self->get_address_txs($path[1], ($path[3] // "") eq "mempool" ? 0 : 25, ($path[3] // "") eq "chain" ? 0 : 50, $path[4]);
+            return $self->list_address_txs($path[1], ($path[3] // "") eq "mempool" ? 0 : 25, ($path[3] // "") eq "chain" ? 0 : 50, $path[4]);
         }
         elsif ($path[2] eq "utxo") {
             @path == 3
@@ -379,39 +379,29 @@ sub get_address_stats {
     return $self->http_ok($stats);
 }
 
-sub get_address_txs {
+sub list_address_txs {
     my $self = shift;
     my ($address, $chain_cnt, $mempool_cnt, $last_seen) = @_;
-    my ($txo_chain, $txo_mempool) = get_address_txo($address);
+    my $last_seen_bin;
+    if ($last_seen && $last_seen =~ /^[0-9a-f]{64}\z/) {
+        $last_seen_bin = pack("H*", $last_seen);
+    }
+    my ($txo_chain, $txo_mempool) = get_address_txs($address, $last_seen_bin, $chain_cnt, $mempool_cnt);
     $txo_chain
         or return $self->http_response(404, "Incorrect address");
     my @tx;
     if ($mempool_cnt) {
-        foreach my $txid (keys %$txo_mempool) {
-            my $tx = QBitcoin::Transaction->get($txid)
+        foreach my $tx_data (@$txo_mempool) {
+            my $tx = QBitcoin::Transaction->get($tx_data->[0])
                 or next;
             push @tx, tx_obj($tx);
-            last unless --$mempool_cnt;
         }
-        @tx = sort { ($b->{received_time} // 0) <=> ($a->{received_time} // 0) } @tx;
     }
     if ($chain_cnt) {
-        my $skip_until_tx;
-        if ($last_seen && $last_seen =~ /^[0-9a-f]{64}\z/) {
-            my $last_seen_bin = pack("H*", $last_seen);
-            if ($txo_chain->{$last_seen_bin}) {
-                $skip_until_tx = $last_seen_bin;
-            }
-        }
-        foreach my $txid (sort { $txo_chain->{$b}->[-1]->[1] <=> $txo_chain->{$a}->[-1]->[1] || $txo_chain->{$b}->[-1]->[2] <=> $txo_chain->{$a}->[-1]->[2] } keys %$txo_chain) {
-            if ($skip_until_tx) {
-                $skip_until_tx = undef if $skip_until_tx eq $txid;
-                next;
-            }
-            my $tx = QBitcoin::Transaction->get_by_hash($txid)
+        foreach my $tx_data (@$txo_chain) {
+            my $tx = QBitcoin::Transaction->get_by_hash($tx_data->[0])
                 or next;
             push @tx, tx_obj($tx);
-            last unless --$chain_cnt;
         }
     }
     return $self->http_ok(\@tx);

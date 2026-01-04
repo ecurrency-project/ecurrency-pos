@@ -21,7 +21,7 @@ use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
 use QBitcoin::MinFee;
-use QBitcoin::Utils qw(get_address_txo get_address_utxo address_received address_balance);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
@@ -1336,50 +1336,26 @@ sub cmd_listtransactions {
     my $minconf = $self->args->[1] // 1;
     blockchain_synced() && mempool_synced()
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
-    my ($txo_chain, $txo_mempool) = get_address_txo($address);
-    $txo_chain
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
+    my ($txs_chain, $txs_mempool) = get_address_txs($address, undef, undef, undef);
+    $txs_chain
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Incorrect address");
     my $best_height = QBitcoin::Block->blockchain_height
         or return $self->response_ok([]);
-    $txo_mempool = {} if $minconf > 0;
-    my %tx;
-    foreach my $txo_data ($txo_chain, $txo_mempool) {
-        foreach my $txid (keys %$txo_data) {
-            my $tx_in = $tx{$txid} //= { value => 0 };
-            for (my $i = 0; $i < @{$txo_data->{$txid}}; $i++) {
-                my $txo = $txo_chain->{$txid}->[$i]
-                    or next;
-                next if $minconf > 1 && ($txo->[1] // $best_height + 1) > $best_height - $minconf + 1;
-                $tx_in->{value} += $txo->[0];
-                if (!defined($tx_in->{height})) {
-                    if (defined($txo->[1])) {
-                        $tx_in->{height} = $txo->[1];
-                        $tx_in->{block_pos} = $txo->[2];
-                    }
-                }
-                if (defined($txo->[3])) {
-                    next if $minconf > 1 && ($txo->[4] // $best_height + 1) > $best_height - $minconf + 1;
-                    my $tx_out = $tx{$txo->[3]} //= { value => 0 };
-                    $tx_out->{value} -= $txo->[0];
-                    if (!defined($tx_out->{height})) {
-                        if (defined($txo->[4])) {
-                            $tx_out->{height} = $txo->[4];
-                            $tx_out->{block_pos} = $txo->[5];
-                        }
-                    }
-                }
-            }
-        }
-    }
+    $txs_mempool = [] if $minconf > 0;
+    @$txs_chain = grep { $_->[2] <= $best_height - $minconf + 1 } @$txs_chain if $minconf > 1;
     return $self->response_ok([
-        map +{
-            txid          => unpack("H*", $_),
-            amount        => $tx{$_}->{value} / DENOMINATOR,
-            height        => $tx{$_}->{height} // -1,
-            confirmations => ( defined($tx{$_}->{height}) ? $best_height - $tx{$_}->{height} + 1 : 0 ),
-        },
-        sort { ($tx{$b}->{height} // $best_height+1) <=> ($tx{$a}->{height} // $best_height+1) || ($tx{$b}->{block_pos} // 0) <=> ($tx{$a}->{block_pos} // 0) }
-        keys %tx
+        map(+{
+            txid          => unpack("H*", $_->[0]),
+            amount        => $_->[1] / DENOMINATOR,
+            height        => $_->[2],
+            confirmations => $best_height - $_->[2] + 1,
+        }, @$txs_chain),
+        map(+{
+            txid          => unpack("H*", $_->[0]),
+            amount        => $_->[1] / DENOMINATOR,
+            height        => -1,
+            confirmations => 0,
+        }, @$txs_mempool),
     ]);
 }
 

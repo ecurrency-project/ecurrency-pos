@@ -5,7 +5,7 @@ use strict;
 # Utility functions for QBitcoin REST and RPC interfaces
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(get_address_txo get_address_utxo address_received address_balance address_stats);
+our @EXPORT_OK = qw(get_address_txs get_address_utxo address_received address_balance address_stats);
 
 use List::Util qw(sum0);
 use QBitcoin::Log;
@@ -18,55 +18,112 @@ use QBitcoin::Block;
 
 use constant MAX_TXO_PER_ADDRESS => 10_000;
 
-sub get_address_txo {
-    my ($address) = @_;
+# returns list of arrays [ txid, value, block_height ] for blockchain and [ txid, value, received_time ] for mempool
+sub get_address_txs {
+    my ($address, $last_seen, $chain_limit, $mempool_limit) = @_;
     my $scripthash = eval { scripthash_by_address($address) }
         or return ();
-    my %txo_chain;
-    my $txo_cnt = 0;
-    if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
-        foreach my $txo (dbh->selectall_array("SELECT tx_in.hash, num, value, tx_in.block_height, tx_in.block_pos, tx_out.hash, tx_out.block_height, tx_out.block_pos FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) LEFT JOIN `" . QBitcoin::Transaction->TABLE . "` tx_out ON (tx_out = tx_out.id) WHERE scripthash = ? ORDER BY tx_in.block_height DESC, tx_in.block_pos DESC LIMIT ?", undef, $script->id, MAX_TXO_PER_ADDRESS)) {
-            $txo_chain{$txo->[0]}->[$txo->[1]] = [ $txo->[2], $txo->[3], $txo->[4], $txo->[5], $txo->[6], $txo->[7] ]; # [ value, block_height, block_pos, spent_hash, spent_height, spent_block_pos ]
-            $txo_cnt++;
+    $chain_limit //= MAX_TXO_PER_ADDRESS;
+    $mempool_limit //= MAX_TXO_PER_ADDRESS;
+    my @txs_chain;
+
+    my ($skip_before, $skip_before_id);
+    my $script = QBitcoin::RedeemScript->find(hash => $scripthash);
+    if ($last_seen) {
+        if ($skip_before = QBitcoin::Transaction->get($last_seen)) {
+            $skip_before_id = $skip_before->id; # undef if not in DB
         }
-        if ($txo_cnt >= MAX_TXO_PER_ADDRESS) {
-            Infof("Too many TXO for address %s", $address);
-            return ();
-        }
-    }
-    for (my $height = QBitcoin::Block->max_db_height + 1; $height <= QBitcoin::Block->blockchain_height; $height++) {
-        my $block = QBitcoin::Block->best_block($height)
-            or next;
-        foreach my $tx (@{$block->transactions}) {
-            for (my $num = 0; $num < @{$tx->out}; $num++) {
-                my $out = $tx->out->[$num];
-                next if $out->scripthash ne $scripthash;
-                $txo_chain{$tx->hash}->[$num] = [ $out->value, $height, $tx->block_pos ];
-            }
-            foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
-                @{ $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num] }[3,4,5] = ( $tx->hash, $height, $tx->block_pos );
-            }
+        elsif ($skip_before = QBitcoin::Transaction->fetch(hash => $last_seen)) {
+            $skip_before_id = $skip_before->{id};
         }
     }
-    my %txo_mempool;
-    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
-        for (my $num = 0; $num < @{$tx->out}; $num++) {
-            my $out = $tx->out->[$num];
-            next if $out->scripthash ne $scripthash;
-            $txo_mempool{$tx->hash}->[$num] = [ $out->value, undef ];
-        }
-        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
-            if ($txo_mempool{$in->{txo}->tx_in}) {
-                $txo_mempool{$in->{txo}->tx_in}->[$in->{txo}->num]->[3] = $tx->hash;
-            }
-            elsif ($txo_chain{$in->{txo}->tx_in}) {
-                # Unconfirmed spent displayed as spent
-                $txo_chain{$in->{txo}->tx_in}->[$in->{txo}->num]->[3] = $tx->hash;
+
+    my @txs_inmem;
+    if (!$skip_before_id) {
+        my $in_skip = $skip_before ? 1 : 0;
+        for (my $height = QBitcoin::Block->blockchain_height; $height > QBitcoin::Block->max_db_height; $height--) {
+            my $block = QBitcoin::Block->best_block($height)
+                or next;
+            foreach my $tx (@{$block->transactions}) {
+                if ($in_skip) {
+                    if ($tx->hash eq $last_seen) {
+                        $in_skip = 0;
+                    }
+                    next;
+                }
+                my $tx_data;
+                for (my $num = 0; $num < @{$tx->out}; $num++) {
+                    my $out = $tx->out->[$num];
+                    next if $out->scripthash ne $scripthash;
+                    if ($tx_data) {
+                        $tx_data->[1] += $out->value;
+                    }
+                    else {
+                        $tx_data= [ $tx->hash, $out->value, $height, $tx->block_pos ];
+                    }
+                }
+                foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+                    if ($tx_data) {
+                        $tx_data->[1] -= $in->{txo}->value;
+                    }
+                    else {
+                        $tx_data = [ $tx->hash, -$in->{txo}->value, $height, $tx->block_pos ];
+                    }
+                }
+                push @txs_inmem, $tx_data if $tx_data;
             }
         }
     }
 
-    return wantarray ? (\%txo_chain, \%txo_mempool) : \%txo_chain;
+    if (@txs_chain < $chain_limit && $script) {
+        my @txs_in = dbh->selectall_array("SELECT hash, amount, block_height, block_pos FROM `" . QBitcoin::Transaction->TABLE . "` tx JOIN (SELECT tx_in, SUM(value) AS amount FROM `" . QBitcoin::TXO->TABLE . "` txo WHERE scripthash = ? AND (? IS NULL OR tx_in < ?) GROUP BY tx_in ORDER BY tx_in DESC LIMIT ?) AS t ON (tx_in = id)", undef, $script->id, $skip_before_id, $skip_before_id, $chain_limit);
+        my @txs_out = dbh->selectall_array("SELECT hash, amount, block_height, block_pos FROM `" . QBitcoin::Transaction->TABLE . "` tx JOIN (SELECT tx_out, -SUM(value) AS amount FROM `" . QBitcoin::TXO->TABLE . "` txo WHERE scripthash = ? AND tx_out IS NOT NULL AND (? IS NULL OR tx_out < ?) GROUP BY tx_out ORDER BY tx_out DESC LIMIT ?) AS t ON (tx_out = id)", undef, $script->id, $skip_before_id, $skip_before_id, $chain_limit);
+        my %txs_in = map { $_->[0] => $_ } @txs_in;
+        foreach my $tx (@txs_out) {
+            if (exists $txs_in{$tx->[0]}) {
+                $txs_in{$tx->[0]}->[1] += $tx->[1];
+            }
+            else {
+                push @txs_in, $tx;
+            }
+        }
+        undef @txs_out;
+        undef %txs_in;
+        @txs_chain = map [ $_->[0], $_->[1], $_->[2] ],
+            sort { $b->[2] <=> $a->[2] || $b->[3] <=> $a->[3] }
+                @txs_inmem, @txs_in;
+    }
+    else {
+        @txs_chain = map [ $_->[0], $_->[1], $_->[2] ], @txs_inmem;
+    }
+    splice @txs_chain, $chain_limit if @txs_chain > $chain_limit;
+    undef @txs_inmem;
+
+    my @txs_mempool;
+    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+        my $tx_data;
+        for (my $num = 0; $num < @{$tx->out}; $num++) {
+            my $out = $tx->out->[$num];
+            next if $out->scripthash ne $scripthash;
+            if ($tx_data) {
+                $tx_data->[1] += $out->value;
+            }
+            else {
+                $tx_data = [ $tx->hash, $out->value, $tx->received_time ];
+            }
+        }
+        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+            if ($tx_data) {
+                $tx_data->[1] -= $in->{txo}->value;
+            }
+            else {
+                $tx_data = [ $tx->hash, -$in->{txo}->value, $tx->received_time ];
+            }
+        }
+        push @txs_mempool, $tx_data if $tx_data;
+    }
+
+    return (\@txs_chain, \@txs_mempool);
 }
 
 sub address_stats {
