@@ -80,6 +80,8 @@ ENV PATH=${PATH}:/qbitcoin/bin
 ENV dbi=sqlite
 ENV database=qbitcoin
 ENV debug=
+# Workaround mariadb-connector-c 3.4x in alpine 3.23 which fail to connect without SSL by default
+ENV MARIADB_TLS_DISABLE_PEER_VERIFICATION=1
 
 ENTRYPOINT ["/qbitcoin/bin/run-qbitcoin.sh"]
 
