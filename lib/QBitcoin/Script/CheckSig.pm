@@ -5,6 +5,7 @@ use strict;
 use Role::Tiny;
 use QBitcoin::Crypto qw(check_sig);
 use QBitcoin::Script::Const;
+use QBitcoin::Script::Util qw(pack_int unpack_int);
 
 sub cmd_checksig($) {
     my ($state) = @_;
@@ -61,6 +62,18 @@ sub cmd_checkmultisigverify($) {
     my ($state) = @_;
     return unless $state->ifstate;
     return checkmultisig($state) ? undef : 0;
+}
+
+sub cmd_checksigadd($) {
+    my ($state) = @_;
+    return unless $state->ifstate;
+    my $stack = $state->stack;
+    @$stack >= 3 or return 0;
+    my ($signature, $accum, $pubkey) = splice(@$stack, -3);
+    my $result = check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? 1 : 0;
+    my $acc_int = unpack_int($accum);
+    push @$stack, pack_int($acc_int + $result);
+    return undef;
 }
 
 sub check_tx_signature {

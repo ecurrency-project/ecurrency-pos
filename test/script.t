@@ -58,6 +58,10 @@ my $tx = TestTx->new(sign_data => $sign_data);
 my $res = script_eval($siglist, $redeem_script, $tx, 0);
 ok($res, "checksig");
 
+$redeem_script = op_pushdata("\x00") . op_pushdata($myaddr->pubkey) . OP_CHECKSIGADD;
+$res = script_eval([ $signature ], $redeem_script, $tx, 0);
+ok($res, "checksigadd");
+
 done_testing();
 
 package TestTx;

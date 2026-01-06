@@ -115,8 +115,8 @@ use constant OPCODES => {
     OP_CHECKLOCKTIMEVERIFY => 0xb1, # + previously OP_NOP2
     OP_CHECKSEQUENCEVERIFY => 0xb2, # + previously OP_NOP3
 
-    OP_MASTVERIFY          => 0xb3, # - previously OP_NOP4
-    OP_EXEC                => 0xb4, # - previously OP_NOP5
+    OP_MASTVERIFY          => 0xb3, # + previously OP_NOP4
+    OP_EXEC                => 0xb4, # + previously OP_NOP5
 
     OP_PUBKEYHASH          => 0xfd, # +
     OP_PUBKEY              => 0xfe, # +
@@ -131,6 +131,8 @@ use constant OPCODES => {
     OP_NOP8                => 0xb7, # +
     OP_NOP9                => 0xb8, # +
     OP_NOP10               => 0xb9, # +
+
+    OP_CHECKSIGADD         => 0xba, # +
 };
 use constant { map { $_ => chr(OPCODES->{$_}) } keys %{&OPCODES} };
 
