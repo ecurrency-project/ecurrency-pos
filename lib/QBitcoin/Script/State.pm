@@ -9,7 +9,7 @@ sub new {
     my ($script, $stack, $tx, $input_num) = @_;
     # script, cp, stack, if-state, if-stack, alt-stack, exec-depth, tx, input_num
     my @stack = $stack ? @$stack : (); # make a copy of stack to prevent siglist modifiactions
-    return bless [$script, 0, \@stack, 1, [], [], 0, $tx, $input_num], $class;
+    return bless [$script, 0, $stack // [], 1, [], [], 0, $tx, $input_num], $class;
 }
 
 sub script  :lvalue { $_[0]->[0] }
