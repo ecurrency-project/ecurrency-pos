@@ -2,6 +2,7 @@ package QBitcoin::Script;
 use warnings;
 use strict;
 
+use List::Util qw(sum0);
 use QBitcoin::Log;
 use QBitcoin::Const;
 use QBitcoin::Crypto qw(hash160 ripemd160 sha1 sha256 hash256);
@@ -433,7 +434,7 @@ sub cmd_exec {
     my $stack = $state->stack;
     @$stack or return 0;
     my $script = pop @$stack;
-    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num);
+    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->sigops);
     $new_state->execdepth = $state->execdepth + 1;
     return execute($new_state);
 }
@@ -492,7 +493,8 @@ sub script_eval($$$$) {
     my ($siglist, $redeem_script, $tx, $input_num) = @_;
 
     my @stack = $siglist ? @$siglist : (); # make a copy to prevent modifying original siglist
-    my $state = QBitcoin::Script::State->new($redeem_script, \@stack, $tx, $input_num);
+    my $sigops = 1 + int(sum0(map { length($_) } @stack) / 50); # as for tapscript, BIP-342
+    my $state = QBitcoin::Script::State->new($redeem_script, \@stack, $tx, $input_num, $sigops);
     my $res = execute($state);
     return $res if defined($res);
 

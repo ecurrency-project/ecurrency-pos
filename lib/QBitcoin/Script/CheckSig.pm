@@ -14,6 +14,7 @@ sub cmd_checksig($) {
     @$stack >= 2 or return 0;
     my $pubkey = pop @$stack;
     my $signature = pop @$stack;
+    $state->sigops-- > 0 or return 0;
     push @$stack, check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? TRUE : FALSE;
     return undef;
 }
@@ -25,6 +26,7 @@ sub cmd_checksigverify($) {
     @$stack >= 2 or return 0;
     my $pubkey = pop @$stack;
     my $signature = pop @$stack;
+    $state->sigops-- > 0 or return 0;
     return check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? undef : 0;
 }
 
@@ -42,6 +44,7 @@ sub checkmultisig($) {
     @$stack >= $nsig or return undef;
     my @sig = splice(@$stack, -$nsig-1);
     $nkeys >= $nsig or return 0;
+    $state->sigops -= $nsig >= 0 or return undef;
     foreach my $sig (@sig) {
         while (1) {
             @pubkeys or return 0;
@@ -70,6 +73,7 @@ sub cmd_checksigadd($) {
     my $stack = $state->stack;
     @$stack >= 3 or return 0;
     my ($signature, $accum, $pubkey) = splice(@$stack, -3);
+    $state->sigops-- > 0 or return 0;
     my $result = check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? 1 : 0;
     my $acc_int = unpack_int($accum);
     push @$stack, pack_int($acc_int + $result);
