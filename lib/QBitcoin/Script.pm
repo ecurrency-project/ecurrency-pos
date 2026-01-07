@@ -152,6 +152,10 @@ foreach my $opcode (keys %{&OPCODES}) {
             return undef;
         };
     }
+    elsif (substr($cmd, 0, 7) eq "success") {
+        # OP_SUCCESSxx
+        $OP_CMD[OPCODES->{$opcode}] = sub { success(@_) };
+    }
 }
 
 foreach my $opcode (keys %{&OPCODES}) {
@@ -162,9 +166,18 @@ foreach my $opcode (keys %{&OPCODES}) {
 foreach my $opcode (0x01 .. 0x4b) {
     $OP_CMD[$opcode] = sub { pushdatan($opcode, @_) };
 }
+foreach my $opcode (0xbb .. 0xfe) {
+    $OP_CMD[$opcode] = sub { success(@_) };
+}
 foreach (1 .. 10) {
     my $opcode = OPCODES->{"OP_NOP$_"} or next;
     $OP_CMD[$opcode] = sub { undef };
+}
+
+sub success($) {
+    my ($state) = @_;
+    return unless $state->ifstate;
+    return 1;
 }
 
 sub unimplemented($$) {
