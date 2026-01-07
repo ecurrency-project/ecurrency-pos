@@ -509,7 +509,7 @@ sub node_status {
         bestblockhash        => $best_block ? unpack("H*", $best_block->hash) : undef,
         weight               => $best_block ? $best_block->weight+0   : -1,
         bestblocktime        => $best_block ? $best_block->time       : -1,
-        reward               => $best_block ? int($best_block->reward_fund / REWARD_DIVIDER) / DENOMINATOR : 0,
+        reward               => $best_block ? int($best_block->reward_fund / REWARD_DIVIDER) : 0,
         initialblockdownload => blockchain_synced() ? FALSE : TRUE,
         mempool_size         => @mempool + 0,
         mempool_bytes        => sum0(map { $_->size } @mempool) + 0,
@@ -539,7 +539,7 @@ sub node_status {
         my ($coinbase) = dbh->selectrow_array("SELECT SUM(value) FROM `" . QBitcoin::Coinbase->TABLE . "` WHERE tx_out IS NOT NULL");
         $coinbase //= 0;
         $coinbase += GENESIS_REWARD if defined($best_block);
-        $response->{total_coins} = $coinbase ? $coinbase / DENOMINATOR : 0;
+        $response->{total_coins} = $coinbase;
     }
     return $response;
 }
