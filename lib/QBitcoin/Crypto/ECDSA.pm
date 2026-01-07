@@ -64,13 +64,14 @@ sub _encode_der_signature {
     my $r_hex = $r->to_hex();
     my $s_hex = $s->to_hex();
 
-    # Add leading zero if higher bit is set
-    $r_hex = '00' . $r_hex if hex(substr($r_hex, 0, 2)) >= 0x80;
-    $s_hex = '00' . $s_hex if hex(substr($s_hex, 0, 2)) >= 0x80;
-
     # Padding to even length
     $r_hex = '0' . $r_hex if length($r_hex) % 2;
     $s_hex = '0' . $s_hex if length($s_hex) % 2;
+
+    # Add 0x00 prefix only if high bit is set
+    # to indicate positive integer
+    $r_hex = '00' . $r_hex if hex(substr($r_hex, 0, 2)) >= 0x80;
+    $s_hex = '00' . $s_hex if hex(substr($s_hex, 0, 2)) >= 0x80;
 
     my $r_bytes = pack('H*', $r_hex);
     my $s_bytes = pack('H*', $s_hex);
