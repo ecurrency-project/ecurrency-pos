@@ -117,8 +117,8 @@ sub main_loop {
 
     my $generate = $config->{generate};
     $generate //= 1 if $config->{genesis};
-    # By default validate blocks if there are any my coins
-    $generate //= !!QBitcoin::TXO->my_utxo;
+    # By default validate blocks if there are any my staked coins
+    $generate //= !!QBitcoin::TXO->staked_utxo;
 
     if ($config->{genesis} && !QBitcoin::Block->blockchain_time) {
         QBitcoin::Generate->generate($config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME);

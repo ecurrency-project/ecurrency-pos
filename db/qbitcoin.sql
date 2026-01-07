@@ -52,7 +52,8 @@ CREATE INDEX `tx_out` ON `txo` (tx_out);
 
 CREATE TABLE `my_address` (
   address     varchar(255) NOT NULL PRIMARY KEY,
-  private_key blob(4096)   NOT NULL -- TODO: encrypted
+  private_key blob(4096)   NOT NULL, -- TODO: encrypted
+  staked      int unsigned NOT NULL DEFAULT 0
 );
 
 CREATE TABLE `btc_block` (

@@ -1364,9 +1364,10 @@ $HELP{listmyaddresses} = qq(
 Returns the list of addresses in the wallet.
 
 Result:
-{                         (json object) json object with addresses as keys
-  "address" : {           (json object) json object with information about address
-    "algo" : [ "str" ]    (json array) list of crypto algorithms supported by the address
+{                           (json object) json object with addresses as keys
+  "address" : {             (json object) json object with information about address
+    "algo" : [ "str" ],     (json array) list of crypto algorithms supported by the address
+    "staked" : true|false   (boolean) whether the address is used for staking (block validation)
   },
   ...
 }
@@ -1380,7 +1381,8 @@ sub cmd_listmyaddresses {
     my %list;
     foreach my $my_address (QBitcoin::MyAddress->my_address) {
         $list{$my_address->address} = {
-            algo => [ map { CRYPT_ALGO_NAMES->{$_} } $my_address->algo ],
+            algo   => [ map { CRYPT_ALGO_NAMES->{$_} } $my_address->algo ],
+            staked => $my_address->staked ? TRUE : FALSE,
         };
     }
     $self->response_ok(\%list);
@@ -1516,6 +1518,71 @@ sub cmd_estimatesmartfee {
         $prev_tx = $tx;
     }
     return $self->response_ok({ feerate => $prev_tx->fee * 1024 / $prev_tx->size });
+}
+
+$PARAMS{stakeaddress} = "address";
+$HELP{stakeaddress} = qq(
+stakeaddress address
+
+Set address to be used for staking (block validation).
+
+Arguments:
+1. address    (string, required) The qbitcoin address to be used for staking.
+              Must be already in the wallet (imported using importprivkey).
+
+null    (json null)
+
+Examples:
+
+> qbitcoin-cli stakeaddress "myaddress"
+
+As a JSON-RPC call
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "stakeaddress", "params": ["myaddress"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_stakeaddress {
+    my $self = shift;
+    my ($address) = @{$self->args};
+    my $scripthash = scripthash_by_address($self->args->[0])
+        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not correct");
+    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
+        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Private key is unknown for this address");
+    if ($my_address->staked) {
+        return $self->response_ok("Address $address is already using for staking");
+    }
+    $my_address->update( staked => 1 );
+    return $self->response_ok("Address $address set for staking");
+}
+
+$PARAMS{unstakeaddress} = "address";
+$HELP{unstakeaddress} = qq(
+unstakeaddress address
+
+Disable staking (block validation) by this address.
+
+Arguments:
+1. address    (string, required) The qbitcoin address that is using for staking.
+
+null    (json null)
+
+Examples:
+
+> qbitcoin-cli unstakeaddress "myaddress"
+
+As a JSON-RPC call
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "unstakeaddress", "params": ["myaddress"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_unstakeaddress {
+    my $self = shift;
+    my ($address) = @{$self->args};
+    my $scripthash = scripthash_by_address($self->args->[0])
+        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not correct");
+    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
+        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not in the wallet");
+    if (!$my_address->staked) {
+        return $self->response_ok("Address $address is not using for staking");
+    }
+    $my_address->update( staked => 0 );
+    return $self->response_ok("Address $address will not be used for staking");
 }
 
 # getmemoryinfo

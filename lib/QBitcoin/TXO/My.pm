@@ -31,6 +31,16 @@ sub my_utxo {
     return values %MY_UTXO;
 }
 
+sub is_staked {
+    my $self = shift;
+    my $my_address = QBitcoin::MyAddress->get_by_hash($self->scripthash);
+    return $my_address && $my_address->staked;
+}
+
+sub staked_utxo {
+    return grep { $_->is_staked } values %MY_UTXO;
+}
+
 sub is_my {
     my $self = shift;
     return !!QBitcoin::MyAddress->get_by_hash($self->scripthash);

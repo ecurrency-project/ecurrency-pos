@@ -33,6 +33,7 @@ my ($address) = addresses_by_pubkey($pubkey, CRYPT_ALGO_ECDSA);
 my $myaddr = QBitcoin::MyAddress->create({
     private_key => wallet_import_format($pk->pk_serialize),
     address     => $address,
+    staked      => 1,
 });
 
 my $time = GENESIS_TIME;

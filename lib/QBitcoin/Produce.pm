@@ -16,7 +16,7 @@ use QBitcoin::RedeemScript;
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 use QBitcoin::Crypto qw(hash160 checksum32);
 use QBitcoin::Address qw(scripthash_by_address);
-use QBitcoin::MyAddress qw(my_address);
+use QBitcoin::MyAddress qw(stake_address);
 
 use constant {
     MAX_MY_UTXO  => 8,
@@ -42,7 +42,7 @@ sub produce {
     my $period = ($time - $prev_run);
     $prev_run = $time;
 
-    if (QBitcoin::TXO->my_utxo() < MAX_MY_UTXO && !UPGRADE_POW) {
+    if (QBitcoin::TXO->staked_utxo() < MAX_MY_UTXO && !UPGRADE_POW) {
         my $prob = probability($period, MY_UTXO_PROB);
         _produce_my_utxo() if $prob > rand();
     }
@@ -64,7 +64,9 @@ sub produce_coinbase {
     # Do not use rand() for get this upgrade deterministic and verifiable
     my $rnd = unpack("V", checksum32($tx->hash . $num));
     # We should not generate coinbase for my address on different nodes for the same btc txo, so xor $rnd with hash of my address
-    state $myaddr_hash = unpack("V", checksum32((my_address)[0]->address));
+    my ($my_address) = stake_address()
+        or return undef;
+    state $myaddr_hash = unpack("V", checksum32($my_address->address));
     if ($rnd < 0x10000 * 0x10000 / UPGRADE_PROB) {
         $out->{open_script} = QBT_BURN_SCRIPT;
         $tx->out->[$num+1] = {
@@ -74,9 +76,9 @@ sub produce_coinbase {
         Infof("Produce coinbase with open txo: tx %s value %Lu", $tx->hash_str, $tx->out->[$num]->{value});
         return 1;
     }
-    elsif (QBitcoin::TXO->my_utxo() < MAX_MY_UTXO &&
+    elsif (QBitcoin::TXO->staked_utxo() < MAX_MY_UTXO &&
            ($rnd ^ $myaddr_hash) < 0x10000 * 0x10000 / MY_UPGRADE) {
-        state $my_scripthash = scripthash_by_address((my_address)[0]->address);
+        state $my_scripthash = scripthash_by_address($my_address->address);
         $out->{open_script} = QBT_BURN_SCRIPT;
         $tx->out->[$num+1] = {
             value       => 0,
@@ -89,7 +91,7 @@ sub produce_coinbase {
 }
 
 sub _produce_my_utxo {
-    my ($my_address) = my_address() # first one
+    my ($my_address) = stake_address() # first one
         or return;
     state $last_time = 0;
     my $time = time();

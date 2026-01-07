@@ -21,8 +21,10 @@ $config->{regtest} = 1;
 
 my $my_address;
 my $generate_module = Test::MockModule->new('QBitcoin::Generate');
-$generate_module->mock('my_address', sub { $my_address });
+$generate_module->mock('stake_address', sub { $my_address });
 $generate_module->mock('txo_confirmed', sub { 1 });
+my $txo_module = Test::MockModule->new('QBitcoin::TXO');
+$txo_module->mock('is_staked', sub { 1 });
 my $transaction_module = Test::MockModule->new('QBitcoin::Transaction');
 $transaction_module->mock('txo_time', sub { $_[1]->tx_in =~ /age_\d+:(\d+)/ ? timeslot(time) - $1*10 : 0 });
 $transaction_module->mock('sign_transaction',
@@ -39,6 +41,7 @@ sub generate_my_address {
     $my_address = QBitcoin::MyAddress->new(
         private_key => wallet_import_format($pk->pk_serialize),
         address     => address_by_pubkey($pk->pubkey_by_privkey, CRYPT_ALGO_ECDSA),
+        staked      => 1,
     );
 }
 

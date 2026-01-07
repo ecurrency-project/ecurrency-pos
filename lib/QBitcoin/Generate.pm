@@ -13,7 +13,7 @@ use QBitcoin::RedeemScript;
 use QBitcoin::TXO;
 use QBitcoin::Coinbase;
 use QBitcoin::Address qw(scripthash_by_address);
-use QBitcoin::MyAddress qw(my_address);
+use QBitcoin::MyAddress qw(my_address stake_address);
 use QBitcoin::Transaction;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::Utils qw(get_address_utxo);
@@ -68,7 +68,7 @@ sub make_out_join {
     my $my_address;
     if ($config->{sign_alg}) {
         foreach my $sign_alg (split(/\s+/, $config->{sign_alg})) {
-            foreach my $addr (my_address()) {
+            foreach my $addr (stake_address()) {
                 if (grep { $_ eq $sign_alg } $addr->algo) {
                     $my_address = $addr;
                     last;
@@ -77,7 +77,7 @@ sub make_out_join {
             last if $my_address;
         }
     }
-    $my_address //= (my_address())[0]
+    $my_address //= (stake_address())[0]
         or return ();
     my $my_amount = sum0 map { $_->value } @$my_txo;
     my $out = QBitcoin::TXO->new_txo(
@@ -147,7 +147,7 @@ sub make_out_union {
 
 sub make_stake_tx {
     my ($reward, $block_sign_data) = @_;
-    my @my_txo = grep { txo_confirmed($_) } QBitcoin::TXO->my_utxo();
+    my @my_txo = grep { txo_confirmed($_) } QBitcoin::TXO->staked_utxo();
     my $reward_to = $config->{reward_to} // "union";
     my @out;
     if ($reward_to eq "join" || !@my_txo) {

@@ -6,29 +6,37 @@ use QBitcoin::Config;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors new);
 use QBitcoin::Const;
-use QBitcoin::ORM qw(find :types);
+use QBitcoin::ORM qw(find update :types);
 use QBitcoin::Crypto qw(hash160 hash256 pk_import pk_alg);
 use QBitcoin::Address qw(wif_to_pk address_by_pubkey script_by_pubkey script_by_pubkeyhash addresses_by_pubkey);
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(my_address);
+our @EXPORT_OK = qw(my_address stake_address);
 
 use constant TABLE => 'my_address';
 
 use constant FIELDS => {
     address     => STRING,
     private_key => STRING,
+    staked      => NUMERIC,
 };
 
-mk_accessors(qw(private_key));
+mk_accessors(qw(private_key staked));
 
 my $MY_ADDRESS;
 my $MY_HASHES;
+my $STAKE_ADDRESS;
 
 sub my_address {
     my $class = shift // __PACKAGE__;
     $MY_ADDRESS //= [ $class->find() ];
     return wantarray ? @$MY_ADDRESS : $MY_ADDRESS->[0];
+}
+
+sub stake_address {
+    my $class = shift // __PACKAGE__;
+    $STAKE_ADDRESS //= [ grep { $_->staked } $class->my_address ];
+    return wantarray ? @$STAKE_ADDRESS : $STAKE_ADDRESS->[0];
 }
 
 sub pubkey {
