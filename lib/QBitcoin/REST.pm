@@ -18,6 +18,10 @@ use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats);
+use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
+use QBitcoin::Coinbase;
+use QBitcoin::ConnectionList;
+use Bitcoin::Block;
 use parent qw(QBitcoin::HTTP);
 
 use constant {
@@ -233,6 +237,12 @@ sub process_request {
         else {
             return $self->http_response(404, "Unknown request");
         }
+    }
+    elsif ($path[0] eq "status") {
+        return $self->http_ok(node_status());
+    }
+    elsif ($path[0] eq "peers") {
+        return $self->http_ok(peer_info());
     }
     elsif ($path[0] eq "fee-estimates") {
         return $self->http_ok({ 1 => 0 }); # TODO
@@ -485,6 +495,74 @@ sub get_blocks {
             QBitcoin::Block->find(height => { '<=' => $height }, -sortby => "height DESC", -limit => 10-@blocks);
     }
     return $self->http_ok(\@blocks);
+}
+
+sub node_status {
+    my $best_block;
+    if (defined(my $height = QBitcoin::Block->blockchain_height)) {
+        $best_block = QBitcoin::Block->best_block($height);
+    }
+    my @mempool = QBitcoin::Transaction->mempool_list();
+    my $response = {
+        chain                => $config->{regtest} ? "regtest" : $config->{testnet} ? "testnet" : "main",
+        blocks               => defined($best_block) ? $best_block->height+0 : -1,
+        bestblockhash        => $best_block ? unpack("H*", $best_block->hash) : undef,
+        weight               => $best_block ? $best_block->weight+0   : -1,
+        bestblocktime        => $best_block ? $best_block->time       : -1,
+        reward               => $best_block ? int($best_block->reward_fund / REWARD_DIVIDER) / DENOMINATOR : 0,
+        initialblockdownload => blockchain_synced() ? FALSE : TRUE,
+        mempool_size         => @mempool + 0,
+        mempool_bytes        => sum0(map { $_->size } @mempool) + 0,
+    };
+    if ($config->{regtest}) {
+        if (my $genesis_block = QBitcoin::Block->best_block(0)) {
+            $response->{genesistime} = $genesis_block->time;
+        }
+    }
+    else {
+        $response->{genesistime} = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
+    }
+    if (UPGRADE_POW) {
+        my ($btc_block) = Bitcoin::Block->find(-sortby => 'height DESC', -limit => 1);
+        my $btc_scanned;
+        if ($btc_block) {
+            if ($btc_block->scanned) {
+                $btc_scanned = $btc_block;
+            }
+            else {
+                ($btc_scanned) = Bitcoin::Block->find(scanned => 1, -sortby => 'height DESC', -limit => 1);
+            }
+        }
+        $response->{btc_synced}  = btc_synced() ? TRUE : FALSE,
+        $response->{btc_headers} = $btc_block   ? $btc_block->height+0   : 0,
+        $response->{btc_scanned} = $btc_scanned ? $btc_scanned->height+0 : 0,
+        my ($coinbase) = dbh->selectrow_array("SELECT SUM(value) FROM `" . QBitcoin::Coinbase->TABLE . "` WHERE tx_out IS NOT NULL");
+        $coinbase //= 0;
+        $coinbase += GENESIS_REWARD if defined($best_block);
+        $response->{total_coins} = $coinbase ? $coinbase / DENOMINATOR : 0;
+    }
+    return $response;
+}
+
+sub peer_info {
+    my @peers;
+    foreach my $connection (QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN, PROTOCOL_BITCOIN)) {
+        my $peer = $connection->peer;
+        push @peers, {
+            addr        => $connection->ip . ":" . $connection->port,
+            addrlocal   => $connection->my_ip . ":" . $connection->my_port,
+            inbound     => $connection->direction == DIR_IN ? TRUE : FALSE,
+            protocol    => $connection->type,
+            network     => "ipv4",
+            createtime  => $peer->create_time,
+            bytessent   => $peer->bytes_sent,
+            bytesrecv   => $peer->bytes_recv,
+            objsent     => $peer->obj_sent,
+            objrecv     => $peer->obj_recv,
+            reputation  => $peer->reputation,
+        };
+    }
+    return \@peers;
 }
 
 1;
