@@ -114,16 +114,6 @@ sub normalize_signature {
     return _encode_der_signature($r, $s);
 }
 
-sub verify_signature {
-    my $class = shift;
-    my ($data, $signature, $pubkey) = @_;
-
-    my $pub = $class->CRYPT_ECC_MODULE->new;
-    $pub->import_key_raw($pubkey, $class->CURVE);
-    return 0 unless is_low_s($pub, $signature);
-    return $pub->verify_hash($signature, $data);
-}
-
 sub signature {
     my $self = shift;
     my ($data) = @_;
