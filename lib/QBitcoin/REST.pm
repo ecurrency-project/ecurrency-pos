@@ -363,6 +363,14 @@ sub tx_obj {
         },
         vin  => [ map { vin_obj($_) } @{$tx->in} ],
         vout => [ map {{ value => $_->value, scripthash => unpack("H*", $_->scripthash), scripthash_address => address_by_hash($_->scripthash) }} @{$tx->out} ],
+        UPGRADE_POW && $tx->is_coinbase ? (
+            coinbase_info => {
+                block_height => $tx->up->block_height,
+                tx_hash      => unpack("H*", $tx->up->btc_tx_hash),
+                out_num      => $tx->up->btc_out_num,
+                value        => $tx->up->btc_value,
+            },
+        ) : (),
     };
 }
 
