@@ -451,7 +451,11 @@ sub cmd_createrawtransaction {
         out     => \@out,
         tx_type => TX_TYPE_STANDARD,
     );
-    return $self->response_ok(unpack("H*", $tx->serialize_unsigned));
+    my $tx_data = $tx->serialize_unsigned;
+    if (length($tx_data) > MAX_TX_SIZE) {
+        return $self->response_error("", ERR_INVALID_REQUEST, "Transaction size too large: " . length($tx_data) . " > " . MAX_TX_SIZE);
+    }
+    return $self->response_ok(unpack("H*", $tx_data));
 }
 
 $PARAMS{sendrawtransaction} = "hexstring";
@@ -605,6 +609,9 @@ sub cmd_signrawtransactionwithkey {
         return $self->response_error("", ERR_INVALID_REQUEST, "Insufficient funds: $input_amount < $output_amount");
     }
     my $tx_data = $tx->serialize_unsigned;
+    if (length($tx_data) > MAX_TX_SIZE) {
+        return $self->response_error("", ERR_INVALID_REQUEST, "Transaction size too large: " . length($tx_data) . " > " . MAX_TX_SIZE);
+    }
     my $fee_per_kb = ($input_amount - $output_amount) * 1024 / length($tx_data);
     my $max_fee_per_kb = $self->max_fee_per_kb;
     if ($max_fee_per_kb && $fee_per_kb > $max_fee_per_kb) {

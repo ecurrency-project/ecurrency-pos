@@ -597,6 +597,11 @@ sub deserialize {
     my $tx_raw_data = $data->get($end_index - $start_index);
     my $hash = tx_data_hash($tx_raw_data);
 
+    if ($end_index - $start_index > MAX_TX_SIZE) {
+        Warningf("Transaction size %u exceeds maximum %u", $end_index - $start_index, MAX_TX_SIZE);
+        return undef;
+    }
+
     my $self = $class->new(
         in_raw        => \@input,
         out           => create_outputs(\@output, $hash),
@@ -876,17 +881,36 @@ sub validate {
             Warningf("Incorrect output value %ld in transaction %s", $out->value, $self->hash_str);
             return -1;
         }
+        if (length($out->data) > MAX_TXO_DATA_SIZE) {
+            Warningf("Too large output data size %u in transaction %s", length($out->data), $self->hash_str);
+            return -1;
+        };
+        if (length($out->scripthash) > 32) {
+            Warningf("Incorrect scripthash size %u in transaction %s", length($out->scripthash), $self->hash_str);
+            return -1;
+        }
     }
     my $class = ref $self;
     my $input_value = 0;
     my %inputs;
-    foreach my $in (map { $_->{txo} } @{$self->in}) {
-        if ($inputs{$in->key}++) {
+    foreach my $in (@{$self->in}) {
+        my $txo = $in->{txo};
+        if ($inputs{$txo->key}++) {
             Warningf("Input %s:%u included in transaction %s twice",
-                $in->tx_in_str, $in->num, $self->hash_str);
+                $txo->tx_in_str, $txo->num, $self->hash_str);
             return -1;
         }
-        $input_value += $in->value;
+        if (length($txo->redeem_script) > MAX_REDEEM_SCRIPT_SIZE) {
+            Warningf("Too large redeem script size %u in transaction %s input %s:%u",
+                length($txo->redeem_script), $self->hash_str, $txo->tx_in_str, $txo->num);
+            return -1;
+        }
+        if (length(serialize_siglist($in->{siglist} // [])) > MAX_SIGLIST_SIZE) {
+            Warningf("Too large siglist size in transaction %s input %s:%u",
+                $self->hash_str, $txo->tx_in_str, $txo->num);
+            return -1;
+        }
+        $input_value += $txo->value;
     }
     if ($self->is_stake) {
         if ($self->fee >= 0) {
