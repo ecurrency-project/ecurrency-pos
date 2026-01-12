@@ -28,6 +28,7 @@ use constant FIELDS => {
     fee          => NUMERIC,
     size         => NUMERIC,
     tx_type      => NUMERIC,
+    token_id     => NUMERIC,
 };
 
 use constant TABLE => 'transaction';
@@ -47,7 +48,14 @@ use constant ATTR => qw(
     block_time
     drop_immune
     upgrade_level
+    token_hash
 );
+
+use constant {
+    TOKEN_TXO_TYPE_TRANSFER    => 1,
+    TOKEN_TXO_TYPE_PERMISSIONS => 2,
+};
+use constant TOKEN_PERMISSION_MINT   => 1;
 
 mk_accessors(keys %{&FIELDS}, ATTR);
 
@@ -367,6 +375,10 @@ sub store {
     my $self = shift;
     $self->is_cached or die "store not cached transaction " . $self->hash_str;
     # we are in sql transaction
+    if ($self->is_tokens && $self->token_hash) {
+        my ($tokens_tx) = QBitcoin::Transaction->fetch(hash => $self->token_hash);
+        $self->token_id = $tokens_tx->{id};
+    }
     $self->create();
     foreach my $in (@{$self->in}) {
         $in->{txo}->store_spend($self),
@@ -385,10 +397,16 @@ sub hash_str {
     return unpack("H*", substr($hash, 0, 4));
 }
 
+sub token_hash_str {
+    my $self = shift;
+    return unpack("H*", substr($self->token_hash, 0, 4));
+}
+
 sub serialize {
     my $self = shift;
 
     my $data = pack("c", $self->tx_type);
+    $data .= varstr($self->token_hash // "") if $self->is_tokens;
     $data .= varint(scalar @{$self->in});
     $data .= serialize_input($_) foreach @{$self->in};
     $data .= varint(scalar @{$self->out});
@@ -403,6 +421,7 @@ sub serialize_unsigned {
     my $self = shift;
 
     my $data = pack("c", $self->tx_type);
+    $data .= varstr($self->token_hash // "") if $self->is_tokens;
     $data .= varint(scalar @{$self->in});
     if ($self->in_raw) {
         $data .= serialize_input_raw($_) foreach @{$self->in_raw};
@@ -577,6 +596,8 @@ sub deserialize {
     my ($data) = @_;
     my $start_index = $data->index;
     my $tx_type = unpack("c", $data->get(1));
+    my $token_hash;
+    $token_hash = $data->get_string() if $tx_type == TX_TYPE_TOKENS;
     my @input  = map { deserialize_input($data)  // return undef } 1 .. ($data->get_varint // return undef);
     my @output = map { deserialize_output($data) // return undef } 1 .. ($data->get_varint // return undef);
     my $up;
@@ -604,10 +625,10 @@ sub deserialize {
 
     my $self = $class->new(
         in_raw        => \@input,
-        out           => create_outputs(\@output, $hash),
+        out           => create_outputs(\@output, $hash, $tx_type == TX_TYPE_TOKENS ? $token_hash || $hash : undef),
         $up ? UPGRADE_POW ? ( up => $up, upgrade_level => $upgrade_level ) : ( coins_created => $up ) : (),
         tx_type       => $tx_type,
-        # data          => $tx_data, # TODO
+        $tx_type == TX_TYPE_TOKENS ? ( token_hash => $token_hash ) : (),
         hash          => $hash,
         size          => $end_index - $start_index,
         received_time => time(),
@@ -632,6 +653,7 @@ sub load_txo {
     $self->load_inputs
         or return undef; # transaction has no such output or incorrect redeem script
     $_->save foreach @{$self->out};
+
     if ($self->input_pending || $self->input_detached) {
         # put the transaction into separate "waiting" pull (limited size) and reprocess it by each received transaction
         foreach my $tx_in (keys %{$self->input_pending // {}}) {
@@ -692,7 +714,7 @@ sub coins_created {
 }
 
 sub create_outputs {
-    my ($outputs, $hash) = @_;
+    my ($outputs, $hash, $token_hash) = @_;
     my @txo;
     my $num = 0;
     foreach my $out (@$outputs) {
@@ -702,6 +724,7 @@ sub create_outputs {
             data       => $out->{data},
             tx_in      => $hash,
             num        => $num++,
+            $token_hash ? ( token_hash => $token_hash ) : (),
         });
         push @txo, $txo;
     }
@@ -749,7 +772,7 @@ sub load_inputs {
 
     if (@need_load_txo) {
         # var @txo here needed to prevent free txo objects as unused just after load
-        my @txo = QBitcoin::TXO->load(@need_load_txo);
+        my @txo = $self->is_tokens ? QBitcoin::TXO->load_tokens(@need_load_txo) : QBitcoin::TXO->load(@need_load_txo);
         my $class = ref $self;
         foreach my $in (@need_load_txo) {
             if (my $txo = QBitcoin::TXO->get($in)) {
@@ -813,6 +836,7 @@ sub calculate_hash {
 sub is_standard { $_[0]->{tx_type} == TX_TYPE_STANDARD }
 sub is_stake    { $_[0]->{tx_type} == TX_TYPE_STAKE    }
 sub is_coinbase { $_[0]->{tx_type} == TX_TYPE_COINBASE }
+sub is_tokens   { $_[0]->{tx_type} == TX_TYPE_TOKENS   }
 
 sub validate_coinbase {
     my $self = shift;
@@ -919,7 +943,7 @@ sub validate {
             return -1;
         }
     }
-    elsif ($self->is_standard) {
+    elsif ($self->is_standard || $self->is_tokens) {
         if ($self->fee < 0) {
             Warningf("Fee for standard transaction %s is %li, can't be negative",
                 $self->hash_str, $self->fee);
@@ -934,9 +958,84 @@ sub validate {
         # so skip this check while block_sign_data is not known, check from valid_for_block()
         $self->check_input_script == 0
             or return -1;
+        # Is this a token transaction?
+        if ($self->is_tokens) {
+            $self->check_tokens_tx() == 0
+                or return -1;
+        }
     }
     else {
         Warningf("Unknown type %d for transaction %s", $self->tx_type, $self->hash_str);
+        return -1;
+    }
+    return 0;
+}
+
+sub check_tokens_tx {
+    my $self = shift;
+
+    if (!$self->token_hash) {
+        # Create tokens transaction, always valid
+        return 0;
+    }
+    my $tokens_tx = QBitcoin::Transaction->get($self->token_hash);
+    ($tokens_tx) = QBitcoin::Transaction->fetch(hash => $self->token_hash) unless defined $tokens_tx;
+    my $correct_input = 0;
+    my $permissions = 0;
+    my $in_value = 0;
+    foreach my $in (grep { ($_->{txo}->token_hash // "") eq $self->token_hash && length($_->{txo}->data // "") } @{$self->in}) {
+        my $txo = $in->{txo};
+        my $txo_type = substr($txo->data, 0, 1);
+        if ($txo_type eq TOKEN_TXO_TYPE_TRANSFER) {
+            if (length($txo->data) == 9) {
+                my $transfer_value = unpack("Q<", substr($txo->data, 1, 8));
+                if ($transfer_value == 0) {
+                    next;
+                }
+                $correct_input = 1;
+                $in_value += $transfer_value;
+                if ($in_value < $transfer_value) {
+                    Warningf("Overflow in token transfer value in transaction %s token %s", $self->hash_str, $self->token_hash_str);
+                    return -1;
+                }
+            }
+        }
+        elsif ($txo_type eq TOKEN_TXO_TYPE_PERMISSIONS) {
+            if (length($txo->data) == 2) {
+                my $in_permissions = unpack("C", substr($txo->data, 1, 1));
+                $permissions |= $in_permissions;
+                $correct_input = 1;
+            }
+        }
+    }
+    if (!$correct_input) {
+        Warningf("No correct token inputs for token %s in transaction %s", $self->token_hash_str, $self->hash_str);
+        return -1;
+    }
+    my $out_value = 0;
+    foreach my $out (grep { length($_->data // "") } @{$self->out}) {
+        my $txo_type = substr($out->data, 0, 1);
+        if ($txo_type eq TOKEN_TXO_TYPE_TRANSFER) {
+            if (length($out->data) == 1+8) {
+                my $transfer_value = unpack("Q<", substr($out->data, 1, 8));
+                $out_value += $transfer_value;
+                if ($out_value < $transfer_value) {
+                    Warningf("Overflow in token transfer value in transaction %s token %s", $self->hash_str, $self->token_hash_str);
+                    return -1;
+                }
+            }
+        }
+        elsif ($txo_type eq TOKEN_TXO_TYPE_PERMISSIONS) {
+            my $out_permissions = unpack("C", substr($out->data, 1, 1));
+            if ($out_permissions && !$permissions) {
+                Warningf("Attempt to gain token %s permission in transaction %s", $self->token_hash_str, $self->hash_str);
+                return -1;
+            }
+        }
+    }
+    if ($out_value > $in_value && !($permissions & TOKEN_PERMISSION_MINT)) {
+        Warningf("Token transfer output value %lu exceeds input value %lu in transaction %s token %s",
+            $out_value, $in_value, $self->hash_str, $self->token_hash_str);
         return -1;
     }
     return 0;
@@ -969,7 +1068,7 @@ sub check_input_script {
             return -1;
         }
         # Set txo min_rel_time to STAKE_MATURITY if previous tx is stake
-        if ($self->is_standard && ($in->{min_rel_time} // -1) < STAKE_MATURITY) {
+        if (($self->is_standard || $self->is_tokens) && ($in->{min_rel_time} // -1) < STAKE_MATURITY) {
             my $tx_in_type = (ref $self)->type_by_hash($in->{txo}->tx_in);
             if (!defined($tx_in_type)) {
                 Errf("No input transaction %s for txo", $in->{txo}->tx_in_str);
@@ -1033,14 +1132,35 @@ sub pre_load {
             $attr->{in} = [];
         }
         else {
+            my @in_txo = $attr->{tx_type} == TX_TYPE_TOKENS
+                ? QBitcoin::TXO->load_stored_token_inputs($attr->{id}, $attr->{hash})
+                : QBitcoin::TXO->load_stored_inputs($attr->{id}, $attr->{hash});
             my @inputs;
-            foreach my $txo (QBitcoin::TXO->load_stored_inputs($attr->{id}, $attr->{hash})) {
+            foreach my $txo (@in_txo) {
                 push @inputs, {
                     txo     => $txo,
                     siglist => $txo->siglist,
                 };
             }
             $attr->{in} = \@inputs;
+        }
+        if ($attr->{tx_type} == TX_TYPE_TOKENS) {
+            my $token_hash;
+            if ($attr->{token_id} ) {
+                my ($token_tx) = QBitcoin::Transaction->fetch(id => $attr->{token_id});
+                if (!$token_tx) {
+                    Errf("No token transaction id %u for transaction %s", $attr->{token_id}, unpack("H*", $attr->{hash}));
+                    die "No token transaction id $attr->{token_id} for transaction " . unpack("H*", $attr->{hash}) . "\n";
+                }
+                $token_hash = $token_tx->{hash};
+                $attr->{token_hash} = $token_tx->{hash};
+            }
+            else {
+                $token_hash = $attr->{hash};
+            }
+            foreach my $out (@{$attr->{out}}) {
+                $out->token_hash = $token_hash;
+            }
         }
     }
     return $attr;

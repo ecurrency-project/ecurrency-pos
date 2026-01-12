@@ -79,7 +79,7 @@ sub validate {
                 return "Coinbase transaction " . $transaction->hash_str . " must not be after standard transaction $was_standard";
             }
         }
-        elsif ($transaction->is_standard) {
+        elsif ($transaction->is_standard || $transaction->is_tokens) {
             $fee += $transaction->fee;
             my $tx_fee_per_kb = int($transaction->fee * 1024 / $transaction->size);
             if ($tx_fee_per_kb < $min_fee || $transaction->fee == 0) {

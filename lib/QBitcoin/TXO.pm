@@ -6,6 +6,7 @@ use Scalar::Util qw(weaken refaddr);
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ORM qw(:types dbh find DEBUG_ORM for_log);
+use QBitcoin::Const;
 use QBitcoin::Crypto qw(hash160 hash256);
 use QBitcoin::RedeemScript;
 use QBitcoin::Address qw(address_by_hash);
@@ -30,6 +31,7 @@ use constant TABLE => "txo";
 use constant TRANSACTION_TABLE => "transaction";
 
 mk_accessors(keys %{&FIELDS});
+mk_accessors(qw(token_hash));
 
 # hash by tx and out-num
 # tx_out and siglist are saved for the best chain for prevent double-spending
@@ -118,10 +120,32 @@ sub load {
     my $class = shift;
     my (@in) = @_;
     # TODO: move this to QBitcoin::ORM
-    my $sql = "SELECT value, num, tx_in.hash AS tx_in, tx_out.hash AS tx_out, siglist, s.hash as scripthash, s.script as redeem_script";
+    my $sql = "SELECT value, num, tx_in.hash AS tx_in, tx_out.hash AS tx_out, siglist, s.hash as scripthash, s.script as redeem_script, data";
     $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
     $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
     $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_out ON (tx_out.id = t.tx_out)";
+    $sql .= " WHERE (tx_in.hash, num) IN (" . (dbh->get_info(17) eq "SQLite" ? "VALUES" : "") . join(",",("(UNHEX(?),?)")x@in) . ")";
+    DEBUG_ORM && Debugf("sql: [%s] values [%s]", $sql, join(',', map { "X'" . unpack("H*", $_->{tx_out}) . "'", $_->{num} } @in));
+    my $sth = dbh->prepare($sql);
+    $sth->execute(map { unpack("H*", $_->{tx_out}), $_->{num} } @in);
+    my @txo;
+    while (my $hash = $sth->fetchrow_hashref()) {
+        push @txo, $class->new_saved($hash);
+    }
+    DEBUG_ORM && Debugf("found %u entries", scalar(@txo));
+    return @txo;
+}
+
+# For new tokens transaction load list of its input txo
+sub load_tokens {
+    my $class = shift;
+    my (@in) = @_;
+    # TODO: move this to QBitcoin::ORM
+    my $sql = "SELECT value, num, tx_in.hash AS tx_in, tx_out.hash AS tx_out, IFNULL(tx_token.hash, tx_in.hash) as token_hash, siglist, s.hash as scripthash, s.script as redeem_script, data";
+    $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
+    $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
+    $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_out ON (tx_out.id = t.tx_out)";
+    $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_token ON (tx_token.id = tx_in.token_id)";
     $sql .= " WHERE (tx_in.hash, num) IN (" . (dbh->get_info(17) eq "SQLite" ? "VALUES" : "") . join(",",("(UNHEX(?),?)")x@in) . ")";
     DEBUG_ORM && Debugf("sql: [%s] values [%s]", $sql, join(',', map { "X'" . unpack("H*", $_->{tx_out}) . "'", $_->{num} } @in));
     my $sth = dbh->prepare($sql);
@@ -195,9 +219,33 @@ sub load_stored_inputs {
     my $class = shift;
     my ($tx_id, $tx_hash) = @_;
     # TODO: move this to QBitcoin::ORM
-    my $sql = "SELECT value, num, tx_in.hash AS tx_in, siglist, s.hash as scripthash, s.script as redeem_script";
+    my $sql = "SELECT value, num, tx_in.hash AS tx_in, siglist, s.hash as scripthash, s.script as redeem_script, data";
     $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
     $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
+    $sql .= " WHERE tx_out = ?";
+    my $sth = dbh->prepare($sql);
+    DEBUG_ORM && Debugf("sql: [%s] values [%u]", $sql, $tx_id);
+    $sth->execute($tx_id);
+    my @txo;
+    while (my $hash = $sth->fetchrow_hashref()) {
+        $hash->{tx_out} = $tx_hash;
+        my $txo = $class->new_saved($hash);
+        $txo->tx_out && $txo->tx_out eq $tx_hash
+            or die sprintf("Cached txo %s:%u has no tx_out %s\n", $txo->tx_in_str, $txo->num, unpack("H*", substr($tx_hash, 0, 4)));
+        push @txo, $txo;
+    }
+    DEBUG_ORM && Debugf("found %u entries", scalar(@txo));
+    return @txo;
+}
+
+sub load_stored_token_inputs {
+    my $class = shift;
+    my ($tx_id, $tx_hash) = @_;
+    # TODO: move this to QBitcoin::ORM
+    my $sql = "SELECT value, num, tx_in.hash AS tx_in, siglist, IFNULL(tx_token.hash, tx_in.hash) AS token_hash, s.hash as scripthash, s.script as redeem_script, data";
+    $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
+    $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
+    $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_token ON (tx_token.id = tx_in.token_id)";
     $sql .= " WHERE tx_out = ?";
     my $sth = dbh->prepare($sql);
     DEBUG_ORM && Debugf("sql: [%s] values [%u]", $sql, $tx_id);
@@ -245,15 +293,18 @@ sub pre_load {
     # TODO: move this to QBitcoin::ORM
     my $sql = "SELECT value, num, tx_in.hash AS tx_in, s.hash as scripthash, s.script as redeem_script, data";
     $sql .= ", tx_out.hash AS tx_out" if $attr->{tx_out};
+    $sql .= ", IFNULL(tx_token.hash, tx_in.hash) AS token_hash" if $attr->{tx_type} == TX_TYPE_TOKENS;
     $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` s ON (t.scripthash = s.id)";
     $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
     $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_out ON (tx_out.id = t.tx_out)" if $attr->{tx_out};
+    $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_token ON (tx_token.id = tx_in.token_id)" if $attr->{tx_type} == TX_TYPE_TOKENS;
     $sql .= " WHERE tx_in.id = ? AND num = ?";
     DEBUG_ORM && Debugf("sql: [%s] values [%u,%u]", $sql, $attr->{tx_in}, $attr->{num});
     my $hash = dbh->selectrow_hashref($sql, undef, $attr->{tx_in}, $attr->{num});
     if ($hash) {
         $attr->{tx_in}         = $hash->{tx_in};
         $attr->{tx_out}        = $hash->{tx_out} if $attr->{tx_out};
+        $attr->{token_hash}    = $hash->{token_hash} if $attr->{tx_type} == TX_TYPE_TOKENS;
         $attr->{scripthash}    = $hash->{scripthash};
         $attr->{redeem_script} = $hash->{redeem_script};
         $attr->{data}          = $hash->{data};

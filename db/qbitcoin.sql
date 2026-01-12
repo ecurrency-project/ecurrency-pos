@@ -20,9 +20,11 @@ CREATE TABLE `transaction` (
   block_height int unsigned NOT NULL,
   block_pos smallint unsigned NOT NULL,
   tx_type smallint unsigned NOT NULL DEFAULT 1,
+  token_id integer DEFAULT NULL,
   size int unsigned NOT NULL,
   fee bigint signed NOT NULL,
-  FOREIGN KEY (block_height) REFERENCES `block` (height) ON DELETE CASCADE
+  FOREIGN KEY (block_height) REFERENCES `block`       (height) ON DELETE CASCADE,
+  FOREIGN KEY (token_id)     REFERENCES `transaction` (id)     ON DELETE SET NULL
 );
 CREATE UNIQUE INDEX `tx_hash` ON `transaction` (hash);
 CREATE UNIQUE INDEX `tx_block_height_pos` ON `transaction` (block_height, block_pos);

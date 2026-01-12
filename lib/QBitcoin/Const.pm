@@ -115,6 +115,7 @@ use constant TX_TYPES_CONST => {
     TX_TYPE_STANDARD => 1,
     TX_TYPE_STAKE    => 2,
     TX_TYPE_COINBASE => 3,
+    TX_TYPE_TOKENS   => 4,
 };
 
 use constant CRYPT_ALGO => {

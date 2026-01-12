@@ -134,7 +134,7 @@ sub choose_for_block {
             # Calculate low-fee transactions in the block with this size and min_fee
             for (my $j = $i; $j >= 0; $j--) {
                 defined($mempool[$j]) or next;
-                $mempool[$j]->is_standard or last;
+                $mempool[$j]->is_standard || $mempool[$j]->is_tokens or last;
                 # Avoid compare floating numbers
                 if ($mempool[$j]->fee * 1024 < $min_fee * $mempool[$j]->size) {
                     last if ++$low_fee_tx > MAX_EMPTY_TX_IN_BLOCK;

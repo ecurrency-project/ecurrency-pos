@@ -547,7 +547,7 @@ sub cmd_signrawtransactionwithkey {
     if (!$tx || $data->length) {
         return $self->response_error("", ERR_DESERIALIZATION_ERROR, "TX decode failed.");
     }
-    if (!$tx->is_standard) {
+    if (!$tx->is_standard && !$tx->is_tokens) {
         return $self->response_error("", ERR_INVALID_REQUEST, "Non-standard transaction.");
     }
     $tx->received_from = $self;
@@ -1505,7 +1505,7 @@ sub cmd_estimatesmartfee {
     if ($best_block->min_fee <= QBitcoin::MinFee->MIN_FEE) {
         return $self->response_ok({ feerate => QBitcoin::MinFee->MIN_FEE / DENOMINATOR });
     }
-    my $size = sum0 map { $_->size } grep { $_->is_standard && $_->fee * 1024 / $_->size > $best_block->min_fee } @mempool;
+    my $size = sum0 map { $_->size } grep { ($_->is_standard || $_->is_tokens) && $_->fee * 1024 / $_->size > $best_block->min_fee } @mempool;
     if ($size < $target * $best_block->size) {
         return $self->response_ok({ feerate => $best_block->min_fee / DENOMINATOR });
     }
