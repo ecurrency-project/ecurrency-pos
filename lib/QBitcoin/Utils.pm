@@ -1,14 +1,16 @@
 package QBitcoin::Utils;
 use warnings;
 use strict;
+use feature 'state';
 
 # Utility functions for QBitcoin REST and RPC interfaces
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(get_address_txs get_address_utxo address_received address_balance address_stats);
+our @EXPORT_OK = qw(get_address_txs get_address_utxo address_received address_balance address_stats tokens_received tokens_balance);
 
 use List::Util qw(sum0);
 use QBitcoin::Log;
+use QBitcoin::Const;
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(scripthash_by_address);
 use QBitcoin::RedeemScript;
@@ -239,14 +241,13 @@ sub address_balance {
     my $value = 0;
     my $max_db_height = QBitcoin::Block->max_db_height;
     my $blockchain_height = QBitcoin::Block->blockchain_height;
-    my $last_tx;
     my %fresh_inputs;
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
         my $result;
         if ($minconf && $blockchain_height - $minconf + 1 < $max_db_height) {
-            ($last_tx) = QBitcoin::Transaction->fetch(block_height => { '<=', $blockchain_height - $minconf + 1 }, -sortby => 'id DESC', -limit => 1);
+            my ($last_tx) = QBitcoin::Transaction->fetch(block_height => { '<=', $blockchain_height - $minconf + 1 }, -sortby => 'id DESC', -limit => 1);
             if (defined $last_tx) {
-                my $sql = "SELECT SUM(value) FROM `" . QBitcoin::TXO->TABLE . "` WHERE tx_out IS NULL and scripthash = ? AND tx_in <= ?";
+                my $sql = "SELECT SUM(value) FROM `" . QBitcoin::TXO->TABLE . "` WHERE tx_out IS NULL AND scripthash = ? AND tx_in <= ?";
                 ($result) = dbh->selectall_array($sql, undef, $script->id, $last_tx->{id});
                 # Store inputs that have not enough confirmations to exclude them later
                 my $fresh_inputs_sql = "SELECT hash FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` ON (id = tx_in) WHERE scripthash = ? AND tx_out IS NULL AND tx_in > ?";
@@ -315,7 +316,7 @@ sub get_address_utxo {
     my %txo_chain;
     my $txo_cnt = 0;
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
-        foreach my $txo (dbh->selectall_array("SELECT tx_in.hash, num, value, tx_in.block_height, tx_in.block_pos FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) WHERE tx_out IS NULL and scripthash = ? ORDER BY tx_in.block_height DESC, tx_in.block_pos DESC LIMIT ?", undef, $script->id, $limit // MAX_TXO_PER_ADDRESS)) {
+        foreach my $txo (dbh->selectall_array("SELECT tx_in.hash, num, value, tx_in.block_height, tx_in.block_pos FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) WHERE tx_out IS NULL AND scripthash = ? ORDER BY tx_in.block_height DESC, tx_in.block_pos DESC LIMIT ?", undef, $script->id, $limit // MAX_TXO_PER_ADDRESS)) {
             $txo_chain{$txo->[0]}->[$txo->[1]] = [ $txo->[2], $txo->[3], $txo->[4] ]; # [ value, block_height, block_pos ]
             $txo_cnt++;
         }
@@ -362,6 +363,161 @@ sub get_address_utxo {
     }
 
     return wantarray ? (\%txo_chain, \%txo_mempool) : \%txo_chain;
+}
+
+sub _unpack_data_value {
+    if (dbh->get_info(17) eq "SQLite") {
+        my $sum = "";
+        foreach my $byte (0 .. 7) {
+            $sum .= " + " if $byte;
+            $sum .= "((INSTR('0123456789ABCDEF', SUBSTR(HEX(data), " . ($byte * 2 + 3) . ", 1)) - 1) << " . ($byte * 8 + 4) . ") + ";
+            $sum .= "((INSTR('0123456789ABCDEF', SUBSTR(HEX(data), " . ($byte * 2 + 4) . ", 1)) - 1) << " . ($byte * 8) . ")";
+        }
+        return $sum;
+    }
+    elsif (dbh->get_info(17) eq "PostgreSQL") {
+        return "GET_BYTE(data, 1)::BIGINT + (GET_BYTE(data, 2)::BIGINT << 8) + (GET_BYTE(data, 3)::BIGINT << 16) + (GET_BYTE(data, 4)::BIGINT << 24) + (GET_BYTE(data, 5)::BIGINT << 32) + (GET_BYTE(data, 6)::BIGINT << 40) + (GET_BYTE(data, 7)::BIGINT << 48) + (GET_BYTE(data, 8)::BIGINT << 56)";
+    }
+    else { # MySQL
+        return "CAST(CONV(HEX(REVERSE(SUBSTR(data, 2, 8))), 16, 10) AS UNSIGNED)";
+    }
+}
+
+sub tokens_received {
+    my ($address, $tokens, $minconf) = @_;
+    my $scripthash = eval { scripthash_by_address($address) }
+        or return undef;
+    my $value = 0;
+    my $max_db_height = QBitcoin::Block->max_db_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    if ((my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) && (my ($token_tx) = QBitcoin::Transaction->fetch(hash => $tokens))) {
+        my $result;
+        state $unpack_value = _unpack_data_value();
+        my $sql = "SELECT IFNULL(SUM($unpack_value), 0) AS value FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) WHERE scripthash = ? AND tx_in.tx_type = ? AND IFNULL(tx_in.token_id, tx_in.id) = ?+0 AND LENGTH(data) = 9 AND SUBSTR(data, 1, 1) = ?";
+        if ($minconf && $blockchain_height - $minconf + 1 < $max_db_height) {
+            $sql .= " AND tx_in.block_height <= ?";
+            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_tx->{id}, TOKEN_TXO_TYPE_TRANSFER, $blockchain_height - $minconf + 1);
+        }
+        else {
+            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_tx->{id}, TOKEN_TXO_TYPE_TRANSFER);
+        }
+        $value = $result->[0] // 0;
+    }
+    if ($minconf && $blockchain_height - $minconf + 1 <= $max_db_height) {
+        return $value;
+    }
+
+    for (my $height = $max_db_height + 1; $height <= $blockchain_height - $minconf + 1; $height++) {
+        my $block = QBitcoin::Block->best_block($height)
+            or next;
+        foreach my $tx (grep { $_->is_tokens && ($_->token_hash || $_->hash) eq $tokens } @{$block->transactions}) {
+            $value += sum0 map { unpack("Q<", substr($_->data, 1, 8)) }
+                grep { $_->scripthash eq $scripthash && length($_->data) == 9 && substr($_->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER }
+                    @{$tx->out};
+        }
+    }
+    if (!$minconf) {
+        foreach my $tx (grep { $_->is_tokens && ($_->token_hash || $_->hash) eq $tokens } QBitcoin::Transaction->mempool_list()) {
+            $value += sum0 map { unpack("Q<", substr($_->data, 1, 8)) }
+                grep { $_->scripthash eq $scripthash && length($_->data) == 9 && substr($_->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER }
+                    @{$tx->out};
+        }
+    }
+
+    return $value;
+}
+
+sub tokens_balance {
+    my ($address, $tokens, $minconf) = @_;
+    my $scripthash = eval { scripthash_by_address($address) }
+        or return undef;
+    my $value = 0;
+    my $max_db_height = QBitcoin::Block->max_db_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    my %fresh_inputs;
+    my $token_id;
+    if ((my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) && (my ($token_tx) = QBitcoin::Transaction->fetch(hash => $tokens))) {
+        $token_id = $token_tx->{id};
+        my $result;
+        my $last_tx;
+        state $unpack_value = _unpack_data_value();
+        if ($minconf && $blockchain_height - $minconf + 1 < $max_db_height) {
+            ($last_tx) = QBitcoin::Transaction->fetch(block_height => { '<=', $blockchain_height - $minconf + 1 }, -sortby => 'id DESC', -limit => 1);
+        }
+        my $sql = "SELECT SUM($unpack_value) FROM `" . QBitcoin::TXO->TABLE . "` AS txo JOIN `" . QBitcoin::Transaction->TABLE . "` AS tx_in ON (tx_in.id = txo.tx_in) WHERE tx_out IS NULL AND scripthash = ? AND tx_in.tx_type = ? AND IFNULL(tx_in.token_id, tx_in.id) = ?+0 AND LENGTH(data) = 9 AND SUBSTR(data, 1, 1) = ?";
+        if (defined $last_tx) {
+            $sql .= " AND tx_in <= ?";
+            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_id, TOKEN_TXO_TYPE_TRANSFER, $last_tx->{id});
+            # Store inputs that have not enough confirmations to exclude them later
+            my $fresh_inputs_sql = "SELECT hash FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` ON (id = tx_in) WHERE scripthash = ? AND tx_out IS NULL AND tx_in > ?";
+            %fresh_inputs = map { $_->[0] => 1 } dbh->selectall_array($fresh_inputs_sql, undef, $script->id, $last_tx->{id});
+        }
+        else {
+            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_id, TOKEN_TXO_TYPE_TRANSFER);
+        }
+        $value = $result->[0] // 0;
+    }
+
+    for (my $height = $max_db_height + 1; $height <= $blockchain_height; $height++) {
+        my $block = QBitcoin::Block->best_block($height)
+            or next;
+        foreach my $tx (@{$block->transactions}) {
+            foreach my $in (grep { $_->{txo}->scripthash eq $scripthash && length($_->{txo}->data) == 9 && substr($_->{txo}->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->in}) {
+                next if exists $fresh_inputs{$in->{txo}->tx_in};
+                my $first_spent = $in->{txo}->tx_out;
+                ($first_spent) = sort { $a cmp $b } map { $_->hash } $in->{txo}->spent_list unless $first_spent;
+                next if $first_spent && $first_spent ne $tx->hash;
+                # Decrease value if it was correct tokens output, i.e if $_->{txo}->tx_in is tokens transaction with correct token id
+                if (my $tx_in = QBitcoin::Transaction->get($in->{txo}->tx_in)) {
+                    next if !$tx_in->is_tokens || ( ($tx_in->token_hash || $tx_in->hash) ne $tokens );
+                }
+                else {
+                    my ($tx_in) = QBitcoin::Transaction->fetch(hash => $in->{txo}->tx_in);
+                    next if $tx_in->{tx_type} != TX_TYPE_TOKENS || ($tx_in->{token_id} || $tx_in->{id}) != $token_id;
+                }
+                $value -= unpack("Q<", substr($in->{txo}->data, 1, 8));
+            }
+            if ($tx->is_tokens && ($tx->token_hash || $tx->hash) eq $tokens) {
+                if (!$minconf || $height <= $blockchain_height - $minconf + 1) {
+                    foreach my $out (grep { $_->scripthash eq $scripthash && length($_->data) == 9 && substr($_->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->out}) {
+                        $value += unpack("Q<", substr($out->data, 1, 8));
+                    }
+                }
+                elsif (grep { $_->scripthash eq $scripthash } @{$tx->out}) {
+                    $fresh_inputs{$tx->hash} = 1;
+                }
+            }
+        }
+    }
+    foreach my $tx (grep { $_->is_tokens && ($_->token_hash || $_->hash) eq $tokens } QBitcoin::Transaction->mempool_list()) {
+        if (!$minconf) {
+            foreach my $out (grep { $_->scripthash eq $scripthash && length($_->data) == 9 && substr($_->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->out}) {
+                $value += unpack("Q<", substr($out->data, 1, 8));
+            }
+        }
+        elsif (grep { $_->scripthash eq $scripthash } @{$tx->out}) {
+            $fresh_inputs{$tx->hash} = 1;
+        }
+    }
+    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash && length($_->{txo}->data) == 9 && substr($_->{txo}->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->in}) {
+            next if exists $fresh_inputs{$in->{txo}->tx_in};
+            my $first_spent = $in->{txo}->tx_out;
+            ($first_spent) = sort { $a cmp $b } map { $_->hash } $in->{txo}->spent_list unless $first_spent;
+            next if $first_spent && $first_spent ne $tx->hash;
+            # Decrease value if it was correct tokens output, i.e if $_->{txo}->tx_in is tokens transaction with correct token id
+            if (my $tx_in = QBitcoin::Transaction->get($in->{txo}->tx_in)) {
+                next if !$tx_in->is_tokens || ( ($tx_in->token_hash || $tx_in->hash) ne $tokens );
+            }
+            else {
+                my ($tx_in) = QBitcoin::Transaction->fetch(hash => $in->{txo}->tx_in);
+                next if $tx_in->{tx_type} != TX_TYPE_TOKENS || ($tx_in->{token_id} || $tx_in->{id}) != $token_id;
+            }
+            $value -= unpack("Q<", substr($in->{txo}->data, 1, 8));
+        }
+    }
+
+    return $value;
 }
 
 1;

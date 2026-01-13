@@ -141,6 +141,15 @@ use constant SIGHASH_TYPES => {
     SIGHASH_ANYONECANPAY => 0x80, # bit-flag
 };
 
+use constant TOKEN_TXO_TYPES => {
+    TOKEN_TXO_TYPE_TRANSFER    => "\x01",
+    TOKEN_TXO_TYPE_PERMISSIONS => "\x02",
+};
+
+use constant TOKEN_PERMISSION_BITS => {
+    TOKEN_PERMISSION_MINT => 1,
+};
+
 # use constant TX_TYPES_NAMES  => [ "unknown", "standard", "stake", "coinbase" ];
 use constant TX_NAME_BY_TYPE => { reverse %{&TX_TYPES_CONST} };
 use constant TX_TYPES_NAMES  =>
@@ -154,6 +163,8 @@ use constant PEER_STATUS_CONST;
 use constant TX_TYPES_CONST;
 use constant CRYPT_ALGO;
 use constant SIGHASH_TYPES;
+use constant TOKEN_TXO_TYPES;
+use constant TOKEN_PERMISSION_BITS;
 
 use constant PROTOCOL2NAME => {
     map { s/BITCOIN/Bitcoin/r } map { s/PROTOCOL_//r } reverse %{&PROTOCOL_CONST}
@@ -174,6 +185,8 @@ our @EXPORT = (
     keys %{&TX_TYPES_CONST},
     keys %{&CRYPT_ALGO},
     keys %{&SIGHASH_TYPES},
+    keys %{&TOKEN_TXO_TYPES},
+    keys %{&TOKEN_PERMISSION_BITS},
     'TX_TYPES_NAMES',
     'PROTOCOL2NAME',
     'CRYPT_ALGO_NAMES',

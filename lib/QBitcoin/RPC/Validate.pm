@@ -27,6 +27,7 @@ my %SPEC = (
     minconf        => qr/^(?:0|[1-9][0-9]{0,9})\z/,
     conf_target    => qr/^[1-9][0-9]?\z/,
     estimate_mode  => qr/^(?:economical|conservative)\z/i,
+    token          => qr/^[0-9a-f]{64}\z/,
     verbose        => \&validate_boolean,
     address        => \&validate_address,
     inputs         => \&validate_inputs,

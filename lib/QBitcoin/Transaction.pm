@@ -51,12 +51,6 @@ use constant ATTR => qw(
     token_hash
 );
 
-use constant {
-    TOKEN_TXO_TYPE_TRANSFER    => 1,
-    TOKEN_TXO_TYPE_PERMISSIONS => 2,
-};
-use constant TOKEN_PERMISSION_MINT   => 1;
-
 mk_accessors(keys %{&FIELDS}, ATTR);
 
 my %TRANSACTION;      # in-memory cache transaction objects by tx_hash

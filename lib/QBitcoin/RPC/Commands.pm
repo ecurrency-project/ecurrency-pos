@@ -21,7 +21,7 @@ use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
 use QBitcoin::MinFee;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
@@ -1583,6 +1583,88 @@ sub cmd_unstakeaddress {
     }
     $my_address->update( staked => 0 );
     return $self->response_ok("Address $address will not be used for staking");
+}
+
+$PARAMS{gettokensbalance} = "address token minconf?";
+$HELP{gettokensbalance} = qq{
+gettokensbalance "address" "token" ( minconf )
+
+Returns the total amount of tokens on the given address in transactions with at least minconf confirmations.
+
+Arguments:
+1. address    (string, required) The qbitcoin address for transactions.
+2. token      (string, required) The token address (create transaction).
+3. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
+
+Result:
+n    (numeric) The total amount of tokens unspent at this address.
+
+Examples:
+
+The amount of tokens from transactions with at least 1 confirmation
+> qbitcoin-cli gettokensbalance "myaddress" "tokenaddress"
+
+The amount including unconfirmed transactions, zero confirmations
+> qbitcoin-cli gettokensbalance "myaddress" "tokenaddress" 0
+
+The amount with at least 6 confirmations
+> qbitcoin-cli gettokensbalance "myaddress" "tokenaddress" 6
+
+As a JSON-RPC call
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensbalance", "params": ["myaddress", "tokenaddress", 6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+};
+sub cmd_gettokensbalance {
+    my $self = shift;
+    blockchain_synced() && mempool_synced()
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+    my $address = $self->args->[0];
+    my $tokens  = pack("H*", $self->args->[1]);
+    my $minconf = $self->args->[2] // 1;
+    my $value = tokens_balance($address, $tokens, $minconf);
+    defined $value
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
+    return $self->response_ok($value);
+}
+
+$PARAMS{gettokensreceived} = "address token minconf?";
+$HELP{gettokensreceived} = qq{
+gettokensreceived "address" "token" ( minconf )
+
+Returns the total received amount of tokens on the given address in transactions with at least minconf confirmations.
+
+Arguments:
+1. address    (string, required) The qbitcoin address for transactions.
+2. token      (string, required) The token address (create transaction).
+3. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
+
+Result:
+n    (numeric) The total amount of tokens received at this address.
+
+Examples:
+
+The received amount of tokens from transactions with at least 1 confirmation
+> qbitcoin-cli gettokensreceived "myaddress" "tokenaddress"
+
+The received amount including unconfirmed transactions, zero confirmations
+> qbitcoin-cli gettokensreceived "myaddress" "tokenaddress" 0
+
+The received amount with at least 6 confirmations
+> qbitcoin-cli gettokensreceived "myaddress" "tokenaddress" 6
+
+As a JSON-RPC call
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensreceived", "params": ["myaddress", "tokenaddress", 6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+};
+sub cmd_gettokensreceived {
+    my $self = shift;
+    blockchain_synced() && mempool_synced()
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+    my $address = $self->args->[0];
+    my $tokens  = pack($self->args->[1]);
+    my $minconf = $self->args->[2] // 1;
+    my $value = tokens_received($address, $tokens, $minconf);
+    defined $value
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
+    return $self->response_ok($value);
 }
 
 # getmemoryinfo
