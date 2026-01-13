@@ -267,32 +267,34 @@ sub address_balance {
         my $block = QBitcoin::Block->best_block($height)
             or next;
         foreach my $tx (@{$block->transactions}) {
-            if (%fresh_inputs) {
-                foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
-                    $value -= $in->{txo}->value if exists $fresh_inputs{$in->{txo}->tx_in};
-                }
+            foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+                $value -= $in->{txo}->value if !exists $fresh_inputs{$in->{txo}->tx_in};
             }
             if (!$minconf || $height <= $blockchain_height - $minconf + 1) {
                 foreach my $out (grep { $_->scripthash eq $scripthash && $_->unspent } @{$tx->out}) {
                     $value += $out->value;
                 }
             }
+            elsif (grep { $_->scripthash eq $scripthash } @{$tx->out}) {
+                $fresh_inputs{$tx->hash} = 1;
+            }
         }
     }
-    if (%fresh_inputs || !$minconf) {
-        foreach my $tx (QBitcoin::Transaction->mempool_list()) {
-            if (%fresh_inputs) {
-                foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
-                    $value -= $in->{txo}->value if exists $fresh_inputs{$in->{txo}->tx_in};
-                }
-            }
-            if (!$minconf) {
-                foreach my $out (grep { $_->scripthash eq $scripthash && $_->unspent } @{$tx->out}) {
-                    $value += $out->value;
-                }
+
+    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+        if (!$minconf) {
+            foreach my $out (grep { $_->scripthash eq $scripthash && $_->unspent } @{$tx->out}) {
+                $value += $out->value;
             }
         }
-
+        elsif (grep { $_->scripthash eq $scripthash } @{$tx->out}) {
+            $fresh_inputs{$tx->hash} = 1;
+        }
+    }
+    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
+            $value -= $in->{txo}->value if !exists $fresh_inputs{$in->{txo}->tx_in};
+        }
     }
 
     return $value;
