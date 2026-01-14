@@ -111,7 +111,7 @@ sub validate_address {
 sub is_amount {
     my $amount = shift;
     looks_like_number($amount) or return 0;
-    int($amount * DENOMINATOR) >= 1 or return 0;
+    $amount >= 0 or return 0;
     $amount * DENOMINATOR <= MAX_VALUE or return 0;
     return 1;
 }
@@ -156,11 +156,23 @@ sub validate_outputs {
     $outputs = [ $outputs ] if ref($outputs) eq "HASH";
     foreach my $out (@$outputs) {
         ref($out) eq "HASH" or return 0;
-        foreach my $address (keys %$out) {
-            validate_address($address) or return 0;
-            ($out->{$address} && !ref($out->{$address}) && is_amount($out->{$address}))
-                or return 0;
+        my $address_count = 0;
+        my $token = undef;
+        foreach my $key (keys %$out) {
+            if (validate_address($key)) {
+                (defined($out->{$key}) && !ref($out->{$key}) && is_amount($out->{$key}))
+                    or return 0;
+                $address_count++;
+            }
+            elsif ($key =~ /^[0-9a-f]{64}\z/ || $key eq "") {
+                return 0 if defined $token; # only one token key allowed
+                $token = $key;
+            }
+            else {
+                return 0;
+            }
         }
+        return 0 if defined($token) && $address_count != 1;
     }
     $_[0] = $outputs;
     return 1;

@@ -405,6 +405,8 @@ Outputs can be addresses or data.
 Returns hex-encoded raw transaction.
 Note that the transaction's inputs are not signed, and
 it is not stored in the wallet or transmitted to the network.
+token_id cannot be different in the transaction outputs.
+Empty token_id means creating new tokens, id will be assigned as txid.
 
 Arguments:
 1. inputs                      (json array, required) The inputs
@@ -419,6 +421,7 @@ Arguments:
      [
        {                       (json object)
          "address": amount,    (numeric or string, required) A key-value pair. The key (string) is the qbitcoin address, the value (float or string) is the amount in BTC
+         "token_id": amount,   (numeric or string, optional) A key-value pair. The key (string) is the token id, the value (unsigned integer or string) is the amount in tokens, or word "mint" for mint permission
        },
        ...
      ]
@@ -436,19 +439,62 @@ sub cmd_createrawtransaction {
     my $outputs = $self->args->[1];
     my @in  = map {{ txo => QBitcoin::TXO->new_txo(tx_in => pack("H*", $_->{txid}), num => $_->{vout}+0) }} @$inputs;
     my @out;
+    my $token_hash;
     foreach my $out (@$outputs) {
-        push @out, map { QBitcoin::TXO->new_txo(value => int($out->{$_} * DENOMINATOR + 0.5), scripthash => scripthash_by_address($_)) } keys %$out;
+        my ($txo, $out_token_hash) = _create_txo($out);
+        $txo or return $self->response_error("", ERR_INVALID_REQUEST, "Invalid output");
+        push @out, @$txo;
+        if (defined($out_token_hash)) {
+            if (defined($token_hash) && $token_hash ne $out_token_hash) {
+                return $self->response_error("", ERR_INVALID_REQUEST, "Different token_id in outputs");
+            }
+            $token_hash //= $out_token_hash;
+        }
     }
     my $tx = QBitcoin::Transaction->new(
         in      => \@in,
         out     => \@out,
-        tx_type => TX_TYPE_STANDARD,
+        tx_type => defined($token_hash) ? TX_TYPE_TOKENS : TX_TYPE_STANDARD,
+        defined($token_hash) ? (token_hash => $token_hash) : (),
     );
     my $tx_data = $tx->serialize_unsigned;
     if (length($tx_data) > MAX_TX_SIZE) {
         return $self->response_error("", ERR_INVALID_REQUEST, "Transaction size too large: " . length($tx_data) . " > " . MAX_TX_SIZE);
     }
     return $self->response_ok(unpack("H*", $tx_data));
+}
+
+sub _create_txo {
+    my $out = shift;
+    my @txo;
+    my $token_data;
+    foreach my $key (keys %$out) {
+        if ($key =~ /^[0-9a-f]{64}\z/ || $key eq "") {
+            my $data;
+            if (defined $token_data) {
+                return undef; # multiple token_id
+            }
+            if ($out->{$key} eq "mint") {
+                $data = TOKEN_TXO_TYPE_PERMISSIONS . pack("C", TOKEN_PERMISSION_MINT);
+            }
+            else {
+                $data = TOKEN_TXO_TYPE_TRANSFER . pack("Q<", $out->{$key});
+            }
+            $token_data = [ pack("H*", $key) => $data ];
+        }
+        elsif (my $scripthash = scripthash_by_address($key)) {
+            my $value = int($out->{$key} * DENOMINATOR + 0.5);
+            push @txo, { scripthash => $scripthash, value => $value };
+        }
+        else {
+            return undef;
+        }
+    }
+    if (defined($token_data)) {
+        @txo == 1 or return undef;
+        $txo[0]->{data} = $token_data->[1];
+    }
+    return ([ map { QBitcoin::TXO->new_txo($_) } @txo ], $token_data ? $token_data->[0] : undef);
 }
 
 $PARAMS{sendrawtransaction} = "hexstring";
