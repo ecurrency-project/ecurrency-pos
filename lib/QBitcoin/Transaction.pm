@@ -473,17 +473,19 @@ sub type_as_text {
 # For JSON RPC output
 sub as_hashref {
     my $self = shift;
-    return {
-        $self->hash ? ( hash => unpack("H*", $self->hash), txid => unpack("H*", $self->hash) ) : (),
-        defined ($self->fee) ? ( fee  => $self->fee / DENOMINATOR ) : (),
+    my $res = {
         size => $self->size //= length($self->serialize),
         in   => $self->in_raw ? [ map { inputraw_as_hashref($_) } @{$self->in_raw} ] : [ map { input_as_hashref($_) } @{$self->in} ],
-        out  => [ map { output_as_hashref($_) } @{$self->out} ],
+        out  => [ map { $self->output_as_hashref($_) } @{$self->out} ],
         type => $self->type_as_text,
-        $self->up ? ( up => $self->up->as_hashref ) : (),
-        !UPGRADE_POW && $self->coins_created ? ( coins_created => $self->coins_created / DENOMINATOR ) : (),
-        $self->received_time ? ( time => $self->received_time ) : (),
     };
+    $res->{hash} = $res->{txid} = unpack("H*", $self->hash) if defined $self->hash;
+    $res->{fee} = $self->fee / DENOMINATOR if defined $self->fee;
+    $res->{up} = $self->up->as_hashref if $self->up;
+    $res->{coins_created} = $self->coins_created / DENOMINATOR if !UPGRADE_POW && defined $self->coins_created;
+    $res->{time} = $self->received_time if defined $self->received_time;
+    $res->{token_id} = unpack("H*", $self->token_hash) if $self->is_tokens && defined $self->token_hash;
+    return $res;
 }
 
 sub input_as_hashref {
@@ -567,12 +569,25 @@ sub deserialize_output {
 }
 
 sub output_as_hashref {
+    my $self = shift;
     my $out = shift;
-    return {
+    my $res = {
         value   => $out->value / DENOMINATOR,
         address => $out->address,
         data    => unpack("H*", $out->data),
     };
+    if ($self->is_tokens) {
+        $res->{token_id} = unpack("H*", $self->token_hash || $self->hash);
+        if (length($out->data // "")) {
+            if (substr($out->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER && length($out->data) == 9) {
+                $res->{token_amount} = unpack("Q<", substr($out->data, 1, 8));
+            }
+            elsif (substr($out->data, 0, 1) eq TOKEN_TXO_TYPE_PERMISSIONS && length($out->data) == 2) {
+                $res->{token_permission} = "0x" . unpack("H2", substr($out->data, 1, 1));
+            }
+        }
+    }
+    return $res;
 }
 
 sub serialize_coinbase {
