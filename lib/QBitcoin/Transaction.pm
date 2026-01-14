@@ -558,7 +558,7 @@ sub output_as_hashref {
     return {
         value   => $out->value / DENOMINATOR,
         address => $out->address,
-        data    => $out->data,
+        data    => unpack("H*", $out->data),
     };
 }
 
