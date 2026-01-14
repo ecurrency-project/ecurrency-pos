@@ -17,7 +17,7 @@ use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::Transaction;
 use QBitcoin::Block;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance);
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
 use QBitcoin::Coinbase;
 use QBitcoin::ConnectionList;
@@ -394,6 +394,13 @@ sub get_address_stats {
     my ($address) = @_;
     my $stats = address_stats($address)
         or return $self->http_response(404, "Incorrect address");
+    $stats->{tokens} = {};
+    my $tokens = all_tokens_balance($address);
+    if ($tokens && %$tokens) {
+        foreach my $token (keys %$tokens) {
+            $stats->{tokens}->{unpack("H*", $token)} = $tokens->{$token};
+        }
+    }
     return $self->http_ok($stats);
 }
 
