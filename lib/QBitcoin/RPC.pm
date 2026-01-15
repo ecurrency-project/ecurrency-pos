@@ -20,7 +20,7 @@ with 'QBitcoin::RPC::Commands';
 
 mk_accessors(qw( cmd args auth_password force hide_response ));
 
-my $JSON = Cpanel::JSON::XS->new;
+my $JSON = Cpanel::JSON::XS->new->allow_bignum;
 
 sub type_id() { PROTOCOL_RPC }
 
