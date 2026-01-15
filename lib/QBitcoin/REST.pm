@@ -17,7 +17,7 @@ use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::Transaction;
 use QBitcoin::Block;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs);
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
 use QBitcoin::Coinbase;
 use QBitcoin::ConnectionList;
@@ -129,6 +129,11 @@ sub process_request {
         }
         elsif ($path[2] eq "txs") {
             return $self->list_address_txs($path[1], ($path[3] // "") eq "mempool" ? 0 : 25, ($path[3] // "") eq "chain" ? 0 : 50, $path[4]);
+        }
+        elsif ($path[2] eq "transfers") {
+            validate_txid($path[3])
+                or return $self->http_response(404, "Unknown request");
+            return $self->list_token_txs($path[1], $path[3], ($path[4] // "") eq "mempool" ? 0 : 25, ($path[4] // "") eq "chain" ? 0 : 50, $path[5]);
         }
         elsif ($path[2] eq "utxo") {
             @path == 3
@@ -304,6 +309,10 @@ sub validate_address {
     $_[0] =~ ($config->{testnet} ? ADDRESS_TESTNET_RE : ADDRESS_RE);
 }
 
+sub validate_txid {
+    $_[0] =~ /^[0-9a-f]{64}\z/;
+}
+
 sub tx_status {
     my ($tx) = @_;
     if (defined $tx->block_height) {
@@ -430,6 +439,19 @@ sub list_address_txs {
         }
     }
     return $self->http_ok(\@tx);
+}
+
+sub list_token_txs {
+    my $self = shift;
+    my ($address, $token_hash, $chain_cnt, $mempool_cnt, $last_seen) = @_;
+    my $last_seen_bin;
+    if ($last_seen && $last_seen =~ /^[0-9a-f]{64}\z/) {
+        $last_seen_bin = pack("H*", $last_seen);
+    }
+    my ($txs_chain, $txs_mempool) = get_tokens_txs($address, pack("H*", $token_hash), $last_seen_bin, $chain_cnt, $mempool_cnt);
+    $txs_chain
+        or return $self->http_response(404, "Incorrect address");
+    return $self->http_ok([ map { [ unpack("H*", $_->[0]), $_->[1], $_->[2] ] } @$txs_mempool, @$txs_chain ]);
 }
 
 sub get_address_unspent {
