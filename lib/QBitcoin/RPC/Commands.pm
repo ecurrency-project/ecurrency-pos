@@ -4,6 +4,7 @@ use strict;
 
 use Role::Tiny;
 use List::Util qw(sum0 sum min max);
+use Math::BigFloat;
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
@@ -102,7 +103,7 @@ sub cmd_getblockchaininfo {
         my ($coinbase) = dbh->selectrow_array("SELECT SUM(value) FROM `" . QBitcoin::Coinbase->TABLE . "` WHERE tx_out IS NOT NULL");
         $coinbase //= 0;
         $coinbase += GENESIS_REWARD if defined($best_block);
-        $response->{total_coins} = $coinbase ? $coinbase / DENOMINATOR : 0;
+        $response->{total_coins} = $coinbase ? Math::BigFloat->new($coinbase) / DENOMINATOR : 0;
     }
     return $self->response_ok($response);
 }
@@ -506,8 +507,7 @@ sub _create_txo {
             $token_attr[unpack("C", TOKEN_TXO_TYPE_SYMBOL)] = pack("C", length($out->{$key})) . $out->{$key};
         }
         elsif (my $scripthash = scripthash_by_address($key)) {
-            my $value = int($out->{$key} * DENOMINATOR + 0.5);
-            push @txo, { scripthash => $scripthash, value => $value };
+            push @txo, { scripthash => $scripthash, value => $out->{$key} };
         }
         else {
             return undef;
@@ -1055,7 +1055,7 @@ sub cmd_getblockstats {
         outs       => sum0(map { scalar @{$_->out} } @{$block->transactions}),
         subsidy    => 0,
         time       => $block->time,
-        total_out  => sum0(map { $_->value } map { @{$_->out} } @{$block->transactions})/DENOMINATOR,
+        total_out  => sum0(map { Math::BigFloat->new($_->value) } map { @{$_->out} } @{$block->transactions}) / DENOMINATOR,
         total_size => sum0(map { $_->size } @{$block->transactions}),
         txs        => @{$block->transactions}+0,
         totalfee   => 0,
@@ -1266,7 +1266,7 @@ sub cmd_getaddressbalance {
     my $value = address_balance($address, $minconf);
     defined $value
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
-    return $self->response_ok($value/DENOMINATOR);
+    return $self->response_ok(Math::BigFloat->new($value) / DENOMINATOR);
 }
 
 $PARAMS{getreceivedbyaddress} = "address minconf?";
@@ -1305,7 +1305,7 @@ sub cmd_getreceivedbyaddress {
     my $value = address_received($address, $minconf);
     defined($value)
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Internal error");
-    return $self->response_ok($value/DENOMINATOR);
+    return $self->response_ok(Math::BigFloat->new($value) / DENOMINATOR);
 }
 
 $PARAMS{listunspent} = "address minconf?";
@@ -1360,7 +1360,7 @@ sub cmd_listunspent {
                     txid    => unpack("H*", $txid),
                     vout    => $vout,
                     address => $address,
-                    amount  => $utxo->{value} / DENOMINATOR,
+                    amount  => Math::BigFloat->new($utxo->{value}) / DENOMINATOR,
                     defined($utxo->{token_id})     ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
                     defined($utxo->{token_amount}) ? ( token_amount      => $utxo->{token_amount}      ) : (),
                     $utxo->{token_permissions}     ? ( token_permissions => $utxo->{token_permissions} ) : (),
@@ -1426,13 +1426,13 @@ sub cmd_listtransactions {
     return $self->response_ok([
         map(+{
             txid          => unpack("H*", $_->[0]),
-            amount        => $_->[1] / DENOMINATOR,
+            amount        => Math::BigFloat->new($_->[1]) / DENOMINATOR,
             height        => $_->[2],
             confirmations => $best_height - $_->[2] + 1,
         }, @$txs_chain),
         map(+{
             txid          => unpack("H*", $_->[0]),
-            amount        => $_->[1] / DENOMINATOR,
+            amount        => Math::BigFloat->new($_->[1]) / DENOMINATOR,
             height        => -1,
             confirmations => 0,
         }, @$txs_mempool),
@@ -1503,7 +1503,7 @@ sub cmd_getbalance {
     else {
         $value = sum0(map { $_->value } @my_txo);
     }
-    return $self->response_ok($value/DENOMINATOR);
+    return $self->response_ok(Math::BigFloat->new($value) / DENOMINATOR);
 }
 
 $PARAMS{getnewaddress} = "address_type?";
@@ -1582,22 +1582,23 @@ sub cmd_estimatesmartfee {
     if (@mempool < $target) {
         return $self->response_ok({ feerate => 0 });
     }
+    # use Math::BigFloat here for output 0.0000001 instead of 1e-07
     if ($best_block->min_fee <= QBitcoin::MinFee->MIN_FEE) {
-        return $self->response_ok({ feerate => QBitcoin::MinFee->MIN_FEE / DENOMINATOR });
+        return $self->response_ok({ feerate => Math::BigFloat->new(QBitcoin::MinFee->MIN_FEE) / DENOMINATOR });
     }
     my $size = sum0 map { $_->size } grep { ($_->is_standard || $_->is_tokens) && $_->fee * 1024 / $_->size > $best_block->min_fee } @mempool;
     if ($size < $target * $best_block->size) {
-        return $self->response_ok({ feerate => $best_block->min_fee / DENOMINATOR });
+        return $self->response_ok({ feerate => Math::BigFloat->new($best_block->min_fee) / DENOMINATOR });
     }
     $size = 0;
     my $prev_tx;
     foreach my $tx (sort { $b->fee / $b->size <=> $a->fee / $a->size } @mempool) {
         if ($size += $tx->size > $best_block->size) {
-            return $self->response_ok({ feerate => ($prev_tx ? $prev_tx->fee / $prev_tx->size : $tx->fee / $tx->size) * 1024 / DENOMINATOR });
+            return $self->response_ok({ feerate => Math::BigFloat->new($prev_tx ? $prev_tx->fee / $prev_tx->size : $tx->fee / $tx->size) * 1024 / DENOMINATOR });
         }
         $prev_tx = $tx;
     }
-    return $self->response_ok({ feerate => $prev_tx->fee * 1024 / $prev_tx->size / DENOMINATOR });
+    return $self->response_ok({ feerate => Math::BigFloat->new($prev_tx->fee) * 1024 / $prev_tx->size / DENOMINATOR });
 }
 
 $PARAMS{stakeaddress} = "address";
@@ -1705,7 +1706,7 @@ sub cmd_gettokensbalance {
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
     if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($token_hash))) {
         my $token_info = $token_tx->token_info;
-        $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
+        $value = Math::BigFloat->new($value) / 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
     }
     return $self->response_ok($value);
 }
@@ -1750,7 +1751,7 @@ sub cmd_gettokensreceived {
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
     if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($token_hash))) {
         my $token_info = $token_tx->token_info;
-        $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
+        $value = Math::BigFloat->new($value) / 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
     }
     return $self->response_ok($value);
 }
