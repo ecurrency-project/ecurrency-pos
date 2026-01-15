@@ -934,9 +934,8 @@ sub create_txo {
         elsif ($key eq "token_symbol") {
             $token_attr[unpack("C", TOKEN_TXO_TYPE_SYMBOL)] = pack("C", length($out->{$key})) . $out->{$key};
         }
-        elsif (my $scripthash = eval { scripthash_by_address($key) }) {
-            my $value = int($out->{$key} * DENOMINATOR + 0.5);
-            push @txo, { scripthash => $scripthash, value => $value };
+        elsif (my $scripthash = scripthash_by_address($key)) {
+            push @txo, { scripthash => $scripthash, value => $out->{$key} };
         }
         else {
             return undef;
