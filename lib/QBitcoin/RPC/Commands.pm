@@ -4,6 +4,7 @@ use strict;
 
 use Role::Tiny;
 use List::Util qw(sum0 sum min max);
+use Math::BigFloat;
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
@@ -143,7 +144,7 @@ sub cmd_getblockchaininfo {
         weight               => $best_block ? $best_block->weight+0   : -1,
         bestblocktime        => $best_block ? $best_block->time       : -1,
         initialblockdownload => blockchain_synced() ? FALSE : TRUE,
-        total_coins          => $total_coins ? $total_coins / DENOMINATOR : 0,
+        total_coins          => $total_coins ? Math::BigFloat->new($total_coins) / DENOMINATOR : 0,
         # size_on_disk         => # TODO
     };
     $response->{headers} = $response->{blocks}; # satisfy explorers
@@ -1096,7 +1097,7 @@ sub cmd_getblockstats {
         outs       => sum0(map { scalar @{$_->out} } @{$block->transactions}),
         subsidy    => 0,
         time       => $block->time,
-        total_out  => sum0(map { $_->value } map { @{$_->out} } @{$block->transactions})/DENOMINATOR,
+        total_out  => sum0(map { Math::BigFloat->new($_->value) } map { @{$_->out} } @{$block->transactions}) / DENOMINATOR,
         total_size => sum0(map { $_->size } @{$block->transactions}),
         txs        => @{$block->transactions}+0,
         totalfee   => 0,
@@ -1867,7 +1868,7 @@ sub cmd_getaddressbalance {
     my $value = address_balance($address, $minconf);
     defined $value
         or return $self->response_error("Too many transactions on this address", ERR_INTERNAL_ERROR);
-    return $self->response_ok($value/DENOMINATOR);
+    return $self->response_ok(Math::BigFloat->new($value) / DENOMINATOR);
 }
 
 $PARAMS{getreceivedbyaddress} = "address minconf?";
@@ -1906,7 +1907,7 @@ sub cmd_getreceivedbyaddress {
     my $value = address_received($address, $minconf);
     defined($value)
         or return $self->response_error("Internal error", ERR_INTERNAL_ERROR);
-    return $self->response_ok($value/DENOMINATOR);
+    return $self->response_ok(Math::BigFloat->new($value) / DENOMINATOR);
 }
 
 $PARAMS{listunspent} = "address minconf?";
@@ -1959,7 +1960,7 @@ sub cmd_listunspent {
                     txid    => unpack("H*", $txid),
                     vout    => $vout,
                     address => $address,
-                    amount  => $utxo->{value} / DENOMINATOR,
+                    amount  => Math::BigFloat->new($utxo->{value}) / DENOMINATOR,
                     defined($utxo->{token_id})     ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
                     defined($utxo->{token_amount}) ? ( token_amount      => $utxo->{token_amount}      ) : (),
                     $utxo->{token_permissions}     ? ( token_permissions => $utxo->{token_permissions} ) : (),
@@ -2026,13 +2027,13 @@ sub cmd_listtransactions {
     return $self->response_ok([
         map(+{
             txid          => unpack("H*", $_->[0]),
-            amount        => $_->[1] / DENOMINATOR,
+            amount        => Math::BigFloat->new($_->[1]) / DENOMINATOR,
             height        => $_->[2],
             confirmations => $best_height - $_->[2] + 1,
         }, @$txs_chain),
         map(+{
             txid          => unpack("H*", $_->[0]),
-            amount        => $_->[1] / DENOMINATOR,
+            amount        => Math::BigFloat->new($_->[1]) / DENOMINATOR,
             height        => -1,
             confirmations => 0,
         }, @$txs_mempool),
@@ -2207,7 +2208,7 @@ sub cmd_getbalance {
     else {
         $value = sum0(map { $_->value } @my_txo);
     }
-    return $self->response_ok($value/DENOMINATOR);
+    return $self->response_ok(Math::BigFloat->new($value) / DENOMINATOR);
 }
 
 $PARAMS{getnewaddress} = "address_type? delegate_pubkeyhash/pubkeyhash?";
@@ -2304,7 +2305,7 @@ sub cmd_estimatesmartfee {
     if ($error) {
         return $self->response_error($error, ERR_INTERNAL_ERROR);
     }
-    return $self->response_ok({ feerate => $result->{$target} * 1024 / DENOMINATOR });
+    return $self->response_ok({ feerate => Math::BigFloat->new($result->{$target}) * 1024 / DENOMINATOR });
 }
 
 $PARAMS{stakeaddress} = "address";
@@ -2418,7 +2419,7 @@ sub cmd_gettokensbalance {
         or return $self->response_error("Too many transactions on this address", ERR_INTERNAL_ERROR);
     if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($token_hash))) {
         my $token_info = $token_tx->token_info;
-        $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
+        $value = Math::BigFloat->new($value) / 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
     }
     return $self->response_ok($value);
 }
@@ -2463,7 +2464,7 @@ sub cmd_gettokensreceived {
         or return $self->response_error("Too many transactions on this address", ERR_INTERNAL_ERROR);
     if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($token_hash))) {
         my $token_info = $token_tx->token_info;
-        $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
+        $value = Math::BigFloat->new($value) / 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
     }
     return $self->response_ok($value);
 }
