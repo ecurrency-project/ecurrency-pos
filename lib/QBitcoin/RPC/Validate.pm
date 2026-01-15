@@ -4,7 +4,7 @@ use strict;
 
 use Role::Tiny;
 use Cpanel::JSON::XS;
-use Scalar::Util qw(looks_like_number);
+use Scalar::Util qw(looks_like_number blessed);
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
@@ -15,7 +15,7 @@ use QBitcoin::Accessors qw(mk_accessors);
 
 mk_accessors(qw(validate_message));
 
-my $JSON = Cpanel::JSON::XS->new;
+my $JSON = Cpanel::JSON::XS->new->allow_bignum;
 
 my %SPEC = (
     height         => qr/^(?:0|[1-9][0-9]{0,9})\z/,
@@ -174,7 +174,7 @@ sub validate_outputs {
                     or return 0;
             }
             elsif ($key eq "token_amount") {
-                (defined($out->{$key}) && !ref($out->{$key}) && $out->{$key} =~ /^(?:0|[1-9][0-9]{0,17})\z/)
+                (defined($out->{$key}) && $out->{$key} =~ /^(?:0|[1-9][0-9]{0,17})\z/)
                     or return 0;
                 $token_amount = 1;
                 next;
@@ -223,9 +223,16 @@ sub validate_outputs {
                 next;
             }
             elsif (validate_address($key)) {
-                (defined($out->{$key}) && !ref($out->{$key}) && is_amount($out->{$key}))
+                (defined($out->{$key}) && is_amount($out->{$key}))
                     or return 0;
-                $out->{$key} = int($out->{$key} * DENOMINATOR + 0.5);
+                # And convert amount to satoshi
+                my $satoshi = $out->{$key} * DENOMINATOR + 0.5;
+                if (blessed($satoshi) && $satoshi->isa('Math::BigFloat')) {
+                    $out->{$key} = $satoshi->as_int->numify;
+                }
+                else {
+                    $out->{$key} = int($satoshi);
+                }
                 $address_count++;
             }
             else {
