@@ -5,6 +5,7 @@ use strict;
 use Tie::IxHash;
 use List::Util qw(sum0);
 use Scalar::Util qw(refaddr);
+use Math::BigFloat;
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
@@ -572,7 +573,7 @@ sub output_as_hashref {
     my $self = shift;
     my $out = shift;
     my $res = {
-        value   => $out->value / DENOMINATOR,
+        value   => Math::BigFloat->new($out->value) / DENOMINATOR,
         address => $out->address,
         data    => unpack("H*", $out->data),
     };
