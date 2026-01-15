@@ -2,7 +2,7 @@ package QBitcoin::RPC;
 use warnings;
 use strict;
 
-use JSON::XS;
+use JSON::PP;
 use Time::HiRes;
 use HTTP::Headers;
 use HTTP::Response;
@@ -18,7 +18,8 @@ with 'QBitcoin::RPC::Commands';
 
 mk_accessors(qw( cmd args ));
 
-my $JSON = JSON::XS->new;
+my $JSON_bignum = JSON::PP->new->utf8->convert_blessed->allow_bignum;
+my $JSON = JSON::PP->new->utf8;
 
 sub type_id() { PROTOCOL_RPC }
 
@@ -101,7 +102,7 @@ sub response_ok {
 sub http_response {
     my $self = shift;
     my ($code, $message, $content) = @_;
-    my $body = $JSON->encode($content);
+    my $body = $JSON_bignum->encode($content);
     my $headers = HTTP::Headers->new(
         Content_Type   => 'application/json',
         Content_Length => length($body),

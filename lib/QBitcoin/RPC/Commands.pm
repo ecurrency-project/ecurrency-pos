@@ -4,6 +4,7 @@ use strict;
 
 use Role::Tiny;
 use List::Util qw(sum0 sum min max);
+use Math::BigFloat;
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
@@ -102,7 +103,7 @@ sub cmd_getblockchaininfo {
         my ($coinbase) = dbh->selectrow_array("SELECT SUM(value) FROM `" . QBitcoin::Coinbase->TABLE . "` WHERE tx_out IS NOT NULL");
         $coinbase //= 0;
         $coinbase += GENESIS_REWARD if defined($best_block);
-        $response->{total_coins} = $coinbase ? $coinbase / DENOMINATOR : 0;
+        $response->{total_coins} = $coinbase ? Math::BigFloat->new($coinbase) / DENOMINATOR : 0;
     }
     return $self->response_ok($response);
 }
@@ -1196,7 +1197,7 @@ sub cmd_getaddressbalance {
     my $value = address_balance($address, $minconf);
     defined $value
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
-    return $self->response_ok($value/DENOMINATOR);
+    return $self->response_ok(Math::BigFloat->new($value) / DENOMINATOR);
 }
 
 $PARAMS{getreceivedbyaddress} = "address minconf?";
@@ -1235,7 +1236,7 @@ sub cmd_getreceivedbyaddress {
     my $value = address_received($address, $minconf);
     defined($value)
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Internal error");
-    return $self->response_ok($value/DENOMINATOR);
+    return $self->response_ok(Math::BigFloat->new($value) / DENOMINATOR);
 }
 
 $PARAMS{listunspent} = "address minconf?";
@@ -1290,7 +1291,7 @@ sub cmd_listunspent {
                     txid    => unpack("H*", $txid),
                     vout    => $vout,
                     address => $address,
-                    amount  => $utxo->[0] / DENOMINATOR,
+                    amount  => Math::BigFloat->new($utxo->[0]) / DENOMINATOR,
                     defined($utxo->[1]) ? (
                         confirmations => $best_height - $utxo->[1] + 1,
                         block_height  => $utxo->[1],
@@ -1353,13 +1354,13 @@ sub cmd_listtransactions {
     return $self->response_ok([
         map(+{
             txid          => unpack("H*", $_->[0]),
-            amount        => $_->[1] / DENOMINATOR,
+            amount        => Math::BigFloat->new($_->[1]) / DENOMINATOR,
             height        => $_->[2],
             confirmations => $best_height - $_->[2] + 1,
         }, @$txs_chain),
         map(+{
             txid          => unpack("H*", $_->[0]),
-            amount        => $_->[1] / DENOMINATOR,
+            amount        => Math::BigFloat->new($_->[1]) / DENOMINATOR,
             height        => -1,
             confirmations => 0,
         }, @$txs_mempool),
@@ -1430,7 +1431,7 @@ sub cmd_getbalance {
     else {
         $value = sum0(map { $_->value } @my_txo);
     }
-    return $self->response_ok($value/DENOMINATOR);
+    return $self->response_ok(Math::BigFloat->new($value) / DENOMINATOR);
 }
 
 $PARAMS{getnewaddress} = "address_type?";
