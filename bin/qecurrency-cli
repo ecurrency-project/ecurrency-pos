@@ -4,13 +4,13 @@ use strict;
 
 use Getopt::Long qw(:config bundling no_ignore_case no_auto_abbrev require_order);
 use HTTP::Tiny;
-use JSON::XS;
+use JSON::PP;
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config qw($config read_config);
 use QBitcoin::BlockchainParams;
 
-my $JSON = JSON::XS->new;
+my $JSON = JSON::PP->new->allow_bignum;
 
 sub main {
     my ( $help, $conffile );

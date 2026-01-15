@@ -2,7 +2,7 @@ package QBitcoin::RPC;
 use warnings;
 use strict;
 
-use JSON::XS;
+use JSON::PP;
 use Time::HiRes;
 use HTTP::Headers;
 use HTTP::Response;
@@ -19,7 +19,7 @@ with 'QBitcoin::RPC::Commands';
 
 mk_accessors(qw( cmd args auth_password force ));
 
-my $JSON = JSON::XS->new;
+my $JSON = JSON::PP->new->allow_bignum;
 
 sub type_id() { PROTOCOL_RPC }
 

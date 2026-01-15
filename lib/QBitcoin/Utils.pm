@@ -942,9 +942,8 @@ sub create_txo {
                 or return undef;
             $data = TXO_DATA_TAG . $out->{$key};
         }
-        elsif (my $scripthash = eval { scripthash_by_address($key) }) {
-            my $value = int($out->{$key} * DENOMINATOR + 0.5);
-            push @txo, { scripthash => $scripthash, value => $value };
+        elsif (my $scripthash = scripthash_by_address($key)) {
+            push @txo, { scripthash => $scripthash, value => $out->{$key} };
         }
         else {
             return undef;
