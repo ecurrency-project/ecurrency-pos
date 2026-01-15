@@ -7,6 +7,7 @@ use Tie::IxHash;
 use Digest::SHA;
 use List::Util qw(sum0);
 use Scalar::Util qw(refaddr);
+use Math::BigFloat;
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
@@ -806,7 +807,7 @@ sub output_as_hashref {
     my $out = shift;
     my $value = $out->value;
     my $res = {
-        value   => $value / DENOMINATOR,
+        value   => Math::BigFloat->new($value) / DENOMINATOR,
         address => $out->address,
     };
     if ($self->is_tokens) {
