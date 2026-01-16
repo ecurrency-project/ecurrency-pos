@@ -75,7 +75,7 @@ sub get_address_txs {
         }
     }
 
-    if (@txs_chain < $chain_limit && $script) {
+    if (@txs_inmem < $chain_limit && $script) {
         my @txs_in = dbh->selectall_array("SELECT hash, amount, block_height, block_pos FROM `" . QBitcoin::Transaction->TABLE . "` tx JOIN (SELECT tx_in, SUM(value) AS amount FROM `" . QBitcoin::TXO->TABLE . "` txo WHERE scripthash = ? AND (? IS NULL OR tx_in < ?) GROUP BY tx_in ORDER BY tx_in DESC LIMIT ?) AS t ON (tx_in = id)", undef, $script->id, $skip_before_id, $skip_before_id, $chain_limit);
         my @txs_out = dbh->selectall_array("SELECT hash, amount, block_height, block_pos FROM `" . QBitcoin::Transaction->TABLE . "` tx JOIN (SELECT tx_out, -SUM(value) AS amount FROM `" . QBitcoin::TXO->TABLE . "` txo WHERE scripthash = ? AND tx_out IS NOT NULL AND (? IS NULL OR tx_out < ?) GROUP BY tx_out ORDER BY tx_out DESC LIMIT ?) AS t ON (tx_out = id)", undef, $script->id, $skip_before_id, $skip_before_id, $chain_limit);
         my %txs_in = map { $_->[0] => $_ } @txs_in;
