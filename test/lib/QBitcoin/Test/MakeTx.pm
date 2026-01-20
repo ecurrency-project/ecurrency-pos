@@ -12,9 +12,9 @@ use QBitcoin::Script qw(op_pushdata);
 use QBitcoin::Crypto qw(hash160);
 
 use Exporter qw(import);
-our @EXPORT = qw(make_tx);
+our @EXPORT = qw(make_tx %SCRIPT);
 
-my %SCRIPT;
+our %SCRIPT;
 
 sub make_tx {
     my ($prev_tx, $fee, $script) = @_;

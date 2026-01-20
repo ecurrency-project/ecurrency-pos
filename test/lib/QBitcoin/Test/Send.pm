@@ -7,6 +7,7 @@ our @EXPORT_OK = qw(
     make_block
     send_block
     send_tx
+    send_raw_tx
     $connection
     $last_tx
 );
@@ -41,17 +42,24 @@ sub send_block {
     my $block_data = $block->serialize;
     block_hash($block->hash);
     $connection->protocol->command("block");
-    $connection->protocol->cmd_block($block_data);
+    $connection->protocol->cmd_block($block_data) == 0
+        or return undef;
     return $block;
+}
+
+sub send_raw_tx {
+    my ($tx) = @_;
+    $connection->protocol->command("tx");
+    $connection->protocol->cmd_tx($tx->serialize . "\x00"x16) == 0
+        or return undef;
+    $last_tx = $tx;
+    return $tx;
 }
 
 sub send_tx {
     my ($fee, $prev_tx, $script) = @_;
     my $tx = make_tx(@_ > 1 ? $prev_tx : $last_tx, $fee, $script);
-    $connection->protocol->command("tx");
-    $connection->protocol->cmd_tx($tx->serialize . "\x00"x16);
-    $last_tx = $tx;
-    return $tx;
+    return send_raw_tx($tx);
 }
 
 1;
