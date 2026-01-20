@@ -30,6 +30,8 @@ use QBitcoin::Block;
 
 use constant MAX_TXO_PER_ADDRESS => 10_000;
 
+my $SQL_IS_TOKEN_TRANSFER = "LENGTH(data) = 9 AND SUBSTR(data, 1, 1) = UNHEX('" . unpack("H2", TOKEN_TXO_TYPE_TRANSFER) . "')";
+
 # returns list of arrays [ txid, value, block_height ] for blockchain and [ txid, value, received_time ] for mempool
 sub get_address_txs {
     my ($address, $last_seen, $chain_limit, $mempool_limit) = @_;
@@ -404,13 +406,13 @@ sub tokens_received {
     if ((my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) && (my ($token_tx) = QBitcoin::Transaction->fetch(hash => $tokens))) {
         my $result;
         state $unpack_value = _unpack_data_value();
-        my $sql = "SELECT IFNULL(SUM($unpack_value), 0) AS value FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) WHERE scripthash = ? AND tx_in.tx_type = ? AND IFNULL(tx_in.token_id, tx_in.id) = ?+0 AND LENGTH(data) = 9 AND SUBSTR(data, 1, 1) = ?";
+        my $sql = "SELECT IFNULL(SUM($unpack_value), 0) AS value FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) WHERE scripthash = ? AND tx_in.tx_type = ? AND IFNULL(tx_in.token_id, tx_in.id) = ?+0 AND $SQL_IS_TOKEN_TRANSFER";
         if ($minconf && $blockchain_height - $minconf + 1 < $max_db_height) {
             $sql .= " AND tx_in.block_height <= ?";
-            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_tx->{id}, TOKEN_TXO_TYPE_TRANSFER, $blockchain_height - $minconf + 1);
+            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_tx->{id}, $blockchain_height - $minconf + 1);
         }
         else {
-            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_tx->{id}, TOKEN_TXO_TYPE_TRANSFER);
+            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_tx->{id});
         }
         $value = $result->[0] // 0;
     }
@@ -455,16 +457,16 @@ sub tokens_balance {
         if ($minconf && $blockchain_height - $minconf + 1 < $max_db_height) {
             ($last_tx) = QBitcoin::Transaction->fetch(block_height => { '<=', $blockchain_height - $minconf + 1 }, -sortby => 'id DESC', -limit => 1);
         }
-        my $sql = "SELECT SUM($unpack_value) FROM `" . QBitcoin::TXO->TABLE . "` AS txo JOIN `" . QBitcoin::Transaction->TABLE . "` AS tx_in ON (tx_in.id = txo.tx_in) WHERE tx_out IS NULL AND scripthash = ? AND tx_in.tx_type = ? AND IFNULL(tx_in.token_id, tx_in.id) = ?+0 AND LENGTH(data) = 9 AND SUBSTR(data, 1, 1) = ?";
+        my $sql = "SELECT SUM($unpack_value) FROM `" . QBitcoin::TXO->TABLE . "` AS txo JOIN `" . QBitcoin::Transaction->TABLE . "` AS tx_in ON (tx_in.id = txo.tx_in) WHERE tx_out IS NULL AND scripthash = ? AND tx_in.tx_type = ? AND IFNULL(tx_in.token_id, tx_in.id) = ?+0 AND $SQL_IS_TOKEN_TRANSFER";
         if (defined $last_tx) {
             $sql .= " AND tx_in <= ?";
-            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_id, TOKEN_TXO_TYPE_TRANSFER, $last_tx->{id});
+            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_id, $last_tx->{id});
             # Store inputs that have not enough confirmations to exclude them later
             my $fresh_inputs_sql = "SELECT hash FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` ON (id = tx_in) WHERE scripthash = ? AND tx_out IS NULL AND tx_in > ?";
             %fresh_inputs = map { $_->[0] => 1 } dbh->selectall_array($fresh_inputs_sql, undef, $script->id, $last_tx->{id});
         }
         else {
-            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_id, TOKEN_TXO_TYPE_TRANSFER);
+            ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_id);
         }
         DEBUG_ORM && Debugf("sql: [%s], values: [%s]", $sql, join(',', $script->id, TX_TYPE_TOKENS, $token_id, $last_tx ? $last_tx->{id} : ()));
         DEBUG_ORM && Debugf("result: [%u]", $result->[0] // 0);
@@ -550,18 +552,18 @@ sub all_tokens_balance {
         if ($minconf && $blockchain_height - $minconf + 1 < $max_db_height) {
             ($last_tx) = QBitcoin::Transaction->fetch(block_height => { '<=', $blockchain_height - $minconf + 1 }, -sortby => 'id DESC', -limit => 1);
         }
-        my $sql = "SELECT IFNULL(tx_in.token_id, tx_in.id) AS token_id, SUM($unpack_value) AS value FROM `" . QBitcoin::TXO->TABLE . "` AS txo JOIN `" . QBitcoin::Transaction->TABLE . "` AS tx_in ON (tx_in.id = txo.tx_in) WHERE tx_out IS NULL AND scripthash = ? AND tx_in.tx_type = ? AND LENGTH(data) = 9 AND SUBSTR(data, 1, 1) = ?";
+        my $sql = "SELECT IFNULL(tx_in.token_id, tx_in.id) AS token_id, SUM($unpack_value) AS value FROM `" . QBitcoin::TXO->TABLE . "` AS txo JOIN `" . QBitcoin::Transaction->TABLE . "` AS tx_in ON (tx_in.id = txo.tx_in) WHERE tx_out IS NULL AND scripthash = ? AND tx_in.tx_type = ? AND $SQL_IS_TOKEN_TRANSFER";
         if (defined $last_tx) {
             $sql .= " AND tx_in <= ?";
             $sql .= " GROUP BY token_id";
-            @result = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, TOKEN_TXO_TYPE_TRANSFER, $last_tx->{id});
+            @result = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $last_tx->{id});
             # Store inputs that have not enough confirmations to exclude them later
             my $fresh_inputs_sql = "SELECT hash FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` ON (id = tx_in) WHERE scripthash = ? AND tx_out IS NULL AND tx_in > ?";
             %fresh_inputs = map { $_->[0] => 1 } dbh->selectall_array($fresh_inputs_sql, undef, $script->id, $last_tx->{id});
         }
         else {
             $sql .= " GROUP BY token_id";
-            @result = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, TOKEN_TXO_TYPE_TRANSFER);
+            @result = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS);
         }
         foreach my $result (@result) {
             $value_by_id{$result->[0]} = $result->[1];
