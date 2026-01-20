@@ -403,4 +403,9 @@ sub address {
     return address_by_hash($self->scripthash);
 }
 
+sub is_token_transfer {
+    my $self = shift;
+    return length($self->data) == 9 && substr($self->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER;
+}
+
 1;

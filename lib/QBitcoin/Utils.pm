@@ -423,14 +423,14 @@ sub tokens_received {
             or next;
         foreach my $tx (grep { $_->is_tokens && ($_->token_hash || $_->hash) eq $tokens } @{$block->transactions}) {
             $value += sum0 map { unpack("Q<", substr($_->data, 1, 8)) }
-                grep { $_->scripthash eq $scripthash && length($_->data) == 9 && substr($_->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER }
+                grep { $_->scripthash eq $scripthash && $_->is_token_transfer }
                     @{$tx->out};
         }
     }
     if (!$minconf) {
         foreach my $tx (grep { $_->is_tokens && ($_->token_hash || $_->hash) eq $tokens } QBitcoin::Transaction->mempool_list()) {
             $value += sum0 map { unpack("Q<", substr($_->data, 1, 8)) }
-                grep { $_->scripthash eq $scripthash && length($_->data) == 9 && substr($_->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER }
+                grep { $_->scripthash eq $scripthash && $_->is_token_transfer }
                     @{$tx->out};
         }
     }
@@ -475,7 +475,7 @@ sub tokens_balance {
         my $block = QBitcoin::Block->best_block($height)
             or next;
         foreach my $tx (@{$block->transactions}) {
-            foreach my $in (grep { $_->{txo}->scripthash eq $scripthash && length($_->{txo}->data) == 9 && substr($_->{txo}->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->in}) {
+            foreach my $in (grep { $_->{txo}->scripthash eq $scripthash && $_->{txo}->is_token_transfer } @{$tx->in}) {
                 next if exists $fresh_inputs{$in->{txo}->tx_in};
                 my $first_spent = $in->{txo}->tx_out;
                 ($first_spent) = sort { $a cmp $b } map { $_->hash } $in->{txo}->spent_list unless $first_spent;
@@ -492,7 +492,7 @@ sub tokens_balance {
             }
             if ($tx->is_tokens && ($tx->token_hash || $tx->hash) eq $tokens) {
                 if (!$minconf || $height <= $blockchain_height - $minconf + 1) {
-                    foreach my $out (grep { $_->scripthash eq $scripthash && length($_->data) == 9 && substr($_->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->out}) {
+                    foreach my $out (grep { $_->scripthash eq $scripthash && $_->is_token_transfer } @{$tx->out}) {
                         $value += unpack("Q<", substr($out->data, 1, 8));
                     }
                 }
@@ -504,7 +504,7 @@ sub tokens_balance {
     }
     foreach my $tx (grep { $_->is_tokens && ($_->token_hash || $_->hash) eq $tokens } QBitcoin::Transaction->mempool_list()) {
         if (!$minconf) {
-            foreach my $out (grep { $_->scripthash eq $scripthash && length($_->data) == 9 && substr($_->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->out}) {
+            foreach my $out (grep { $_->scripthash eq $scripthash && $_->is_token_transfer } @{$tx->out}) {
                 $value += unpack("Q<", substr($out->data, 1, 8));
             }
         }
@@ -513,7 +513,7 @@ sub tokens_balance {
         }
     }
     foreach my $tx (QBitcoin::Transaction->mempool_list()) {
-        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash && length($_->{txo}->data) == 9 && substr($_->{txo}->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->in}) {
+        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash && $_->{txo}->is_token_transfer } @{$tx->in}) {
             next if exists $fresh_inputs{$in->{txo}->tx_in};
             my $first_spent = $in->{txo}->tx_out;
             ($first_spent) = sort { $a cmp $b } map { $_->hash } $in->{txo}->spent_list unless $first_spent;
@@ -550,7 +550,7 @@ sub all_tokens_balance {
         if ($minconf && $blockchain_height - $minconf + 1 < $max_db_height) {
             ($last_tx) = QBitcoin::Transaction->fetch(block_height => { '<=', $blockchain_height - $minconf + 1 }, -sortby => 'id DESC', -limit => 1);
         }
-        my $sql = "SELECT IFNULL(tx_in.token_id, tx_in.id) AS token_id, SUM($unpack_value) AS value FROM `" . QBitcoin::TXO->TABLE . "` AS txo JOIN `" . QBitcoin::Transaction->TABLE . "` AS tx_in ON (tx_in.id = txo.tx_in) WHERE tx_out IS NULL AND scripthash = ? AND tx_in.tx_type = ? AND LENGTH(data) = 9 AND SUBSTR(data, 1, 1) = CHR(?)";
+        my $sql = "SELECT IFNULL(tx_in.token_id, tx_in.id) AS token_id, SUM($unpack_value) AS value FROM `" . QBitcoin::TXO->TABLE . "` AS txo JOIN `" . QBitcoin::Transaction->TABLE . "` AS tx_in ON (tx_in.id = txo.tx_in) WHERE tx_out IS NULL AND scripthash = ? AND tx_in.tx_type = ? AND LENGTH(data) = 9 AND SUBSTR(data, 1, 1) = ?";
         if (defined $last_tx) {
             $sql .= " AND tx_in <= ?";
             $sql .= " GROUP BY token_id";
@@ -582,7 +582,7 @@ sub all_tokens_balance {
         my $block = QBitcoin::Block->best_block($height)
             or next;
         foreach my $tx (@{$block->transactions}) {
-            foreach my $in (grep { $_->{txo}->scripthash eq $scripthash && length($_->{txo}->data) == 9 && substr($_->{txo}->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->in}) {
+            foreach my $in (grep { $_->{txo}->scripthash eq $scripthash && $_->{txo}->is_token_transfer } @{$tx->in}) {
                 next if exists $fresh_inputs{$in->{txo}->tx_in};
                 my $first_spent = $in->{txo}->tx_out;
                 ($first_spent) = sort { $a cmp $b } map { $_->hash } $in->{txo}->spent_list unless $first_spent;
@@ -608,7 +608,7 @@ sub all_tokens_balance {
             }
             if ($tx->is_tokens) {
                 if (!$minconf || $height <= $blockchain_height - $minconf + 1) {
-                    foreach my $out (grep { $_->scripthash eq $scripthash && length($_->data) == 9 && substr($_->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->out}) {
+                    foreach my $out (grep { $_->scripthash eq $scripthash && $_->is_token_transfer } @{$tx->out}) {
                         $value{$tx->token_hash || $tx->hash} += unpack("Q<", substr($out->data, 1, 8));
                     }
                 }
@@ -620,7 +620,7 @@ sub all_tokens_balance {
     }
     foreach my $tx (grep { $_->is_tokens } QBitcoin::Transaction->mempool_list()) {
         if (!$minconf) {
-            foreach my $out (grep { $_->scripthash eq $scripthash && length($_->data) == 9 && substr($_->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->out}) {
+            foreach my $out (grep { $_->scripthash eq $scripthash && $_->is_token_transfer } @{$tx->out}) {
                 $value{$tx->token_hash || $tx->hash} += unpack("Q<", substr($out->data, 1, 8));
             }
         }
@@ -629,7 +629,7 @@ sub all_tokens_balance {
         }
     }
     foreach my $tx (QBitcoin::Transaction->mempool_list()) {
-        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash && length($_->{txo}->data) == 9 && substr($_->{txo}->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER } @{$tx->in}) {
+        foreach my $in (grep { $_->{txo}->scripthash eq $scripthash && $_->{txo}->is_token_transfer } @{$tx->in}) {
             next if exists $fresh_inputs{$in->{txo}->tx_in};
             my $first_spent = $in->{txo}->tx_out;
             ($first_spent) = sort { $a cmp $b } map { $_->hash } $in->{txo}->spent_list unless $first_spent;
@@ -715,7 +715,7 @@ sub get_tokens_txs {
                     for (my $num = 0; $num < @{$tx->out}; $num++) {
                         my $out = $tx->out->[$num];
                         next if $out->scripthash ne $scripthash;
-                        next if length($out->data) != 9 || substr($out->data, 0, 1) ne TOKEN_TXO_TYPE_TRANSFER;
+                        next if !$out->is_token_transfer;
                         my $value = unpack("Q<", substr($out->data, 1, 8));
                         if ($tx_data) {
                             $tx_data->[1] += $value;
@@ -728,7 +728,7 @@ sub get_tokens_txs {
                 foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
                     _matched_token($in->{txo}->tx_in, $token_hash, $token_id)
                         or next;
-                    next if length($in->{txo}->data) != 9 || substr($in->{txo}->data, 0, 1) ne TOKEN_TXO_TYPE_TRANSFER;
+                    next if !$in->{txo}->is_token_transfer;
                     my $value = unpack("Q<", substr($in->{txo}->data, 1, 8));
                     if ($tx_data) {
                         $tx_data->[1] -= $value;
@@ -774,7 +774,7 @@ sub get_tokens_txs {
             for (my $num = 0; $num < @{$tx->out}; $num++) {
                 my $out = $tx->out->[$num];
                 next if $out->scripthash ne $scripthash;
-                next if length($out->data) != 9 || substr($out->data, 0, 1) ne TOKEN_TXO_TYPE_TRANSFER;
+                next if !$out->is_token_transfer;
                 my $value = unpack("Q<", substr($out->data, 1, 8));
                 if ($tx_data) {
                     $tx_data->[1] += $value;
@@ -787,7 +787,7 @@ sub get_tokens_txs {
         foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
             _matched_token($in->{txo}->tx_in, $token_hash, $token_id)
                 or next;
-            next if length($in->{txo}->data) != 9 || substr($in->{txo}->data, 0, 1) ne TOKEN_TXO_TYPE_TRANSFER;
+            next if !$in->{txo}->is_token_transfer;
             my $value = unpack("Q<", substr($in->{txo}->data, 1, 8));
             if ($tx_data) {
                 $tx_data->[1] -= $value;
