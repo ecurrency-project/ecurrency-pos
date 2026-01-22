@@ -268,10 +268,14 @@ sub address_balance {
             or next;
         foreach my $tx (@{$block->transactions}) {
             foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
-                $value -= $in->{txo}->value if !exists $fresh_inputs{$in->{txo}->tx_in};
+                next if exists $fresh_inputs{$in->{txo}->tx_in};
+                my $first_spent = $in->{txo}->tx_out;
+                ($first_spent) = sort { $a cmp $b } map { $_->hash } $in->{txo}->spent_list unless $first_spent;
+                next if $first_spent && $first_spent ne $tx->hash;
+                $value -= $in->{txo}->value;
             }
             if (!$minconf || $height <= $blockchain_height - $minconf + 1) {
-                foreach my $out (grep { $_->scripthash eq $scripthash && $_->unspent } @{$tx->out}) {
+                foreach my $out (grep { $_->scripthash eq $scripthash } @{$tx->out}) {
                     $value += $out->value;
                 }
             }
@@ -283,7 +287,7 @@ sub address_balance {
 
     foreach my $tx (QBitcoin::Transaction->mempool_list()) {
         if (!$minconf) {
-            foreach my $out (grep { $_->scripthash eq $scripthash && $_->unspent } @{$tx->out}) {
+            foreach my $out (grep { $_->scripthash eq $scripthash } @{$tx->out}) {
                 $value += $out->value;
             }
         }
@@ -293,7 +297,11 @@ sub address_balance {
     }
     foreach my $tx (QBitcoin::Transaction->mempool_list()) {
         foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
-            $value -= $in->{txo}->value if !exists $fresh_inputs{$in->{txo}->tx_in};
+            next if exists $fresh_inputs{$in->{txo}->tx_in};
+            my $first_spent = $in->{txo}->tx_out;
+            ($first_spent) = sort { $a cmp $b } map { $_->hash } $in->{txo}->spent_list unless $first_spent;
+            next if $first_spent && $first_spent ne $tx->hash;
+            $value -= $in->{txo}->value;
         }
     }
 
