@@ -33,7 +33,7 @@ sub get_address_txs {
         if ($skip_before = QBitcoin::Transaction->get($last_seen)) {
             $skip_before_id = $skip_before->id; # undef if not in DB
         }
-        elsif ($skip_before = QBitcoin::Transaction->fetch(hash => $last_seen)) {
+        elsif (($skip_before) = QBitcoin::Transaction->fetch(hash => $last_seen)) {
             $skip_before_id = $skip_before->{id};
         }
     }
@@ -44,7 +44,7 @@ sub get_address_txs {
         for (my $height = QBitcoin::Block->blockchain_height; $height > QBitcoin::Block->max_db_height; $height--) {
             my $block = QBitcoin::Block->best_block($height)
                 or next;
-            foreach my $tx (@{$block->transactions}) {
+            foreach my $tx (reverse @{$block->transactions}) {
                 if ($in_skip) {
                     if ($tx->hash eq $last_seen) {
                         $in_skip = 0;
