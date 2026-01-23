@@ -25,6 +25,13 @@ docker:: Dockerfile
 	@[ -n "$(DOCKER)" ] || { echo "Neither docker nor podman found" >&2; exit 1; }
 	$(DOCKER) build --rm -t qecurrency:latest . && $(DOCKER) image prune --force --filter label=stage=builder
 
+docker-run:
+	mkdir -p database
+	@$(DOCKER) inspect qecurrency:latest >/dev/null 2>&1 || { echo "Docker image not found. Please build it with 'make docker' first" >&2; exit 1; }
+	$(DOCKER) run --volume $(shell pwd)/database:/database \
+	           --volume $(shell pwd)/admin/src/index.html:/qecurrency/admin/www/index.html \
+	           --rm -it -p 9666:9666 -p 9667:9667 -p 9669:9669 --name qecurrency qecurrency:latest
+
 PM_FILES := $(shell find lib -type f -name '*.pm')
 
 check_syntax:: bin/* ${PM_FILES}
