@@ -31,7 +31,7 @@ sub main {
     read_config($conffile);
     $config->set($_ => $opts{$_}) foreach grep { defined $opts{$_} } keys %opts;
     my $command = shift @ARGV;
-    call_rpc($command, @ARGV);
+    return call_rpc($command, @ARGV);
 }
 
 sub usage {
@@ -68,6 +68,7 @@ sub call_rpc {
         else {
             print "$response->{status} $response->{reason}\n";
         }
+        return 1;
     }
     if (ref($result) eq 'HASH' && defined $result->{result}) {
         if (ref($result->{result})) {
@@ -77,6 +78,7 @@ sub call_rpc {
             print $result->{result} . "\n";
         }
     }
+    return 0;
 }
 
 exit main();
