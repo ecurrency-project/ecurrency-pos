@@ -1,9 +1,13 @@
 all: install
 
 clean:
-	rm -rf node_modules
+	rm -rf www
 
 install:
-	#pnpm install --production=false
-	#pnpm run build
-	mkdir -p www && cp src/index.html www/index.html
+	mkdir -p www
+	cp src/index.html www/index.html
+
+# Future React + Vite support
+# dev:
+# 	pnpm install
+# 	pnpm run dev
