@@ -111,8 +111,14 @@ sub parse_condition {
             $condition .= " `$key` = FROM_UNIXTIME(?)";
             push @$values, $value;
         }
-        $condition .= " `$key` = ?";
-        push @$values, $value;
+        elsif ($type == BINARY) {
+            $condition .= " `$key` = UNHEX(?)";
+            push @$values, unpack("H*", $value);
+        }
+        else {
+            $condition .= " `$key` = ?";
+            push @$values, $value;
+        }
     }
     else {
         $condition .= " `$key` IS NULL";
@@ -207,6 +213,11 @@ sub create {
             push @placeholders, 'FROM_UNIXTIME(?)';
             push(@values, $args->{$key});
         }
+        elsif ($type == BINARY) {
+            # sqlite can store binary data as string and truncate trailing zeros, so we use UNHEX() for store as blob
+            push @placeholders, 'UNHEX(?)';
+            push @values, defined($args->{$key}) ? unpack("H*", $args->{$key}) : undef;
+        }
         else {
             push @placeholders, "?";
             push @values, $args->{$key};
@@ -250,6 +261,10 @@ sub replace {
             push @placeholders, "FROM_UNIXTIME(?)";
             push @values, $self->$key;
         }
+        elsif ($type == BINARY) {
+            push @placeholders, "UNHEX(?)";
+            push @values, defined($self->$key) ? unpack("H*", $self->$key) : undef;
+        }
         else {
             push @placeholders, "?";
             push @values, $self->$key;
@@ -264,6 +279,31 @@ sub replace {
         DEBUG_ORM && Debugf("orm: last_insert_id: %u", $id);
     }
     return $self;
+}
+
+sub _pk_condition {
+    my ($self, $values) = @_;
+
+    my $sql;
+    if ($self->can('PRIMARY_KEY')) {
+        my @conditions;
+        foreach my $key ($self->PRIMARY_KEY) {
+            if ($self->FIELDS->{$key} == BINARY) {
+                push @conditions, "`$key` = UNHEX(?)";
+                push @$values, defined($self->$key) ? unpack("H*", $self->$key) : undef;
+            }
+            else {
+                push @conditions, "`$key` = ?";
+                push @$values, $self->$key;
+            }
+        }
+        $sql = " WHERE " . join(" AND ", @conditions);
+    }
+    else {
+        $sql = " WHERE `id` = ?";
+        @$values = ($self->id);
+    }
+    return $sql;
 }
 
 sub update {
@@ -290,6 +330,10 @@ sub update {
                 $sql .= "`$key` = FROM_UNIXTIME(?)";
                 push @values, $args->{$key};
             }
+            elsif ($self->FIELDS->{$key} == BINARY) {
+                $sql .= "`$key` = UNHEX(?)";
+                push @values, defined($args->{$key}) ? unpack("H*", $args->{$key}) : undef;
+            }
             else {
                 $sql .= "`$key` = ?";
                 push @values, $args->{$key};
@@ -298,14 +342,7 @@ sub update {
         }
     }
     my @pk_values;
-    if ($self->can('PRIMARY_KEY')) {
-        $sql .= " WHERE " . join(" AND ", map { "`$_` = ?" } $self->PRIMARY_KEY);
-        @pk_values = map { $self->$_ } $self->PRIMARY_KEY;
-    }
-    else {
-        $sql .= " WHERE `id` = ?";
-        @pk_values = ($self->id);
-    }
+    $sql .= _pk_condition($self, \@pk_values);
     DEBUG_ORM && Debugf("orm: [%s], values [%s]", $sql, join(',', map { for_log($_) } @values, @pk_values));
     dbh->do($sql, undef, @values, @pk_values);
 }
@@ -315,16 +352,9 @@ sub delete {
 
     my $table = $self->TABLE
         or die "No TABLE defined in " . ref($self) . "\n";
-    my $sql = "DELETE FROM `$table` ";
+    my $sql = "DELETE FROM `$table`";
     my @pk_values;
-    if ($self->can('PRIMARY_KEY')) {
-        $sql .= "WHERE " . join(" AND ", map { "`$_` = ?" } $self->PRIMARY_KEY);
-        @pk_values = map { $self->$_ } $self->PRIMARY_KEY;
-    }
-    else {
-        $sql .= "WHERE `id` = ?";
-        @pk_values = ($self->id);
-    }
+    $sql .= _pk_condition($self, \@pk_values);
     if (grep { !defined } @pk_values) {
         die "Object primary key undefined on delete $table\n";
     }

@@ -122,10 +122,10 @@ sub load {
     $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
     $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
     $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_out ON (tx_out.id = t.tx_out)";
-    $sql .= " WHERE (tx_in.hash, num) IN (" . (dbh->get_info(17) eq "SQLite" ? "VALUES" : "") . join(",",("(?,?)")x@in) . ")";
+    $sql .= " WHERE (tx_in.hash, num) IN (" . (dbh->get_info(17) eq "SQLite" ? "VALUES" : "") . join(",",("(UNHEX(?),?)")x@in) . ")";
     DEBUG_ORM && Debugf("sql: [%s] values [%s]", $sql, join(',', map { "X'" . unpack("H*", $_->{tx_out}) . "'", $_->{num} } @in));
     my $sth = dbh->prepare($sql);
-    $sth->execute(map { $_->{tx_out}, $_->{num} } @in);
+    $sth->execute(map { unpack("H*", $_->{tx_out}), $_->{num} } @in);
     my @txo;
     while (my $hash = $sth->fetchrow_hashref()) {
         push @txo, $class->new_saved($hash);
@@ -160,9 +160,9 @@ sub store {
     my $self = shift;
     my ($tx) = @_;
     my $script = QBitcoin::RedeemScript->store($self->scripthash);
-    my $sql = "REPLACE INTO `" . TABLE . "` (value, num, tx_in, scripthash, tx_out, siglist, data) VALUES (?,?,?,?,NULL,NULL,?)";
-    DEBUG_ORM && Debugf("dbi [%s] values [%lu,%u,%u,%u,%s]", $sql, $self->value, $self->num, $tx->id, $script->id, for_log($self->data));
-    my $res = dbh->do($sql, undef, $self->value, $self->num, $tx->id, $script->id, $self->data);
+    my $sql = "REPLACE INTO `" . TABLE . "` (value, num, tx_in, scripthash, tx_out, siglist, data) VALUES (?,?,?,?,NULL,NULL,UNHEX(?))";
+    DEBUG_ORM && Debugf("dbi [%s] values [%lu,%u,%u,%u,'%s']", $sql, $self->value, $self->num, $tx->id, $script->id, unpack("H*", $self->data));
+    my $res = dbh->do($sql, undef, $self->value, $self->num, $tx->id, $script->id, unpack("H*", $self->data));
     $res == 1
         or die "Can't store txo " . $self->tx_in_str . ":" . $self->num . ": " . (dbh->errstr // "no error") . "\n";
 }
@@ -176,16 +176,16 @@ sub store_spend {
     my $self = shift;
     # We're already inside SQL transaction created in QBitcoin::Block->store()
     my ($tx) = @_;
-    my ($tx_in_id) = dbh->selectrow_array("SELECT id FROM `" . TRANSACTION_TABLE . "` WHERE hash = ?", undef, $self->tx_in);
-    my $sql = "UPDATE `" . QBitcoin::RedeemScript->TABLE . "` SET script = ? WHERE hash = ? AND script IS NULL";
-    DEBUG_ORM && Debugf("dbi [%s] values [%s,%s]", $sql, for_log($self->redeem_script), for_log($self->scripthash));
-    my $res = dbh->do($sql, undef, $self->redeem_script, $self->scripthash);
+    my ($tx_in_id) = dbh->selectrow_array("SELECT id FROM `" . TRANSACTION_TABLE . "` WHERE hash = UNHEX(?)", undef, unpack("H*", $self->tx_in));
+    my $sql = "UPDATE `" . QBitcoin::RedeemScript->TABLE . "` SET script = UNHEX(?) WHERE hash = UNHEX(?) AND script IS NULL";
+    DEBUG_ORM && Debugf("dbi [%s] values [%s,%s]", $sql, unpack("H*", $self->redeem_script), unpack("H*", $self->scripthash));
+    my $res = dbh->do($sql, undef, unpack("H*", $self->redeem_script), unpack("H*", $self->scripthash));
     $res
         or die "Can't store txo " . $self->tx_in_str . ":" . $self->num . " as spend: " . (dbh->errstr // "no error") . "\n";
-    $sql = "UPDATE `" . TABLE . "` SET tx_out = ?, siglist = ? WHERE tx_in = ? AND num = ?";
+    $sql = "UPDATE `" . TABLE . "` SET tx_out = ?, siglist = UNHEX(?) WHERE tx_in = ? AND num = ?";
     my $siglist = store_siglist($self->siglist);
-    DEBUG_ORM && Debugf("dbi [%s] values [%u,%s,%u,%u]", $sql, $tx->id, for_log($siglist), $tx_in_id, $self->num);
-    $res = dbh->do($sql, undef, $tx->id, $siglist, $tx_in_id, $self->num);
+    DEBUG_ORM && Debugf("dbi [%s] values [%u,'%s',%u,%u]", $sql, $tx->id, unpack("H*", $siglist), $tx_in_id, $self->num);
+    $res = dbh->do($sql, undef, $tx->id, unpack("H*", $siglist), $tx_in_id, $self->num);
     $res == 1
         or die "Can't store txo " . $self->tx_in_str . ":" . $self->num . " as spend: " . (dbh->errstr // "no error") . "\n";
 }
