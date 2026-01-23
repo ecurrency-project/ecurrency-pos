@@ -380,13 +380,11 @@ sub get_address_utxo {
 
 sub _unpack_data_value {
     if (dbh->get_info(17) eq "SQLite") {
-        my $sum = "";
-        foreach my $byte (0 .. 7) {
-            $sum .= " + " if $byte;
-            $sum .= "((INSTR('0123456789ABCDEF', SUBSTR(HEX(data), " . ($byte * 2 + 3) . ", 1)) - 1) << " . ($byte * 8 + 4) . ") + ";
-            $sum .= "((INSTR('0123456789ABCDEF', SUBSTR(HEX(data), " . ($byte * 2 + 4) . ", 1)) - 1) << " . ($byte * 8) . ")";
-        }
-        return $sum;
+        state $created =
+            dbh->sqlite_create_function('data2int64', 1, sub {
+                 return defined $_[0] ? unpack("Q<", $_[0]) : undef;
+            });
+        return "data2int64(SUBSTR(data, 2, 8))";
     }
     elsif (dbh->get_info(17) eq "PostgreSQL") {
         return "GET_BYTE(data, 1)::BIGINT + (GET_BYTE(data, 2)::BIGINT << 8) + (GET_BYTE(data, 3)::BIGINT << 16) + (GET_BYTE(data, 4)::BIGINT << 24) + (GET_BYTE(data, 5)::BIGINT << 32) + (GET_BYTE(data, 6)::BIGINT << 40) + (GET_BYTE(data, 7)::BIGINT << 48) + (GET_BYTE(data, 8)::BIGINT << 56)";
