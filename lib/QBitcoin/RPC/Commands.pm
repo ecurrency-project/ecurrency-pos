@@ -1503,21 +1503,21 @@ sub cmd_estimatesmartfee {
         return $self->response_ok({ feerate => 0 });
     }
     if ($best_block->min_fee <= QBitcoin::MinFee->MIN_FEE) {
-        return $self->response_ok({ feerate => QBitcoin::MinFee->MIN_FEE });
+        return $self->response_ok({ feerate => QBitcoin::MinFee->MIN_FEE / DENOMINATOR });
     }
     my $size = sum0 map { $_->size } grep { $_->is_standard && $_->fee * 1024 / $_->size > $best_block->min_fee } @mempool;
     if ($size < $target * $best_block->size) {
-        return $self->response_ok({ feerate => $best_block->min_fee });
+        return $self->response_ok({ feerate => $best_block->min_fee / DENOMINATOR });
     }
     $size = 0;
     my $prev_tx;
     foreach my $tx (sort { $b->fee / $b->size <=> $a->fee / $a->size } @mempool) {
         if ($size += $tx->size > $best_block->size) {
-            return $self->response_ok({ feerate => $prev_tx ? $prev_tx->fee * 1024 / $prev_tx->size : $tx->fee * 1024 / $tx->size });
+            return $self->response_ok({ feerate => ($prev_tx ? $prev_tx->fee / $prev_tx->size : $tx->fee / $tx->size) * 1024 / DENOMINATOR });
         }
         $prev_tx = $tx;
     }
-    return $self->response_ok({ feerate => $prev_tx->fee * 1024 / $prev_tx->size });
+    return $self->response_ok({ feerate => $prev_tx->fee * 1024 / $prev_tx->size / DENOMINATOR });
 }
 
 $PARAMS{stakeaddress} = "address";
