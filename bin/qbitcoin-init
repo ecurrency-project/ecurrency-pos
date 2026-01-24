@@ -52,6 +52,15 @@ sub main {
     }
     elsif (($ver // 0) < DB_VERSION) {
         foreach my $update (($ver // 0) + 1 .. DB_VERSION) {
+            if (dbh->get_info(17) eq "SQLite" && -f "$db_dir/updates/${update}_sqlite.sql") {
+                apply_file("$db_dir/updates/${update}_sqlite.sql");
+            }
+            elsif (dbh->get_info(17) eq "PostgreSQL" && -f "$db_dir/updates/${update}_pgsql.sql") {
+                apply_file("$db_dir/updates/${update}_pgsql.sql");
+            }
+            elsif (dbh->get_info(17) eq "MySQL" && -f "$db_dir/updates/${update}_mysql.sql") {
+                apply_file("$db_dir/updates/${update}_mysql.sql");
+            }
             apply_file("$db_dir/updates/$update.sql") if -f "$db_dir/updates/$update.sql";
             $dbh->do("insert into version (version) values (?)", undef, $update);
         }
