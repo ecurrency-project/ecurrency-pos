@@ -47,6 +47,12 @@ sub is_valid_pk {
     return length($private_key) == PRIVATE_KEY_LENGTH + PUBLIC_KEY_LENGTH;
 }
 
+sub is_valid_pubkey {
+    my $class = shift;
+    my ($public_key) = @_;
+    return length($public_key) == PUBLIC_KEY_LENGTH;
+}
+
 sub import_private_key {
     my $class = shift;
     my ($pk, $algo) = @_;
