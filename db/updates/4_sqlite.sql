@@ -1,0 +1,15 @@
+UPDATE `block` SET hash = CAST(hash AS BLOB) WHERE typeof(hash) = 'text';
+UPDATE `block` SET prev_hash = CAST(prev_hash AS BLOB) WHERE typeof(prev_hash) = 'text';
+UPDATE `block` SET merkle_root = CAST(merkle_root AS BLOB) WHERE typeof(merkle_root) = 'text';
+UPDATE `transaction` SET hash = CAST(hash AS BLOB) WHERE typeof(hash) = 'text';
+UPDATE `redeem_script` SET hash = CAST(hash AS BLOB) WHERE typeof(hash) = 'text';
+UPDATE `redeem_script` SET script = CAST(script AS BLOB) WHERE typeof(script) = 'text';
+UPDATE `txo` SET siglist = CAST(siglist AS BLOB) WHERE typeof(siglist) = 'text';
+UPDATE `txo` SET data = CAST(data AS BLOB) WHERE typeof(data) = 'text';
+UPDATE `my_address` SET private_key = CAST(private_key AS BLOB) WHERE typeof(private_key) = 'text';
+UPDATE `btc_block` SET hash = CAST(hash AS BLOB) WHERE typeof(hash) = 'text';
+UPDATE `btc_block` SET prev_hash = CAST(prev_hash AS BLOB) WHERE typeof(prev_hash) = 'text';
+UPDATE `btc_block` SET merkle_root = CAST(merkle_root AS BLOB) WHERE typeof(merkle_root) = 'text';
+UPDATE `coinbase` SET btc_tx_hash = CAST(btc_tx_hash AS BLOB) WHERE typeof(btc_tx_hash) = 'text';
+UPDATE `coinbase` SET merkle_path = CAST(merkle_path AS BLOB) WHERE typeof(merkle_path) = 'text';
+UPDATE `coinbase` SET btc_tx_data = CAST(btc_tx_data AS BLOB) WHERE typeof(btc_tx_data) = 'text';
