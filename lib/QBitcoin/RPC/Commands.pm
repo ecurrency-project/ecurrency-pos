@@ -335,36 +335,29 @@ Result (if verbose is not set or is set to true):
 {                                    (json object)
   "hash" : "hex",                    (string) The transaction hash (differs from txid for witness transactions)
   "size" : n,                        (numeric) The serialized transaction size
-  "vin" : [                          (json array)
+  "in" : [                           (json array)
     {                                (json object)
       "txid" : "hex",                (string) The transaction id
-      "vout" : n,                    (numeric) The output number
-      "scriptSig" : {                (json object) The script
-        "hex" : "hex"                (string) hex
+      "num" : n,                     (numeric) The output number
+      "redeem_script" : "hex",       (string, optional) The redeem script in hex
+      "siglist" : [                  (json object) The list of signatures
+        "hex"                        (string) hex
       },
     },
     ...
   ],
-  "vout" : [                         (json array)
+  "out" : [                          (json array)
     {                                (json object)
       "value" : n,                   (numeric) The value in BTC
-      "n" : n,                       (numeric) index
-      "scriptPubKey" : {             (json object)
-        "hex" : "str",               (string) the hex
-        "reqSigs" : n,               (numeric) The required sigs
-        "type" : "str",              (string) The type, eg 'pubkeyhash'
-        "addresses" : [              (json array)
-          "str",                     (string) qbitcoin address
-          ...
-        ]
-      }
+      "address" : "str",             (string) qbitcoin address
+      "data" : "hex",                (string, optional) The data in hex (if a data output)
     },
     ...
   ],
   "blockhash" : "hex",               (string) the block hash
   "confirmations" : n,               (numeric) The confirmations
   "blocktime" : xxx,                 (numeric) The block time expressed in UNIX epoch time
-  "time" : n                         (numeric) Same as "blocktime"
+  "fee" : n                          (numeric) The transaction fee in BTC
 }
 
 Examples:
