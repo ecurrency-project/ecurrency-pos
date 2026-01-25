@@ -330,7 +330,11 @@ sub get_address_utxo {
     my $txo_cnt = 0;
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
         foreach my $txo (dbh->selectall_array("SELECT tx_in.hash, num, value, tx_in.block_height, tx_in.block_pos FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) WHERE tx_out IS NULL AND scripthash = ? ORDER BY tx_in.block_height DESC, tx_in.block_pos DESC LIMIT ?", undef, $script->id, $limit // MAX_TXO_PER_ADDRESS)) {
-            $txo_chain{$txo->[0]}->[$txo->[1]] = [ $txo->[2], $txo->[3], $txo->[4] ]; # [ value, block_height, block_pos ]
+            $txo_chain{$txo->[0]}->[$txo->[1]] = {
+                value        => $txo->[2],
+                block_height => $txo->[3],
+                block_pos    => $txo->[4],
+            };
             $txo_cnt++;
         }
         if (!defined($limit) && $txo_cnt >= MAX_TXO_PER_ADDRESS) {
@@ -344,7 +348,11 @@ sub get_address_utxo {
             for (my $num = 0; $num < @{$tx->out}; $num++) {
                 my $out = $tx->out->[$num];
                 next if $out->scripthash ne $scripthash;
-                $txo_chain{$tx->hash}->[$num] = [ $out->value, $height, $tx->block_pos ] if $out->unspent;
+                $txo_chain{$tx->hash}->[$num] = {
+                    value        => $out->value,
+                    block_height => $height,
+                    block_pos    => $tx->block_pos,
+                } if $out->unspent;
             }
             foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
                 my $txid = $in->{txo}->tx_in;
@@ -360,7 +368,7 @@ sub get_address_utxo {
         for (my $num = 0; $num < @{$tx->out}; $num++) {
             my $out = $tx->out->[$num];
             next if $out->scripthash ne $scripthash;
-            $txo_mempool{$tx->hash}->[$num] = [ $out->value ] if $out->unspent;
+            $txo_mempool{$tx->hash}->[$num] = { value => $out->value } if $out->unspent;
         }
         foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
             my $txid = $in->{txo}->tx_in;

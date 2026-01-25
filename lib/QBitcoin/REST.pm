@@ -467,9 +467,9 @@ sub get_address_unspent {
             push @utxo, {
                 txid      => unpack("H*", $txid),
                 vout      => $vout,
-                value     => $txo_chain->{$txid}->[$vout]->[0],
-                height    => $txo_chain->{$txid}->[$vout]->[1],
-                block_pos => $txo_chain->{$txid}->[$vout]->[2],
+                value     => $txo_chain->{$txid}->[$vout]->{value},
+                height    => $txo_chain->{$txid}->[$vout]->{block_height},
+                block_pos => $txo_chain->{$txid}->[$vout]->{block_pos},
                 status    => "confirmed",
             } if $txo_chain->{$txid}->[$vout];
         }
@@ -480,7 +480,7 @@ sub get_address_unspent {
             push @utxo, {
                 txid   => unpack("H*", $txid),
                 vout   => $vout,
-                value  => $txo_mempool->{$txid}->[$vout]->[0],
+                value  => $txo_mempool->{$txid}->[$vout]->{value},
                 status => "unconfirmed",
             } if $txo_mempool->{$txid}->[$vout];
         }

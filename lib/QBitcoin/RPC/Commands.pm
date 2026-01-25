@@ -1321,7 +1321,7 @@ sub cmd_listunspent {
             for (my $vout = @{$hash->{$txid}}-1; $vout >= 0; $vout--) {
                 my $utxo = $hash->{$txid}->[$vout]
                     or next;
-                if ($minconf && $utxo->[1] > $best_height - $minconf + 1) {
+                if ($minconf && $utxo->{block_height} > $best_height - $minconf + 1) {
                     $vout = 0;
                     next;
                 }
@@ -1329,11 +1329,11 @@ sub cmd_listunspent {
                     txid    => unpack("H*", $txid),
                     vout    => $vout,
                     address => $address,
-                    amount  => $utxo->[0] / DENOMINATOR,
-                    defined($utxo->[1]) ? (
-                        confirmations => $best_height - $utxo->[1] + 1,
-                        block_height  => $utxo->[1],
-                        block_pos     => $utxo->[2],
+                    amount  => $utxo->{value} / DENOMINATOR,
+                    defined($utxo->{block_height}) ? (
+                        confirmations => $best_height - $utxo->{block_height} + 1,
+                        block_height  => $utxo->{block_height},
+                        block_pos     => $utxo->{block_pos},
                     ) : (
                         confirmations => 0,
                     ),
