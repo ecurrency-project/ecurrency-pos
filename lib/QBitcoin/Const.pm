@@ -150,7 +150,7 @@ use constant TOKEN_PERMISSION_BITS => {
     TOKEN_PERMISSION_MINT => 1,
 };
 
-# use constant TX_TYPES_NAMES  => [ "unknown", "standard", "stake", "coinbase" ];
+# use constant TX_TYPES_NAMES  => [ "unknown", "standard", "stake", "coinbase", "tokens" ];
 use constant TX_NAME_BY_TYPE => { reverse %{&TX_TYPES_CONST} };
 use constant TX_TYPES_NAMES  =>
     [ map { s/^tx_type_//r } map { lc(TX_NAME_BY_TYPE->{$_} // "unknown") } 0 .. (sort { $b <=> $a } values %{&TX_TYPES_CONST})[0] ];

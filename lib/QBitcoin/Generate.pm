@@ -39,7 +39,7 @@ sub load_address_utxo {
             my $utxo = QBitcoin::TXO->new_saved({
                 tx_in      => $txid,
                 num        => $vout,
-                value      => $chain_utxo->{$txid}->[$vout]->[0],
+                value      => $chain_utxo->{$txid}->[$vout]->{value},
                 scripthash => $scripthash,
             });
             $utxo->add_my_utxo();

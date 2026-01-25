@@ -322,6 +322,20 @@ sub address_balance {
     return $value;
 }
 
+sub _add_token_data {
+    my ($utxo, $data) = @_;
+    return if !defined($data);
+    if (length($data) == 9 && substr($data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER) {
+        $utxo->{token_value} = unpack("Q<", substr($data, 1, 8));
+    }
+    elsif (length($data) == 2 && substr($data, 0, 1) eq TOKEN_TXO_TYPE_PERMISSIONS) {
+        my $permissions = unpack("C", substr($data, 1, 1));
+        my @perms;
+        push (@perms, 'mint') if $permissions & TOKEN_PERMISSION_MINT;
+        $utxo->{token_permissions} = \@perms;
+    }
+}
+
 sub get_address_utxo {
     my ($address, $limit) = @_;
     my $scripthash = eval { scripthash_by_address($address) }
@@ -329,12 +343,28 @@ sub get_address_utxo {
     my %txo_chain;
     my $txo_cnt = 0;
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
-        foreach my $txo (dbh->selectall_array("SELECT tx_in.hash, num, value, tx_in.block_height, tx_in.block_pos FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) WHERE tx_out IS NULL AND scripthash = ? ORDER BY tx_in.block_height DESC, tx_in.block_pos DESC LIMIT ?", undef, $script->id, $limit // MAX_TXO_PER_ADDRESS)) {
-            $txo_chain{$txo->[0]}->[$txo->[1]] = {
+        my %token_hash;
+        foreach my $txo (dbh->selectall_array("SELECT tx_in.hash, num, value, tx_in.block_height, tx_in.block_pos, tx_in.tx_type, tx_in.id, tx_in.token_id, data FROM `" . QBitcoin::TXO->TABLE . "` JOIN `" . QBitcoin::Transaction->TABLE . "` tx_in ON (tx_in = tx_in.id) WHERE tx_out IS NULL AND scripthash = ? ORDER BY tx_in.block_height DESC, tx_in.block_pos DESC LIMIT ?", undef, $script->id, $limit // MAX_TXO_PER_ADDRESS)) {
+            my $utxo = {
                 value        => $txo->[2],
                 block_height => $txo->[3],
                 block_pos    => $txo->[4],
+                tx_type      => TX_TYPES_NAMES->[$txo->[5]],
             };
+            if ($txo->[5] == TX_TYPE_TOKENS) {
+                if ($txo->[7]) {
+                    if (!exists $token_hash{$txo->[7]}) {
+                        my ($token_tx) = QBitcoin::Transaction->fetch(id => $txo->[7]);
+                        $token_hash{$txo->[7]} = $token_tx ? $token_tx->{hash} : undef;
+                    }
+                    $utxo->{token_id} = $token_hash{$txo->[7]};
+                }
+                else {
+                    $utxo->{token_id} = $token_hash{$txo->[6]} = $txo->[0];
+                }
+                _add_token_data($utxo, $txo->[8]);
+            }
+            $txo_chain{$txo->[0]}->[$txo->[1]] = $utxo;
             $txo_cnt++;
         }
         if (!defined($limit) && $txo_cnt >= MAX_TXO_PER_ADDRESS) {
@@ -348,11 +378,18 @@ sub get_address_utxo {
             for (my $num = 0; $num < @{$tx->out}; $num++) {
                 my $out = $tx->out->[$num];
                 next if $out->scripthash ne $scripthash;
-                $txo_chain{$tx->hash}->[$num] = {
+                next unless $out->unspent;
+                my $utxo = {
                     value        => $out->value,
                     block_height => $height,
                     block_pos    => $tx->block_pos,
-                } if $out->unspent;
+                    tx_type      => $tx->type_as_text,
+                };
+                if ($tx->is_tokens) {
+                    $utxo->{token_id} = $tx->token_hash || $tx->hash;
+                    _add_token_data($utxo, $out->data);
+                }
+                $txo_chain{$tx->hash}->[$num] = $utxo;
             }
             foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
                 my $txid = $in->{txo}->tx_in;
@@ -368,7 +405,13 @@ sub get_address_utxo {
         for (my $num = 0; $num < @{$tx->out}; $num++) {
             my $out = $tx->out->[$num];
             next if $out->scripthash ne $scripthash;
-            $txo_mempool{$tx->hash}->[$num] = { value => $out->value } if $out->unspent;
+            next unless $out->unspent;
+            my $utxo = { value => $out->value, tx_type => $tx->type_as_text };
+            if ($tx->is_tokens) {
+                $utxo->{token_id} = $tx->token_hash || $tx->hash;
+                _add_token_data($utxo, $out->data);
+            }
+            $txo_mempool{$tx->hash}->[$num] = $utxo;
         }
         foreach my $in (grep { $_->{txo}->scripthash eq $scripthash } @{$tx->in}) {
             my $txid = $in->{txo}->tx_in;

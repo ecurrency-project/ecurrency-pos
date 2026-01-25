@@ -464,25 +464,35 @@ sub get_address_unspent {
     my @utxo;
     foreach my $txid (keys %$txo_chain) {
         for (my $vout = 0; $vout < @{$txo_chain->{$txid}}; $vout++) {
+            my $utxo = $txo_chain->{$txid}->[$vout]
+                or next;
             push @utxo, {
                 txid      => unpack("H*", $txid),
                 vout      => $vout,
-                value     => $txo_chain->{$txid}->[$vout]->{value},
-                height    => $txo_chain->{$txid}->[$vout]->{block_height},
-                block_pos => $txo_chain->{$txid}->[$vout]->{block_pos},
+                value     => $utxo->{value},
+                height    => $utxo->{block_height},
+                block_pos => $utxo->{block_pos},
                 status    => "confirmed",
-            } if $txo_chain->{$txid}->[$vout];
+                defined($utxo->{token_id})    ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
+                defined($utxo->{token_value}) ? ( token_value       => $utxo->{token_value} ) : (),
+                $utxo->{token_permissions}    ? ( token_permissions => $utxo->{token_permissions} ) : (),
+            }
         }
     }
     @utxo = sort { $a->{height} <=> $b->{height} || $a->{block_pos} <=> $b->{block_pos} } @utxo;
     foreach my $txid (sort { $a cmp $b } keys %$txo_mempool) { # TODO: sort by received_time
         for (my $vout = 0; $vout < @{$txo_mempool->{$txid}}; $vout++) {
+            my $utxo = $txo_mempool->{$txid}->[$vout]
+                or next;
             push @utxo, {
                 txid   => unpack("H*", $txid),
                 vout   => $vout,
-                value  => $txo_mempool->{$txid}->[$vout]->{value},
+                value  => $utxo->{value},
                 status => "unconfirmed",
-            } if $txo_mempool->{$txid}->[$vout];
+                defined($utxo->{token_id})    ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
+                defined($utxo->{token_value}) ? ( token_value       => $utxo->{token_value} ) : (),
+                $utxo->{token_permissions}    ? ( token_permissions => $utxo->{token_permissions} ) : (),
+            };
         }
     }
     return $self->http_ok(\@utxo);

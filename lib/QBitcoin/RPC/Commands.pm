@@ -1330,6 +1330,9 @@ sub cmd_listunspent {
                     vout    => $vout,
                     address => $address,
                     amount  => $utxo->{value} / DENOMINATOR,
+                    defined($utxo->{token_id})    ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
+                    defined($utxo->{token_value}) ? ( token_value       => $utxo->{token_value} ) : (),
+                    $utxo->{token_permissions}    ? ( token_permissions => $utxo->{token_permissions} ) : (),
                     defined($utxo->{block_height}) ? (
                         confirmations => $best_height - $utxo->{block_height} + 1,
                         block_height  => $utxo->{block_height},
