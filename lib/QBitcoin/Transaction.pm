@@ -909,6 +909,11 @@ sub validate {
         Warningf("No outputs in transaction %s", $self->hash_str);
         return -1;
     }
+    # Transaction must contains at least one input
+    if (!@{$self->in} && !$self->is_coinbase && !$self->is_stake) {
+        Warningf("No inputs in transaction %s", $self->hash_str);
+        return -1;
+    }
     foreach my $out (@{$self->out}) {
         if ($out->value < 0 || $out->value > MAX_VALUE) {
             Warningf("Incorrect output value %ld in transaction %s", $out->value, $self->hash_str);
