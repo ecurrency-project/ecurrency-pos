@@ -347,6 +347,27 @@ sub vin_obj {
     };
 }
 
+sub vout_obj {
+    my ($tx, $out) = @_;
+    my $res = {
+        value              => $out->value,
+        scripthash         => unpack("H*", $out->scripthash),
+        scripthash_address => address_by_hash($out->scripthash),
+    };
+    if ($tx->is_tokens) {
+        $res->{token_id} = unpack("H*", $tx->token_hash || $tx->hash);
+        if (length($out->data // "")) {
+            if ($out->is_token_transfer) {
+                $res->{token_amount} = unpack("Q<", substr($out->data, 1, 8));
+            }
+            elsif (substr($out->data, 0, 1) eq TOKEN_TXO_TYPE_PERMISSIONS && length($out->data) == 2) {
+                $res->{token_permissions} = unpack("C", substr($out->data, 1, 1));
+            }
+        }
+    }
+    return $res;
+}
+
 sub tx_obj {
     my ($tx) = @_;
     my $block = defined($tx->block_height) ? block_by_height($tx->block_height) : undef;
@@ -357,6 +378,7 @@ sub tx_obj {
         value         => sum0(map { $_->value } @{$tx->out}) + $tx->fee,
         is_coinbase   => $tx->is_coinbase ? TRUE : FALSE,
         received_time => $tx->received_time // undef,
+        tx_type       => $tx->type_as_text,
         status        => {
             defined($tx->block_height) ? (
                 block_height => $tx->block_height,
@@ -370,8 +392,8 @@ sub tx_obj {
                 block_hash   => unpack("H*", $block->hash),
             ) : (),
         },
-        vin  => [ map { vin_obj($_) } @{$tx->in} ],
-        vout => [ map {{ value => $_->value, scripthash => unpack("H*", $_->scripthash), scripthash_address => address_by_hash($_->scripthash) }} @{$tx->out} ],
+        vin  => [ map { vin_obj($_)       } @{$tx->in}  ],
+        vout => [ map { vout_obj($tx, $_) } @{$tx->out} ],
         UPGRADE_POW && $tx->is_coinbase ? (
             coinbase_info => {
                 block_height => $tx->up->btc_block_height,
@@ -380,6 +402,7 @@ sub tx_obj {
                 value        => $tx->up->value,
             },
         ) : (),
+        $tx->is_tokens ? ( token_id => unpack("H*", $tx->token_hash) ) : (),
     };
 }
 

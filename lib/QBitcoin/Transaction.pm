@@ -579,7 +579,7 @@ sub output_as_hashref {
     if ($self->is_tokens) {
         $res->{token_id} = unpack("H*", $self->token_hash || $self->hash);
         if (length($out->data // "")) {
-            if (substr($out->data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER && length($out->data) == 9) {
+            if ($out->is_token_transfer) {
                 $res->{token_amount} = unpack("Q<", substr($out->data, 1, 8));
             }
             elsif (substr($out->data, 0, 1) eq TOKEN_TXO_TYPE_PERMISSIONS && length($out->data) == 2) {
