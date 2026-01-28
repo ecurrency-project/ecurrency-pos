@@ -33,8 +33,8 @@ sub make_tx {
         out     => [ $out ],
         in      => [ map +{ txo => $_, siglist => [] }, @in ],
         fee     => $fee,
-        tx_type => $fee < 0 ? TX_TYPE_STAKE : $prev_tx ? TX_TYPE_STANDARD : TX_TYPE_COINBASE,
-        $prev_tx ? () : ( coins_created => $out_value ),
+        tx_type => $fee < 0 ? TX_TYPE_STAKE : @in ? TX_TYPE_STANDARD : TX_TYPE_COINBASE,
+        @in ? () : ( coins_created => $out_value ),
     );
     $value += 100;
     $tx_num++;

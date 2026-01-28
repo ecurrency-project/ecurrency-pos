@@ -9,6 +9,7 @@ use List::Util qw(sum0);
 use Test::More;
 use Test::MockModule;
 use QBitcoin::Test::ORM;
+use QBitcoin::Test::BlockSerialize;
 use QBitcoin::Test::Send qw(send_tx);
 use QBitcoin::Const;
 use QBitcoin::Config;
