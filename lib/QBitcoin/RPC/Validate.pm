@@ -135,7 +135,7 @@ sub validate_vout {
 sub validate_inputs {
     my $value = $_[0];
     my $inputs = ref($value) ? $value : eval { $JSON->decode($value) };
-    if (!$inputs || ref($inputs) ne "ARRAY") {
+    if (!$inputs || ref($inputs) ne "ARRAY" || !@$inputs) {
         return 0;
     }
     foreach my $in (@$inputs) {
