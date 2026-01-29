@@ -192,8 +192,8 @@ sub address_stats {
 
     return {
         chain_stats   => {
-            funded_txo_sum   => $funded_sum,
-            funded_txo_count => $funded_cnt,
+            funded_txo_sum   => $funded_sum+0,
+            funded_txo_count => $funded_cnt+0,
             spent_txo_sum    => $spent_sum,
             spent_txo_count  => $spent_cnt,
             tx_count         => $tx_cnt,
@@ -464,6 +464,7 @@ sub tokens_received {
             ($result) = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS, $token_tx->{id});
         }
         $value = $result->[0] // 0;
+        $value += 0;
     }
     if ($minconf && $blockchain_height - $minconf + 1 <= $max_db_height) {
         return $value;
@@ -520,6 +521,7 @@ sub tokens_balance {
         DEBUG_ORM && Debugf("sql: [%s], values: [%s]", $sql, join(',', $script->id, TX_TYPE_TOKENS, $token_id, $last_tx ? $last_tx->{id} : ()));
         DEBUG_ORM && Debugf("result: [%u]", $result->[0] // 0);
         $value = $result->[0] // 0;
+        $value += 0;
     }
 
     for (my $height = $max_db_height + 1; $height <= $blockchain_height; $height++) {
@@ -615,7 +617,7 @@ sub all_tokens_balance {
             @result = dbh->selectall_array($sql, undef, $script->id, TX_TYPE_TOKENS);
         }
         foreach my $result (@result) {
-            $value_by_id{$result->[0]} = $result->[1];
+            $value_by_id{$result->[0]} = $result->[1]+0;
         }
         if (%value_by_id) {
             my @token_txs = QBitcoin::Transaction->fetch(
