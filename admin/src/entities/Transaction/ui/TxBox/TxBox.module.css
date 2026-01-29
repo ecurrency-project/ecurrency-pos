@@ -1,0 +1,45 @@
+.TxBox {
+    background-color: var(--tx-bg-color-primary);
+    border: 1px solid var(--tx-border-color);
+
+    padding: 24px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.wrapper {
+    width: 100%;
+
+    @media only screen and (max-width: 850px) {
+        flex-direction: column;
+        gap: 10px;
+
+    }
+}
+
+.wrapper > div:first-child,
+.wrapper > div:last-child {
+    width: 50%;
+
+    @media only screen and (max-width: 850px) {
+        width: 100%;
+    }
+}
+
+.arrow {
+    @media only screen and (max-width: 850px) {
+        transform: rotate(90deg)
+    }
+}
+
+.vins > div {
+    width: 100%;
+}
+
+.vouts > div {
+    width: 100%;
+}
+
+.footer {
+    width: 100%;
+}

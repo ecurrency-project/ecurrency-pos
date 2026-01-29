@@ -1,0 +1,46 @@
+.txRow {
+    border-top: 1px solid var(--stats-border-color);
+    height: 52px;
+    padding: 20px 30px;
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+    color: var(--text-color-primary);
+    text-decoration: none;
+}
+
+.txRow div:first-child {
+    width: 590px;
+    padding-left: 12px;
+    color: var(--link-color);
+}
+
+.txCell {
+    display: table-cell;
+    vertical-align: middle;
+    font-size: 16px;
+
+    @media only screen and (max-width: 850px) {
+        border: none;
+        position: relative;
+        padding: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        width: 100% !important;
+        text-align: right;
+        word-break: break-all;
+
+        &:before {
+            padding-right: 10px;
+            font-weight: 600;
+            color: var(--text-color-secondary);
+
+            content: attr(data-label);
+            text-align: left;
+            width: auto;
+            word-break: keep-all;
+            margin-right: 50px;
+        }
+    }
+}

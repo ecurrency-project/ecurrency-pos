@@ -4,10 +4,9 @@ clean:
 	rm -rf www
 
 install:
-	mkdir -p www
-	cp src/index.html www/index.html
+	pnpm install
+	pnpm build
 
-# Future React + Vite support
-# dev:
-# 	pnpm install
-# 	pnpm run dev
+dev:
+	pnpm install
+	pnpm dev

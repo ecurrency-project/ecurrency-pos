@@ -1,0 +1,42 @@
+:root {
+    /* FONT */
+    --font-family-main: 'Source Sans Pro', sans-serif;
+    --font-family-secondary: 'Inconsolata', sans-serif;
+    --font-weight-l: 300;
+    --font-weight-r: 400;
+    --font-weight-m: 500;
+    --font-weight-b: 700;
+
+    --font-size-xs: 10px;
+    --font-size-s: 12px;
+    --font-size-m: 13px;
+    --font-size-l: 14px;
+    --font-size-xl: 18px;
+
+    /* COLORS */
+    --color-white: #fff;
+    --color-dark-black: #141414;
+    --color-black: #222;
+    --color-blue: #1BADFF;
+    --color-primary: #71CC52;
+    --color-secondary: #E52424;
+    --color-tertiary: #222222;
+
+    /* RADIUS */
+    --radius-m: 4px;
+    --radius-l: 6px;
+    --radius-xl: 8px;
+
+    /* SIZES */
+    --navbar-height: 60px;
+    --view-height-max: 100vh;
+
+    /* DEVICES */
+    --device-xs: 320px;
+    --device-s: 480px;
+    --device-m: 768px;
+    --device-l: 1024px;
+    --device-xl: 1440px;
+
+    --yellow: rgba(255, 187, 0, 1)
+}
