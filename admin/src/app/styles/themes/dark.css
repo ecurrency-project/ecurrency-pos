@@ -1,0 +1,34 @@
+.app_dark_theme {
+  --bg-color-primary: #111316;
+  --bg-color-secondary: #1D2127;
+  --bg-color-tertiary: #1f1f1f;
+
+  --sub-nav-bg-color: #21272d;
+  --sub-nav-box-shadow-color: #21272d;
+
+  --text-color-primary: #fff;
+  --text-color-secondary: #78838e;
+
+  --link-color: #00ccff;
+
+  --stats-bg-color: #1D2127;
+  --stats-box-shadow: 0 20px 32px 0 rgba(0, 0, 0, 0.08);
+  --stats-border-color: #2d2f39;
+
+  --tx-bg-color-primary: #15181C;
+  --tx-bg-color-secondary: #21272D;
+  --tx-border-color: transparent;
+
+  --clipboard-bg-color: #21272d;
+  --clipboard-tooltip-bg-color: #000;
+  --clipboard-tooltop-text-color: #fff;
+
+  --svg-fill-color: #fff;
+
+  --link-bg-color: #21272d;
+  --link-box-shadow: 0 20px 32px 0 rgba(0, 0, 0, 0.08);
+
+  --border-color: #d6d6d6;
+
+    --abstract-linear-gradient: linear-gradient(135deg, #16283f 0%, #021023 100%)
+}

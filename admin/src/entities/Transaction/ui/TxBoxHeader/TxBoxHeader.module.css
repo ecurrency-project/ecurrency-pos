@@ -1,0 +1,42 @@
+.TxBoxHeader {
+    margin-bottom: 10px;
+    width: 100%;
+
+    @media only screen and (max-width: 850px) {
+        flex-direction: column-reverse;
+        gap: 10px;
+    }
+}
+
+.TxBoxHeader .detailsBtn {
+    @media only screen and (max-width: 850px) {
+        align-self: flex-end;
+    }
+}
+
+.link {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--link-color);
+    text-decoration: none;
+
+    @media only screen and (max-width: 850px) {
+        align-self: flex-start;
+        word-wrap: break-word;
+        width: 100%;
+    }
+}
+
+.time {
+    font-size: 13px;
+    color: var(--text-color-secondary);
+    margin-top: 5px;
+}
+
+.detailsBtn {
+    justify-content: flex-end;
+}
+
+.expended {
+    transform: rotate(180deg);
+}

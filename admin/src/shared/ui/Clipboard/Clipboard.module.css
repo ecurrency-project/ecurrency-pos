@@ -1,0 +1,18 @@
+.Clipboard {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 4px 8px;
+    border: 1px solid var(--input-border-color);
+    border-radius: 4px;
+}
+
+.text {
+    font-weight: var(--font-weight-m);
+    font-size: var(--font-size-l);
+    color: var(--text-color-primary);
+
+    word-break: break-word;
+    width: 100%;
+}

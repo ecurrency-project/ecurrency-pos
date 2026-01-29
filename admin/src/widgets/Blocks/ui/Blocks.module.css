@@ -1,0 +1,32 @@
+.Blocks {
+  padding: 30px 0;
+  border-radius: 8px;
+  box-shadow: var(--stats-box-shadow);
+  background-color: var(--stats-bg-color);
+}
+
+.title {
+  font-weight: normal;
+  margin: 10px 40px 30px;
+}
+
+.viewMore {
+  width: 100%;
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+  color: #1187C1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.svg {
+  fill: #1187C1;
+  width: 24px;
+}
+
+.loadMore {
+  margin: 0 auto;
+}

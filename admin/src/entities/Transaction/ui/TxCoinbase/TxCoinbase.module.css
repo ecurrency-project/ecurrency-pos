@@ -1,0 +1,45 @@
+.TxCoinbase {
+    background-color: var(--tx-bg-color-secondary);
+    border: 1px solid var(--tx-border-color);
+    border-radius: 5px;
+    min-height: 46px;
+    line-height: 20px;
+    font-size: 13px;
+    word-break: break-all;
+}
+
+.header {
+    padding: 12px 24px 12px 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 46px;
+}
+
+.amount {
+    white-space: nowrap;
+    font-size: 13px;
+    margin-left: 10px;
+}
+
+.wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+
+    @media only screen and (max-width: 550px){
+        flex-direction: column;
+    }
+}
+
+.wrapper .amount {
+    @media only screen and (max-width: 550px){
+        margin-left: 0;
+    }
+}
+
+.index {
+    color: #c3cbd3;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
