@@ -1,0 +1,67 @@
+.Radio {
+    margin-bottom: 10px;
+}
+
+.inputHidden {
+    display: none;
+    outline: none;
+}
+
+.inputHidden:checked ~ .radio::before {
+    transform: scale(1);
+    opacity: 1;
+}
+
+.inputHidden:checked ~ .radio {
+    border: 1px solid rgb(79, 70, 229);
+}
+
+.label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    position: relative;
+    color: var(--text-color-primary);
+    font-weight: var(--font-weight-m);
+}
+
+.radio {
+    display: block;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    border: 1px solid #767676;
+    border-radius: 50%;
+    margin-right: 10px;
+    transition: .15s;
+    position: relative;
+}
+
+.radio::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    bottom: 3px;
+    right: 3px;
+    width: 12px;
+    height: 12px;
+    background: rgb(79, 70, 229);
+    border-radius: 50%;
+    opacity: 0;
+    transform: scale(1.5);
+    transition: ease-out .15s;
+}
+
+.subtitle {
+    color: var(--text-color-secondary);
+    font-size: var(--font-size-s);
+    font-weight: var(--font-weight-l);
+    display: block;
+    margin-left: 29px;
+}
+
+.disabled {
+    cursor: not-allowed;
+    opacity: .5;
+}
