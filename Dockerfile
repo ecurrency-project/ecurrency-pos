@@ -81,7 +81,7 @@ RUN { \
       --dbi=${dbi} \
       --database=${database} \
       --rpc="*:9667" \
-      --rest="127.0.0.1:9669" \
+      --rest="127.0.0.1:9668" \
       --log=/dev/null \
       --verbose ${debug:+$( [ "$debug" = "0" ] || echo --debug )} \
       ${notify_args:+${notify_args}} \

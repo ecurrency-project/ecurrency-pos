@@ -1,0 +1,35 @@
+.SubNavbar {
+    background-color: var(--sub-nav-bg-color);
+    box-shadow: 1px 1px 1px var(--sub-nav-box-shadow-color);
+}
+
+.SubNavbarContainer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 79px;
+
+    @media only screen and (max-width: 990px) {
+        height: auto;
+        flex-direction: column-reverse;
+        padding: 30px 10px 10px 10px;
+        gap: 10px;
+    }
+}
+
+.SubNav {
+    display: flex;
+    gap: 50px;
+    width: 100%;
+
+    @media only screen and (max-width: 990px) {
+        justify-content: space-between;
+    }
+}
+
+.SubNav a {
+    font-weight: bold;
+    line-height: 2.5;
+    color: var(--text-color-primary);
+    text-decoration: none;
+}

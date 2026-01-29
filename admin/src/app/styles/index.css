@@ -1,0 +1,38 @@
+@import "./reset.css";
+@import "./fonts/sourceSansPro.css";
+@import "./fonts/inconsolata.css";
+@import "./variables/global.css";
+@import "./themes/dark.css";
+@import "./themes/light.css";
+
+body {
+    direction: ltr;
+    text-align: left;
+    font-family: var(--font-family-main);
+    background-color: var(--bg-color-primary);
+    color: var(--text-color-primary);
+}
+
+.content-wrap {
+    min-height: 100vh;
+    margin-bottom: 24px;
+}
+
+.container {
+    width: 100%;
+    max-width: 1200px !important;
+    padding-right: 15px;
+    padding-left: 15px;
+    margin-right: auto;
+    margin-left: auto;
+}
+
+.ant-btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#root {
+    width: 100%;
+}

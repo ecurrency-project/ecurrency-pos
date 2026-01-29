@@ -1,0 +1,13 @@
+.label {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.inputOTP {
+    width: 100%;
+
+    :global(.ant-otp-input-wrapper) {
+        width: 100% !important;
+    }
+}
+

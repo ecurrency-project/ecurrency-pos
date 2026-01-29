@@ -1,0 +1,11 @@
+@font-face {
+  font-family: "Source Sans Pro";
+  src: url("@/shared/assets/fonts/SourceSansPro/SourceSansPro-Regular.ttf") format("opentype");
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Source Sans Pro";
+  src: url("@/shared/assets/fonts/SourceSansPro/SourceSansPro-SemiBold.ttf") format("opentype");
+  font-weight: bold;
+}
