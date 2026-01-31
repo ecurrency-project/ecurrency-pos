@@ -648,7 +648,7 @@ sub cmd_ihave {
         return 0;
     }
     if ($weight < ($self->has_weight // -1)) {
-        Warningf("Remote %s decreases weight %Lu => %Lu", $self->has_weight, $weight);
+        Warningf("Remote %s decreases weight %Lu => %Lu", $self->peer->id, $self->has_weight, $weight);
         $self->syncing(0); # prevent blocking connection on infinite wait
     }
     $self->has_weight = $weight;
