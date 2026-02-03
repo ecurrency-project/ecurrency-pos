@@ -144,6 +144,9 @@ use constant SIGHASH_TYPES => {
 use constant TOKEN_TXO_TYPES => {
     TOKEN_TXO_TYPE_TRANSFER    => "\x01",
     TOKEN_TXO_TYPE_PERMISSIONS => "\x02",
+    TOKEN_TXO_TYPE_DECIMALS    => "\x03",
+    TOKEN_TXO_TYPE_SYMBOL      => "\x04",
+    TOKEN_TXO_TYPE_NAME        => "\x05",
 };
 
 use constant TOKEN_PERMISSION_BITS => {
