@@ -1672,6 +1672,10 @@ sub cmd_gettokensbalance {
     my $value = tokens_balance($address, $tokens, $minconf);
     defined $value
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
+    if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($tokens))) {
+        my $token_info = $token_tx->token_info;
+        $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
+    }
     return $self->response_ok($value);
 }
 
@@ -1713,6 +1717,10 @@ sub cmd_gettokensreceived {
     my $value = tokens_received($address, $tokens, $minconf);
     defined $value
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
+    if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($tokens))) {
+        my $token_info = $token_tx->token_info;
+        $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
+    }
     return $self->response_ok($value);
 }
 
