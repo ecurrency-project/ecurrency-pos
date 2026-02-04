@@ -305,6 +305,10 @@ sub generate {
     if ($generated->receive()) {
         die "Generated block " . $generated->hash_str . " is invalid\n";
     }
+    # Remove the block from cache (and free my utxo) if it was not added as best block
+    if (QBitcoin::Block->best_block->hash ne $generated->hash) {
+        $generated->free();
+    }
     return $generated;
 }
 
