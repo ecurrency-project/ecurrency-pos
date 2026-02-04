@@ -581,9 +581,16 @@ sub output_as_hashref {
         if (length($out->data // "")) {
             if ($out->is_token_transfer) {
                 $res->{token_amount} = unpack("Q<", substr($out->data, 1, 8));
+                my $decimals;
+                if (my $token_info = $self->token_info) {
+                    $decimals = $token_info->{decimals};
+                }
+                $res->{token_decimals} = $decimals // TOKEN_DEFAULT_DECIMALS;
             }
-            elsif (substr($out->data, 0, 1) eq TOKEN_TXO_TYPE_PERMISSIONS && length($out->data) == 2) {
-                $res->{token_permission} = "0x" . unpack("H2", substr($out->data, 1, 1));
+            elsif (my $token_info = $self->unpack_token_info($out->data)) {
+                if ($token_info->{permissions}) {
+                    $res->{token_permissions} = "0x" . unpack("H2", substr($out->data, 1, 1));
+                }
             }
         }
     }
@@ -1050,6 +1057,36 @@ sub unpack_token_info {
         last; # Ignore unknown attributes
     }
     return \%res;
+}
+
+sub token_tx {
+    my $self = shift;
+
+    return undef unless $self->is_tokens;
+    return $self unless $self->token_hash;
+    my $token_tx = QBitcoin::Transaction->get_by_hash($self->token_hash)
+        or die "No such token transaction " . $self->token_hash_str . " for transaction " . $self->hash_str;
+    return $token_tx;
+}
+
+sub _load_token_info {
+    my $self = shift;
+
+    my $token_tx = $self->token_tx;
+    my %res;
+    foreach my $out (grep { length($_->data // "") && !$_->is_token_transfer } @{$token_tx->out}) {
+        my $data = $self->unpack_token_info($out->data)
+            or next;
+        foreach my $key (qw(decimals symbol name)) {
+            $res{$key} //= $data->{$key} if defined $data->{$key};
+        }
+    }
+    return \%res;
+}
+
+sub token_info {
+    my $self = shift;
+    return $self->{token_info} //= $self->_load_token_info;
 }
 
 sub check_tokens_tx {

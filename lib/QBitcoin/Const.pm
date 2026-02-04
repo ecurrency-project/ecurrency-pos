@@ -153,6 +153,8 @@ use constant TOKEN_PERMISSION_BITS => {
     TOKEN_PERMISSION_MINT => 1,
 };
 
+use constant TOKEN_DEFAULT_DECIMALS => 6;
+
 # use constant TX_TYPES_NAMES  => [ "unknown", "standard", "stake", "coinbase", "tokens" ];
 use constant TX_NAME_BY_TYPE => { reverse %{&TX_TYPES_CONST} };
 use constant TX_TYPES_NAMES  =>
@@ -195,6 +197,7 @@ our @EXPORT = (
     'CRYPT_ALGO_NAMES',
     'CRYPT_ALGO_BY_NAME',
     'CRYPT_ALGO_POSTQUANTUM',
+    'TOKEN_DEFAULT_DECIMALS',
 );
 push @EXPORT, qw(timeslot);
 

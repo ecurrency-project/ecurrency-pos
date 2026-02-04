@@ -359,9 +359,16 @@ sub vout_obj {
         if (length($out->data // "")) {
             if ($out->is_token_transfer) {
                 $res->{token_amount} = unpack("Q<", substr($out->data, 1, 8));
+                my $decimals;
+                if (my $token_info = $tx->token_info) {
+                    $decimals = $token_info->{decimals};
+                }
+                $res->{token_decimals} = $decimals // TOKEN_DEFAULT_DECIMALS;
             }
-            elsif (substr($out->data, 0, 1) eq TOKEN_TXO_TYPE_PERMISSIONS && length($out->data) == 2) {
-                $res->{token_permissions} = unpack("C", substr($out->data, 1, 1));
+            elsif (my $token_info = $tx->unpack_token_info) {
+                if ($token_info->{permissions}) {
+                    $res->{token_permissions} = sprintf("0x%02x", $token_info->{permissions});
+                }
             }
         }
     }
