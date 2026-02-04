@@ -157,22 +157,54 @@ sub validate_outputs {
     foreach my $out (@$outputs) {
         ref($out) eq "HASH" or return 0;
         my $address_count = 0;
-        my $token_id = undef;
+        my ($token_id, $token_value, $token_control);
         foreach my $key (keys %$out) {
-            if (validate_address($key)) {
+            if ($key eq "token_id") {
+                $token_id = $out->{$key};
+                ($token_id eq "" || $token_id =~ /^[0-9a-f]{64}\z/)
+                    or return 0;
+            }
+            elsif ($key eq "token_value") {
+                (defined($out->{$key}) && !ref($out->{$key}) && $out->{$key} =~ /^(?:0|[1-9][0-9]{0,17})\z/)
+                    or return 0;
+                $token_value = 1;
+                next;
+            }
+            elsif ($key eq "token_name" || $key eq "token_symbol") {
+                (defined($out->{$key}) && ref($out->{$key}) eq "")
+                    or return 0;
+                $token_control = 1;
+                next;
+            }
+            elsif ($key eq "token_permissions") {
+                if (ref($out->{$key}) eq "") {
+                    $out->{$key} =~ /^0x[0-9a-fA-F][0-9a-fA-F]\z/
+                        or return 0;
+                }
+                elsif (ref($out->{$key}) eq "ARRAY") {
+                    foreach my $perm (@{ $out->{$key} }) {
+                        ref($perm) eq "" or return 0;
+                        $perm =~ /^(?:mint)\z/ or return 0;
+                    }
+                }
+                else {
+                    return 0;
+                }
+                $token_control = 1;
+            }
+            elsif (validate_address($key)) {
                 (defined($out->{$key}) && !ref($out->{$key}) && is_amount($out->{$key}))
                     or return 0;
                 $address_count++;
-            }
-            elsif ($key =~ /^[0-9a-f]{64}\z/ || $key eq "") {
-                return 0 if defined $token_id; # only one token key allowed
-                $token_id = $key;
             }
             else {
                 return 0;
             }
         }
         return 0 if defined($token_id) && $address_count != 1;
+        return 0 if ($token_value || $token_control) && !defined($token_id);
+        return 0 if $token_value && $token_control; # must be either value or control, not both
+        return 0 if $token_control && $token_id;    # control allowed only for new tokens
     }
     $_[0] = $outputs;
     return 1;

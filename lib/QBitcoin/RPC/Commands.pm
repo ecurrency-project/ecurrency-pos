@@ -420,8 +420,13 @@ Arguments:
 2. outputs                     (json array, required) The outputs (key-value pairs)
      [
        {                       (json object)
-         "address": amount,    (numeric or string, required) A key-value pair. The key (string) is the qbitcoin address, the value (float or string) is the amount in BTC
-         "token_id": amount,   (numeric or string, optional) A key-value pair. The key (string) is the token id, the value (unsigned integer or string) is the amount in tokens, or word "mint" for mint permission
+         "address": amount,      (numeric or string, required) A key-value pair. The key (string) is the qbitcoin address, the value (float or string) is the amount in BTC
+         "token_id": "hex",      (numeric or string, optional) Token id, txid of the token creation transaction or empty for new token
+         "token_value": amount,  (numeric or string, optional) Amount in tokens
+         "token_permissions": [ "mint", ... ], (json array, optional) Token permissions
+         "token_decimals": n,    (numeric, optional) Token decimals, valid only for token creation, 0 to 18
+         "token_name": "str",    (string, optional) Token name, valid only for token creation
+         "token_symbol": "str",  (string, optional) Token symbol, valid only for token creation
        },
        ...
      ]
@@ -467,20 +472,38 @@ sub cmd_createrawtransaction {
 sub _create_txo {
     my $out = shift;
     my @txo;
+    my $token_id;
     my $token_data;
+    my @token_attr;
     foreach my $key (keys %$out) {
-        if ($key =~ /^[0-9a-f]{64}\z/ || $key eq "") {
-            my $data;
-            if (defined $token_data) {
-                return undef; # multiple token_id
-            }
-            if ($out->{$key} eq "mint") {
-                $data = TOKEN_TXO_TYPE_PERMISSIONS . pack("C", TOKEN_PERMISSION_MINT);
+        if ($key eq "token_id") {
+            $token_id = pack("H*", $out->{$key});
+        }
+        elsif ($key eq "token_value") {
+            $token_data = TOKEN_TXO_TYPE_TRANSFER . pack("Q<", $out->{$key} );
+        }
+        elsif ($key eq "token_permissions") {
+            my $permissions = 0;
+            if (!ref($out->{$key})) {
+                $permissions = hex($1) if $out->{$key} =~ /^0x([0-9a-fA-F]{2})$/;
             }
             else {
-                $data = TOKEN_TXO_TYPE_TRANSFER . pack("Q<", $out->{$key});
+                foreach my $attr (@{$out->{$key}}) {
+                    if ($attr eq "mint") {
+                        $permissions |= TOKEN_PERMISSION_MINT;
+                    }
+                }
             }
-            $token_data = [ pack("H*", $key) => $data ];
+            $token_attr[unpack("C", TOKEN_TXO_TYPE_PERMISSIONS)] = pack("C", $permissions);
+        }
+        elsif ($key eq "token_decimals") {
+            $token_attr[unpack("C", TOKEN_TXO_TYPE_DECIMALS)] = pack("C", $out->{$key});
+        }
+        elsif ($key eq "token_name") {
+            $token_attr[unpack("C", TOKEN_TXO_TYPE_NAME)] = pack("C", length($out->{$key})) . $out->{$key};
+        }
+        elsif ($key eq "token_symbol") {
+            $token_attr[unpack("C", TOKEN_TXO_TYPE_SYMBOL)] = pack("C", length($out->{$key})) . $out->{$key};
         }
         elsif (my $scripthash = scripthash_by_address($key)) {
             my $value = int($out->{$key} * DENOMINATOR + 0.5);
@@ -490,11 +513,19 @@ sub _create_txo {
             return undef;
         }
     }
-    if (defined($token_data)) {
+    if (defined($token_id)) {
         @txo == 1 or return undef;
-        $txo[0]->{data} = $token_data->[1];
+        if (@token_attr) {
+            return undef if defined($token_data);
+            $token_data = "";
+            foreach my $attr (0 .. $#token_attr) {
+                next unless defined $token_attr[$attr];
+                $token_data .= pack("C", $attr) . $token_attr[$attr];
+            }
+        }
+        $txo[0]->{data} = $token_data;
     }
-    return ([ map { QBitcoin::TXO->new_txo($_) } @txo ], $token_data ? $token_data->[0] : undef);
+    return ([ map { QBitcoin::TXO->new_txo($_) } @txo ], $token_id);
 }
 
 $PARAMS{sendrawtransaction} = "hexstring";
