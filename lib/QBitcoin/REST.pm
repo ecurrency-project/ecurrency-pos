@@ -369,6 +369,9 @@ sub vout_obj {
                 if ($token_info->{permissions}) {
                     $res->{token_permissions} = sprintf("0x%02x", $token_info->{permissions});
                 }
+                foreach my $key (qw(decimals symbol name)) {
+                    $res->{"token_$key"} = $token_info->{$key} if defined $token_info->{$key};
+                }
             }
         }
     }

@@ -591,6 +591,9 @@ sub output_as_hashref {
                 if ($token_info->{permissions}) {
                     $res->{token_permissions} = "0x" . unpack("H2", substr($out->data, 1, 1));
                 }
+                foreach my $key (qw(decimals symbol name)) {
+                    $res->{"token_$key"} = $token_info->{$key} if defined $token_info->{$key};
+                }
             }
         }
     }
