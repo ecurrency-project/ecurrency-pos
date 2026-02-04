@@ -157,17 +157,17 @@ sub validate_outputs {
     foreach my $out (@$outputs) {
         ref($out) eq "HASH" or return 0;
         my $address_count = 0;
-        my ($token_id, $token_value, $token_control);
+        my ($token_id, $token_amount, $token_control);
         foreach my $key (keys %$out) {
             if ($key eq "token_id") {
                 $token_id = $out->{$key};
                 ($token_id eq "" || $token_id =~ /^[0-9a-f]{64}\z/)
                     or return 0;
             }
-            elsif ($key eq "token_value") {
+            elsif ($key eq "token_amount") {
                 (defined($out->{$key}) && !ref($out->{$key}) && $out->{$key} =~ /^(?:0|[1-9][0-9]{0,17})\z/)
                     or return 0;
-                $token_value = 1;
+                $token_amount = 1;
                 next;
             }
             elsif ($key eq "token_name" || $key eq "token_symbol") {
@@ -202,9 +202,9 @@ sub validate_outputs {
             }
         }
         return 0 if defined($token_id) && $address_count != 1;
-        return 0 if ($token_value || $token_control) && !defined($token_id);
-        return 0 if $token_value && $token_control; # must be either value or control, not both
-        return 0 if $token_control && $token_id;    # control allowed only for new tokens
+        return 0 if ($token_amount || $token_control) && !defined($token_id);
+        return 0 if $token_amount && $token_control; # must be either amount or control, not both
+        return 0 if $token_control && $token_id;     # control allowed only for new tokens
     }
     $_[0] = $outputs;
     return 1;

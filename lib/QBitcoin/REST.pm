@@ -513,9 +513,9 @@ sub get_address_unspent {
                 height    => $utxo->{block_height},
                 block_pos => $utxo->{block_pos},
                 status    => "confirmed",
-                defined($utxo->{token_id})    ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
-                defined($utxo->{token_value}) ? ( token_value       => $utxo->{token_value} ) : (),
-                $utxo->{token_permissions}    ? ( token_permissions => $utxo->{token_permissions} ) : (),
+                defined($utxo->{token_id})     ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
+                defined($utxo->{token_amount}) ? ( token_amount      => $utxo->{token_amount}      ) : (),
+                $utxo->{token_permissions}     ? ( token_permissions => $utxo->{token_permissions} ) : (),
             }
         }
     }
@@ -529,9 +529,9 @@ sub get_address_unspent {
                 vout   => $vout,
                 value  => $utxo->{value},
                 status => "unconfirmed",
-                defined($utxo->{token_id})    ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
-                defined($utxo->{token_value}) ? ( token_value       => $utxo->{token_value} ) : (),
-                $utxo->{token_permissions}    ? ( token_permissions => $utxo->{token_permissions} ) : (),
+                defined($utxo->{token_id})     ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
+                defined($utxo->{token_amount}) ? ( token_amount      => $utxo->{token_amount} ) : (),
+                $utxo->{token_permissions}     ? ( token_permissions => $utxo->{token_permissions} ) : (),
             };
         }
     }

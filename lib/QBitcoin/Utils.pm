@@ -327,7 +327,7 @@ sub _add_token_data {
     my ($utxo, $data) = @_;
     return if !defined($data);
     if (length($data) == 9 && substr($data, 0, 1) eq TOKEN_TXO_TYPE_TRANSFER) {
-        $utxo->{token_value} = unpack("Q<", substr($data, 1, 8));
+        $utxo->{token_amount} = unpack("Q<", substr($data, 1, 8));
     }
     elsif (length($data) == 2 && substr($data, 0, 1) eq TOKEN_TXO_TYPE_PERMISSIONS) {
         my $permissions = unpack("C", substr($data, 1, 1));

@@ -422,7 +422,7 @@ Arguments:
        {                       (json object)
          "address": amount,      (numeric or string, required) A key-value pair. The key (string) is the qbitcoin address, the value (float or string) is the amount in BTC
          "token_id": "hex",      (numeric or string, optional) Token id, txid of the token creation transaction or empty for new token
-         "token_value": amount,  (numeric or string, optional) Amount in tokens
+         "token_amount": amount, (numeric or string, optional) Amount in tokens
          "token_permissions": [ "mint", ... ], (json array, optional) Token permissions
          "token_decimals": n,    (numeric, optional) Token decimals, valid only for token creation, 0 to 18
          "token_name": "str",    (string, optional) Token name, valid only for token creation
@@ -479,7 +479,7 @@ sub _create_txo {
         if ($key eq "token_id") {
             $token_id = pack("H*", $out->{$key});
         }
-        elsif ($key eq "token_value") {
+        elsif ($key eq "token_amount") {
             $token_data = TOKEN_TXO_TYPE_TRANSFER . pack("Q<", $out->{$key} );
         }
         elsif ($key eq "token_permissions") {
@@ -1361,9 +1361,9 @@ sub cmd_listunspent {
                     vout    => $vout,
                     address => $address,
                     amount  => $utxo->{value} / DENOMINATOR,
-                    defined($utxo->{token_id})    ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
-                    defined($utxo->{token_value}) ? ( token_value       => $utxo->{token_value} ) : (),
-                    $utxo->{token_permissions}    ? ( token_permissions => $utxo->{token_permissions} ) : (),
+                    defined($utxo->{token_id})     ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
+                    defined($utxo->{token_amount}) ? ( token_amount      => $utxo->{token_amount}      ) : (),
+                    $utxo->{token_permissions}     ? ( token_permissions => $utxo->{token_permissions} ) : (),
                     defined($utxo->{block_height}) ? (
                         confirmations => $best_height - $utxo->{block_height} + 1,
                         block_height  => $utxo->{block_height},
