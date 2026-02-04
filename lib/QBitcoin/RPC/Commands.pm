@@ -1634,15 +1634,15 @@ sub cmd_unstakeaddress {
     return $self->response_ok("Address $address will not be used for staking");
 }
 
-$PARAMS{gettokensbalance} = "address token minconf?";
+$PARAMS{gettokensbalance} = "address token_id minconf?";
 $HELP{gettokensbalance} = qq{
-gettokensbalance "address" "token" ( minconf )
+gettokensbalance "address" "token_id" ( minconf )
 
 Returns the total amount of tokens on the given address in transactions with at least minconf confirmations.
 
 Arguments:
 1. address    (string, required) The qbitcoin address for transactions.
-2. token      (string, required) The token address (create transaction).
+2. token_id   (string, required) The token identifier (create transaction).
 3. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
 
 Result:
@@ -1651,43 +1651,43 @@ n    (numeric) The total amount of tokens unspent at this address.
 Examples:
 
 The amount of tokens from transactions with at least 1 confirmation
-> qbitcoin-cli gettokensbalance "myaddress" "tokenaddress"
+> qbitcoin-cli gettokensbalance "myaddress" "token_id"
 
 The amount including unconfirmed transactions, zero confirmations
-> qbitcoin-cli gettokensbalance "myaddress" "tokenaddress" 0
+> qbitcoin-cli gettokensbalance "myaddress" "token_id" 0
 
 The amount with at least 6 confirmations
-> qbitcoin-cli gettokensbalance "myaddress" "tokenaddress" 6
+> qbitcoin-cli gettokensbalance "myaddress" "token_id" 6
 
 As a JSON-RPC call
-> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensbalance", "params": ["myaddress", "tokenaddress", 6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensbalance", "params": ["myaddress", "token_id", 6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 };
 sub cmd_gettokensbalance {
     my $self = shift;
     blockchain_synced() && mempool_synced()
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
     my $address = $self->args->[0];
-    my $tokens  = pack("H*", $self->args->[1]);
+    my $token_hash = pack("H*", $self->args->[1]);
     my $minconf = $self->args->[2] // 1;
-    my $value = tokens_balance($address, $tokens, $minconf);
+    my $value = tokens_balance($address, $token_hash, $minconf);
     defined $value
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
-    if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($tokens))) {
+    if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($token_hash))) {
         my $token_info = $token_tx->token_info;
         $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
     }
     return $self->response_ok($value);
 }
 
-$PARAMS{gettokensreceived} = "address token minconf?";
+$PARAMS{gettokensreceived} = "address token_id minconf?";
 $HELP{gettokensreceived} = qq{
-gettokensreceived "address" "token" ( minconf )
+gettokensreceived "address" "token_id" ( minconf )
 
 Returns the total received amount of tokens on the given address in transactions with at least minconf confirmations.
 
 Arguments:
 1. address    (string, required) The qbitcoin address for transactions.
-2. token      (string, required) The token address (create transaction).
+2. token_id   (string, required) The token identifier (create transaction).
 3. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
 
 Result:
@@ -1696,42 +1696,42 @@ n    (numeric) The total amount of tokens received at this address.
 Examples:
 
 The received amount of tokens from transactions with at least 1 confirmation
-> qbitcoin-cli gettokensreceived "myaddress" "tokenaddress"
+> qbitcoin-cli gettokensreceived "myaddress" "token_id"
 
 The received amount including unconfirmed transactions, zero confirmations
-> qbitcoin-cli gettokensreceived "myaddress" "tokenaddress" 0
+> qbitcoin-cli gettokensreceived "myaddress" "token_id" 0
 
 The received amount with at least 6 confirmations
-> qbitcoin-cli gettokensreceived "myaddress" "tokenaddress" 6
+> qbitcoin-cli gettokensreceived "myaddress" "token_id" 6
 
 As a JSON-RPC call
-> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensreceived", "params": ["myaddress", "tokenaddress", 6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensreceived", "params": ["myaddress", "token_id", 6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 };
 sub cmd_gettokensreceived {
     my $self = shift;
     blockchain_synced() && mempool_synced()
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
     my $address = $self->args->[0];
-    my $tokens  = pack($self->args->[1]);
+    my $token_hash = pack("H*", $self->args->[1]);
     my $minconf = $self->args->[2] // 1;
-    my $value = tokens_received($address, $tokens, $minconf);
+    my $value = tokens_received($address, $token_hash, $minconf);
     defined $value
         or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
-    if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($tokens))) {
+    if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($token_hash))) {
         my $token_info = $token_tx->token_info;
         $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
     }
     return $self->response_ok($value);
 }
 
-$PARAMS{gettokensinfo} = "token";
+$PARAMS{gettokensinfo} = "token_id";
 $HELP{gettokensreceived} = qq{
-gettokensinfo "token"
+gettokensinfo "token_id"
 
 Returns common information about the given token.
 
 Arguments:
-1. token      (string, required) The token address (create transaction).
+1. token_id    (string, required) The token identifier (create transaction).
 
 Result:
 n    (numeric) The total amount of tokens received at this address.
@@ -1739,10 +1739,10 @@ n    (numeric) The total amount of tokens received at this address.
 Examples:
 
 The received amount of tokens from transactions with at least 1 confirmation
-> qbitcoin-cli gettokensinfo "tokenaddress"
+> qbitcoin-cli gettokensinfo "token_id"
 
 As a JSON-RPC call
-> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensinfo", "params": ["tokenaddress"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensinfo", "params": ["token_id"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 };
 sub cmd_gettokensinfo {
     my $self = shift;

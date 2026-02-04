@@ -27,7 +27,7 @@ my %SPEC = (
     minconf        => qr/^(?:0|[1-9][0-9]{0,9})\z/,
     conf_target    => qr/^[1-9][0-9]?\z/,
     estimate_mode  => qr/^(?:economical|conservative)\z/i,
-    token          => qr/^[0-9a-f]{64}\z/,
+    token_id       => qr/^[0-9a-f]{64}\z/,
     verbose        => \&validate_boolean,
     address        => \&validate_address,
     inputs         => \&validate_inputs,
@@ -157,7 +157,7 @@ sub validate_outputs {
     foreach my $out (@$outputs) {
         ref($out) eq "HASH" or return 0;
         my $address_count = 0;
-        my $token = undef;
+        my $token_id = undef;
         foreach my $key (keys %$out) {
             if (validate_address($key)) {
                 (defined($out->{$key}) && !ref($out->{$key}) && is_amount($out->{$key}))
@@ -165,14 +165,14 @@ sub validate_outputs {
                 $address_count++;
             }
             elsif ($key =~ /^[0-9a-f]{64}\z/ || $key eq "") {
-                return 0 if defined $token; # only one token key allowed
-                $token = $key;
+                return 0 if defined $token_id; # only one token key allowed
+                $token_id = $key;
             }
             else {
                 return 0;
             }
         }
-        return 0 if defined($token) && $address_count != 1;
+        return 0 if defined($token_id) && $address_count != 1;
     }
     $_[0] = $outputs;
     return 1;
