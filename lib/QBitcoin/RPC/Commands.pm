@@ -21,7 +21,7 @@ use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
 use QBitcoin::MinFee;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
@@ -1722,6 +1722,36 @@ sub cmd_gettokensreceived {
         $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
     }
     return $self->response_ok($value);
+}
+
+$PARAMS{gettokensinfo} = "token";
+$HELP{gettokensreceived} = qq{
+gettokensinfo "token"
+
+Returns common information about the given token.
+
+Arguments:
+1. token      (string, required) The token address (create transaction).
+
+Result:
+n    (numeric) The total amount of tokens received at this address.
+
+Examples:
+
+The received amount of tokens from transactions with at least 1 confirmation
+> qbitcoin-cli gettokensinfo "tokenaddress"
+
+As a JSON-RPC call
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettokensinfo", "params": ["tokenaddress"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+};
+sub cmd_gettokensinfo {
+    my $self = shift;
+    blockchain_synced() && mempool_synced()
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+    my $token_hash  = pack("H*", $self->args->[0]);
+    my $info = get_tokens_info($token_hash)
+        or return $self->response_error("", ERR_INTERNAL_ERROR, "Token not found");
+    return $self->response_ok($info);
 }
 
 # getmemoryinfo

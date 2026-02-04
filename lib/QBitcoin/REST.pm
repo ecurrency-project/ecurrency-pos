@@ -17,7 +17,7 @@ use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::Transaction;
 use QBitcoin::Block;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info);
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
 use QBitcoin::Coinbase;
 use QBitcoin::ConnectionList;
@@ -242,6 +242,13 @@ sub process_request {
         else {
             return $self->http_response(404, "Unknown request");
         }
+    }
+    elsif ($path[0] eq "tokens-info") {
+        (@path == 2 && $path[1] && $path[1] =~ qr/^[0-9a-f]{64}\z/)
+            or return $self->http_response(404, "Unknown request");
+        my $token_info = get_tokens_info(pack("H*", $path[1]))
+            or return $self->http_response(404, "Token not found");
+        return $self->http_ok($token_info);
     }
     elsif ($path[0] eq "status") {
         return $self->http_ok(node_status());

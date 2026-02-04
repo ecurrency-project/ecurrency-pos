@@ -16,6 +16,7 @@ our @EXPORT_OK = qw(
     tokens_balance
     all_tokens_balance
     get_tokens_txs
+    get_tokens_info
 );
 
 use List::Util qw(sum0);
@@ -854,6 +855,29 @@ sub get_tokens_txs {
     }
 
     return (\@txs_chain, \@txs_mempool);
+}
+
+sub get_tokens_info {
+    my ($token_hash) = @_;
+    my ($token_tx) = QBitcoin::Transaction->get_by_hash($token_hash)
+        or return undef;
+    $token_tx->is_tokens
+        or return undef;
+    my $data = $token_tx->token_info;
+    my $res = {
+        token_id => unpack("H*", $token_tx->hash),
+        decimals => $data->{decimals} // TOKEN_DEFAULT_DECIMALS,
+        issuer   => $token_tx->in->[0]->{txo}->address,
+    };
+    $res->{name} = $data->{name} if defined $data->{name};
+    $res->{symbol} = $data->{symbol} if defined $data->{symbol};
+    if ($token_tx->block_height) {
+        if (my $block = QBitcoin::Block->best_block($token_tx->block_height) // QBitcoin::Block->find(height => $token_tx->block_height)) {
+            $res->{create_time} = $block->time;
+        }
+    }
+    # TODO: add total_supply and mint_allowed attributes
+    return $res;
 }
 
 1;
