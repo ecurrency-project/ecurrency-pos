@@ -43,19 +43,23 @@ send_block(0, "a0", undef, 50, send_tx());
 send_block(1, "a1", "a0", 100, send_tx());
 
 my $data_mint = TOKEN_TXO_TYPE_PERMISSIONS . pack("C", TOKEN_PERMISSION_MINT);
+my $data_decimals = TOKEN_TXO_TYPE_DECIMALS . pack("C", 8);
 my $data_transfer = TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 1000);
-my $create_contract = send_tokens_tx(undef, [ $data_mint, $data_transfer, $data_transfer, $data_transfer, $data_transfer ]);
+my $create_contract = send_tokens_tx(undef, [ $data_mint . $data_decimals, $data_transfer, $data_transfer, $data_transfer, $data_transfer ]);
 ok($create_contract, "Created token contract");
 
 # increase funds without mint permission
 my $tx_fail1 = send_tokens_tx($create_contract->hash, [ TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 3000) ], [ $create_contract->out->[1] ]);
 ok(!$tx_fail1, "Failed to increase funds without mint permission");
 # increase funds with mint permission
-my $tx_ok1 = send_tokens_tx($create_contract->hash, [ TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 3000) ], [ $create_contract->out->[1], $create_contract->out->[0] ]);
+my $tx_ok1 = send_tokens_tx($create_contract->hash, [ TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 3000), $data_mint ], [ $create_contract->out->[1], $create_contract->out->[0] ]);
 ok($tx_ok1, "Increased funds with mint permission");
 # create mint permission without permission
 my $tx_fail2 = send_tokens_tx($create_contract->hash, [ TOKEN_TXO_TYPE_PERMISSIONS . pack("C", TOKEN_PERMISSION_MINT) ], [ $create_contract->out->[2] ]);
 ok(!$tx_fail2, "Failed to create mint permission without permission");
+# output with incorrect data length
+my $tx_fail3 = send_tokens_tx($create_contract->hash, [ TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 2000) . "extra" ], [ $create_contract->out->[2] ]);
+ok(!$tx_fail3, "Created tx with incorrect data length");
 # spent (input) with standard tx
 my $out = QBitcoin::TXO->new_txo({
     value      => 0,
@@ -74,12 +78,16 @@ $tx_ok2->calculate_hash();
 $tx_ok2->out->[0]->tx_in = $tx_ok2->hash;
 ok(send_raw_tx($tx_ok2), "Create standard tx which spends tokens");
 # use standard tx output as token input
-my $tx_fail3 = send_tokens_tx($create_contract->hash, [ TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 5000) ], [ $tx_ok2->out->[0] ]);
-ok(!$tx_fail3, "Failed to use standard tx output as token input");
+my $tx_fail4 = send_tokens_tx($create_contract->hash, [ TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 5000) ], [ $tx_ok2->out->[0] ]);
+ok(!$tx_fail4, "Failed to use standard tx output as token input");
 # spend with another token_id
 my $create_contract2 = send_tokens_tx(undef, [ $data_transfer, $data_transfer ]);
-my $tx_fail4 = send_tokens_tx($create_contract2->hash, [ TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 2000) ], [ $create_contract2->out->[0], $create_contract->out->[2] ]);
-ok(!$tx_fail4, "Spent with another token_id");
+my $tx_fail5 = send_tokens_tx($create_contract2->hash, [ TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 2000) ], [ $create_contract2->out->[0], $create_contract->out->[2] ]);
+ok(!$tx_fail5, "Spent with another token_id");
+# set decimals in not token-create tx
+my $tx_fail6 = send_tokens_tx($create_contract->hash, [ $data_decimals ], [ $tx_ok2->out->[0] ]);
+ok(!$tx_fail6, "Set tokens decimals in not token-create tx");
+
 my @out = (
     QBitcoin::TXO->new_txo({
         value      => 0,
@@ -105,15 +113,16 @@ $tx_ok3->calculate_hash();
 $tx_ok3->out->[0]->tx_in = $tx_ok3->out->[1]->tx_in = $tx_ok3->hash;
 ok(send_raw_tx($tx_ok3), "Send tokens with second contract");
 
-# output with incorrect data length
+# create mint permission with permission
 # second spend for $create_contract->out->[2], it's ok for mempool
-my $tx_ok4 = send_tokens_tx($create_contract->hash, [ TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 2000) . "extra" ], [ $create_contract->out->[2] ]);
-ok($tx_ok4, "Created tx with incorrect data length");
+my $tx_ok4 = send_tokens_tx($create_contract->hash, [ TOKEN_TXO_TYPE_TRANSFER . pack("Q<", 2000), $data_mint ], [ $create_contract->out->[2], $tx_ok1->out->[1] ]);
+ok($tx_ok4, "Create mint permission with permission");
+
 # Now:
 # $create_contract: -> A1(1000,1000,1000,1000)
 # $tx_ok1: A1(1000) -> A2(3000)
 # $tx_ok2: A1(1000) -> A1(burn-5000) (standard tx)
-# $tx_ok4: A1(1000) -> A3(burn-2000) (incorrect data length)
+# $tx_ok4: A1(1000) -> A3(burn-2000) (create mint permission)
 # get_tokens_txs
 # amount and received by database
 my $address1 = address_by_hash($create_contract->out->[1]->scripthash);
