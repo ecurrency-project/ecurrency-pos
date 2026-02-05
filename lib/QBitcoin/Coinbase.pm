@@ -237,7 +237,7 @@ sub get_scripthash {
     my $class = shift;
     my ($tx, $out_num) = @_;
     my $out = $tx->out->[$out_num];
-    $out->{open_script} eq QBT_BURN_SCRIPT
+    $out->{open_script} eq QBT_LOCK_SCRIPT
         or return undef;
     if (@{$tx->out} > $out_num+1 && substr(my $out_script = $tx->out->[$out_num+1]->{open_script}, 0, 1) eq OP_RETURN) {
         my $len = unpack("C", substr($out_script, 1, 1));

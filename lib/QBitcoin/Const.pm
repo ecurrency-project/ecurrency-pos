@@ -4,10 +4,14 @@ use strict;
 
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 
-use constant GENESIS_BLOCK_HASH => "1234";
+use constant GENESIS_BLOCK_HASH  => "1234";
 use constant GENESIS_BLOCK_HASH_TESTNET => "1234";
-use constant QBT_BURN_HASH      => pack("H*", "fe5205472fb87124923f4be64292ef289478b06d"); # 1QBitcoin1QBitcoin1QBitcoin1pSAg3e
-use constant QBT_BURN_SCRIPT    => OP_DUP . OP_HASH160 . pack("C", length(QBT_BURN_HASH)) . QBT_BURN_HASH . OP_EQUALVERIFY . OP_CHECKSIG;
+use constant QBT_LOCK_PUBKEY     => pack("H*", "02af76abbaf02cf4e3ed250da7319af96762b68daf10d547a347c6bc4cc3d0b5b7");
+use constant QBT_LOCK_PUBKEYHASH => pack("H*", "56ca8180ab9c6f4b9bb8a3d84cddd85670319407"); # hash160 of QBT_LOCK_PUBKEY
+use constant QBT_LOCK_SCRIPT     => OP_DUP . OP_HASH160 . pack("C", length(QBT_LOCK_PUBKEYHASH)) . QBT_LOCK_PUBKEYHASH . OP_EQUALVERIFY . OP_CHECKSIG;
+use constant QBT_LOCK_ADDR       => "1QBTChgBqLyMLjr9rvoALwqCGcdWAHzLL1";
+use constant QBT_BURN_SCRIPT     => pack("C", length(QBT_LOCK_PUBKEY)) . QBT_LOCK_PUBKEY . OP_CHECKSIG;
+use constant QBT_BURN_VIRT_AGE   => 3600*24*365; # 1 year, to prevent reorg attacks on burn transactions after downgrade
 
 use constant QBITCOIN_CONST => {
     VERSION                 => "0.1",
@@ -75,7 +79,8 @@ use constant QBITCOIN_CONST => {
     COINBASE_WEIGHT_TIME    => 365*24*3600, # 1 year
     STAKE_MATURITY          => 12*3600, # 12 hours
     QBT_BURN_SCRIPT         => QBT_BURN_SCRIPT,
-    QBT_BURN_SCRIPT_LEN     => length(QBT_BURN_SCRIPT),
+    QBT_BURN_VIRT_AGE       => QBT_BURN_VIRT_AGE,
+    QBT_LOCK_SCRIPT         => QBT_LOCK_SCRIPT,
     CONFIG_DIR              => "/etc",
     CONFIG_NAME             => "qbitcoin.conf",
     ZERO_HASH               => "\x00" x 32,
@@ -116,6 +121,7 @@ use constant TX_TYPES_CONST => {
     TX_TYPE_STAKE    => 2,
     TX_TYPE_COINBASE => 3,
     TX_TYPE_TOKENS   => 4,
+    TX_TYPE_BURN     => 5,
 };
 
 use constant CRYPT_ALGO => {
