@@ -372,7 +372,7 @@ sub vout_obj {
                 }
                 $res->{token_decimals} = $decimals // TOKEN_DEFAULT_DECIMALS;
             }
-            elsif (my $token_info = $tx->unpack_token_info) {
+            elsif (my $token_info = $tx->unpack_token_info($out->data)) {
                 if ($token_info->{permissions}) {
                     $res->{token_permissions} = sprintf("0x%02x", $token_info->{permissions});
                 }
