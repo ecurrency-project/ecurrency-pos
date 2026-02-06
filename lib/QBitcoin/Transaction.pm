@@ -1001,11 +1001,12 @@ sub unpack_token_info {
     my $last_attr = 1;
     for (my $i = 0; $i < length($data);) {
         my $type = substr($data, $i, 1);
-        if (unpack("C", $type) <= $last_attr) {
+        my $attr = unpack("C", $type);
+        if ($attr <= $last_attr) {
             Watningf("Incorrect token attribute order in transaction %s token %s", $self->hash_str, $self->token_hash_str);
             return undef;
         }
-        $last_attr = $type;
+        $last_attr = $attr;
         if ($type eq TOKEN_TXO_TYPE_PERMISSIONS) {
             $i++;
             if (length($data) < $i + 1) {
