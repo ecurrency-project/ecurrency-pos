@@ -340,8 +340,8 @@ sub block_by_height {
 }
 
 sub vin_obj {
-    my ($vin) = @_;
-    return {
+    my ($tx, $vin) = @_;
+    my $res = {
         txid          => unpack("H*", $vin->{txo}->tx_in),
         vout          => $vin->{txo}->num,
         redeem_script => unpack("H*", $vin->{txo}->redeem_script),
@@ -352,6 +352,19 @@ sub vin_obj {
             scripthash_address => address_by_hash($vin->{txo}->scripthash),
         },
     };
+    if ($tx->is_tokens) {
+        my $token_hash = $tx->token_hash || $tx->hash;
+        if (($vin->{txo}->token_hash // "") eq $token_hash && $vin->{txo}->is_token_transfer) {
+            $res->{prevout}->{token_id} = unpack("H*", $token_hash);
+            $res->{prevout}->{token_amount} = unpack("Q<", substr($vin->{txo}->data // "", 1, 8));
+            my $decimals;
+            if (my $token_info = $tx->token_info) {
+                $decimals = $token_info->{decimals};
+            }
+            $res->{prevout}->{token_decimals} = $decimals // TOKEN_DEFAULT_DECIMALS;
+        }
+    }
+    return $res;
 }
 
 sub vout_obj {
@@ -409,7 +422,7 @@ sub tx_obj {
                 block_hash   => unpack("H*", $block->hash),
             ) : (),
         },
-        vin  => [ map { vin_obj($_)       } @{$tx->in}  ],
+        vin  => [ map { vin_obj($tx, $_)  } @{$tx->in}  ],
         vout => [ map { vout_obj($tx, $_) } @{$tx->out} ],
         UPGRADE_POW && $tx->is_coinbase ? (
             coinbase_info => {
