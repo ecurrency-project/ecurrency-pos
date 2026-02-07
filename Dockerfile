@@ -65,7 +65,7 @@ RUN { \
     echo "Unsupported dbi ${dbi}, choose sqlite or mysql" >&2; \
     exit 1; \
   fi; \
-  /bin/busybox-extras httpd -p 9669 -u nobody -c /qbitcoin/admin/etc/httpd.conf; \
+  /bin/busybox-extras httpd -p 9669 -u nobody -c /qecurrency/admin/etc/httpd.conf; \
   /qecurrency/bin/qecurrency-init --dbi=${dbi} --database=${database} /qecurrency/db && \
   notify_args=""; \
   if [ -n "${notify_url}" ]; then \
