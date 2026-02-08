@@ -86,9 +86,9 @@ sub parse_condition {
             if (ref $v eq 'SCALAR') {
                 $condition .= "`$key` $op $$v ";
             }
-            elsif (ref $v eq 'ARRAY') { # key => { not => [ 'value1', 'value2' ] }
+            elsif (ref $v eq 'ARRAY') { # key => { NOT => [ 'value1', 'value2' ] }
                 $condition .= " `$key` $op IN (" . (@$value ? join(',', ('?')x@$value) : "NULL") . ")";
-                push @$values, @$value;
+                push @$values, @$v;
             }
             elsif (ref $v) {
                 die "Incorrect search value type " . ref($v) . " key $key\n";
