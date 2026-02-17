@@ -231,7 +231,7 @@ sub cmd_btcheaders {
         if (defined(my $start_height = $known_block->height)) {
             my @blocks = Bitcoin::Block->find(height => [ map { $start_height + $_*int(MAX_BTC_HEADERS*0.95) } 1 .. 250 ], -sortby => "height DESC");
             $self->send_message("btcgethdrs", pack("V", PROTOCOL_VERSION) .
-                varint(scalar(@blocks + 1)) . join("", map { $_->hash } @blocks) . $known_block->hash . ZERO_HASH);
+                varint(scalar(@blocks) + 1) . join("", map { $_->hash } @blocks) . $known_block->hash . ZERO_HASH);
         }
         else {
             # This block is not in our best brunch, request blocks started on it
@@ -239,7 +239,7 @@ sub cmd_btcheaders {
             my @hashes = ($known_block->hash);
             push @hashes, $known_block->prev_hash if $known_block->prev_hash ne ZERO_HASH;
             $self->send_message("btcgethdrs", pack("V", PROTOCOL_VERSION) .
-                varint(scalar(@hashes + 1)) . join("", @hashes) . ZERO_HASH);
+                varint(scalar(@hashes) + 1) . join("", @hashes) . ZERO_HASH);
         }
     }
     elsif ($self->have_block0) {
