@@ -5,7 +5,7 @@ import { moveDecimalPoint } from '@/shared/lib/moveDecimalPoint/moveDecimalPoint
 
 import { useGetTokenInfoQuery } from '../../api/tokenApi.ts';
 
-import cls from './TokenItem.module.scss';
+import cls from './TokenItem.module.css';
 
 interface TokenItemProps {
     tokenId: string;
