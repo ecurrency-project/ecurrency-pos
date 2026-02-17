@@ -85,6 +85,11 @@ const TxDetailsPage = (props: TxDetailsPageProps) => {
                     <span>{t('Size')}</span>
                     <span className="amount">{formatNumber(transaction.size)} B</span>
                 </HStack>
+
+                {transaction.token_id ? <HStack justify="space-between" className={cls.statsTableItem}>
+                    <span>{t('Token ID')}</span>
+                    <Link to={`/tx/${transaction.token_id}`} className="mono">{transaction.token_id}</Link>
+                </HStack> : null}
             </VStack>
 
             {!isLoading && transaction && <Transactions

@@ -17,6 +17,7 @@ interface MempoolStats {
 export interface IAddress {
     chain_stats: ChainStats;
     mempool_stats: MempoolStats;
+    tokens: Record<string, number>
 }
 
 export interface UTXO {
