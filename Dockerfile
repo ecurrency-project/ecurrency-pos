@@ -29,7 +29,8 @@ RUN apk add --no-cache perl-test-mockmodule
 COPY . /qecurrency
 RUN cd /qecurrency; make test || exit 1
 RUN cd /qecurrency/admin; make || exit 1
-RUN cd /qecurrency; rm -rf test systemd Dockerfile Makefile admin/Makefile admin/src
+RUN cd /qecurrency; rm -rf test systemd Dockerfile Makefile
+RUN cd /qecurrency/admin; find . -mindepth 1 -maxdepth 1 ! -name 'www' ! -name 'etc' -exec rm -rf {} +
 RUN apk del --no-cache perl-test-mockmodule
 
 # Final minimized image
