@@ -22,6 +22,10 @@
   font-size: 16px;
 }
 
+.statsTableItem:first-child {
+  border-top: none;
+}
+
 .statsTableItem span:last-child {
   word-break: break-word;
   text-align: right;
