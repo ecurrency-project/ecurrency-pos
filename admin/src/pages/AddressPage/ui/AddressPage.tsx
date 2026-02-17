@@ -8,6 +8,7 @@ import { Transactions } from '@/widgets/Transactions';
 
 import { useGetAddressQuery } from '@/entities/Address';
 import { useGetTransactionsByAddressQuery } from '@/entities/Transaction';
+import { TokenItem } from '@/entities/Token';
 
 import { HStack, VStack } from '@/shared/ui/Stack';
 import { QrCode } from '@/shared/ui/QrCode';
@@ -96,6 +97,19 @@ const AddressPage = (props: AddressPageProps) => {
                     </HStack>
                 )}
             </VStack>
+
+            {address.tokens && Object.keys(address.tokens).length > 0 && (
+                <VStack className={cls.statsTable}>
+                    <h2>{t`Tokens info`}</h2>
+                    {Object.entries(address.tokens).map(([tokenId, amount]) => (
+                        <TokenItem
+                            tokenId={tokenId}
+                            amount={amount as number}
+                            key={tokenId}
+                        />
+                    ))}
+                </VStack>
+            )}
 
             {!transactionsIsLoading && <Transactions
                 txs={transactionsByAddress}
