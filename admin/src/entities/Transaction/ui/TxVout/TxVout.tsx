@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import classNames from "classnames";
 
 import { HStack, VStack } from '@/shared/ui/Stack';
+import { moveDecimalPoint } from '@/shared/lib/moveDecimalPoint';
 
 import type { ISpend, Vout } from '../../model/types/ITransaction.ts';
 
@@ -79,6 +80,27 @@ export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
                 <div className={cls.voutBodyRow}>
                     <div>{t('_asset_id')}</div>
                     <div className="mono"><Link to={`/asset/${vout.asset}`}>{vout.asset}</Link></div>
+                </div>
+            }
+
+            { vout.token_id &&
+                <div className={cls.voutBodyRow}>
+                    <div>{t('token id')}</div>
+                    <div className="mono">{vout.token_id}</div>
+                </div>
+            }
+
+            { vout.token_amount !== undefined && vout.token_amount !== 0 &&
+                <div className={cls.voutBodyRow}>
+                    <div>{t('token amount')}</div>
+                    <div className="mono">{moveDecimalPoint(vout.token_amount, -vout.token_decimals)}</div>
+                </div>
+            }
+
+            { vout.token_permissions !== undefined &&
+                <div className={cls.voutBodyRow}>
+                    <div>{t('token permissions')}</div>
+                    <div className="mono">{vout.token_permissions}</div>
                 </div>
             }
 

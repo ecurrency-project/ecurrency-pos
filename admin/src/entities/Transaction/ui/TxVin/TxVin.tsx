@@ -5,6 +5,7 @@ import classNames from "classnames";
 
 import { HStack, VStack } from '@/shared/ui/Stack';
 import { formatNumber } from '@/shared/utils';
+import { moveDecimalPoint } from '@/shared/lib/moveDecimalPoint';
 
 import type { Vin } from '../../model/types/ITransaction.ts';
 
@@ -146,6 +147,27 @@ export const TxVin = memo(function TxVin(props: TransactionVinProps) {
                     <div>{t('_previous_output_address')}</div>
                     <div>{linkToAddr(vin.prevout.scripthash_address)}</div>
                 </div>}
+
+                { vin.prevout.token_id &&
+                    <div className={cls.vinBodyRow}>
+                        <div>{t('token id')}</div>
+                        <div className="mono">{vin.prevout.token_id}</div>
+                    </div>
+                }
+
+                { vin.prevout.token_amount !== undefined && vin.prevout.token_amount !== 0 &&
+                    <div className={cls.vinBodyRow}>
+                        <div>{t('token amount')}</div>
+                        <div className="mono">{moveDecimalPoint(vin.prevout.token_amount, -(vin.prevout.token_decimals ?? 0))}</div>
+                    </div>
+                }
+
+                { vin.prevout.token_permissions !== undefined &&
+                    <div className={cls.vinBodyRow}>
+                        <div>{t('token permissions')}</div>
+                        <div className="mono">{vin.prevout.token_permissions}</div>
+                    </div>
+                }
             </>}
         </VStack> : null
     )

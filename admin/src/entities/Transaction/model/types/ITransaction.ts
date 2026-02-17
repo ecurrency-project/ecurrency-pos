@@ -7,6 +7,10 @@ export interface Prevout {
     asset?: string;
     assetcommitment?: string;
     scriptpubkey_type?: string;
+    token_amount?: number;
+    token_permissions?: number;
+    token_decimals?: number;
+    token_id?: string;
 }
 
 export interface Issuance {
@@ -65,6 +69,10 @@ export interface Vout {
     asset: string;
     assetcommitment: string;
     pegout?: Pegout;
+    token_id: string;
+    token_amount: number;
+    token_permissions: number;
+    token_decimals: number;
 }
 
 export interface ITxStatus {
@@ -86,6 +94,7 @@ export interface ITransaction {
     value: number;
     is_coinbase: boolean;
     status: ITxStatus;
+    token_id?: string;
 }
 
 export interface TxShort {
