@@ -1,13 +1,20 @@
 .Blocks {
-  padding: 30px 0;
   border-radius: 8px;
   box-shadow: var(--stats-box-shadow);
   background-color: var(--stats-bg-color);
 }
 
-.title {
-  font-weight: normal;
-  margin: 10px 40px 30px;
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.headerTitle {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
 }
 
 .viewMore {
