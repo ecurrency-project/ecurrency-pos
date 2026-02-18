@@ -59,7 +59,6 @@ sub validate {
     my $upgraded = $block->prev_block ? $block->prev_block->upgraded // 0 : 0;
     my $min_block_fee;
     my $was_standard;
-    my $was_burn;
     foreach my $transaction (@{$block->transactions}) {
         if ($tx_in_block{$transaction->hash}++) {
             return "Transaction " . $transaction->hash_str . " included in the block twice";
@@ -79,15 +78,6 @@ sub validate {
             if ($was_standard && !$config->{regtest}) {
                 return "Coinbase transaction " . $transaction->hash_str . " must not be after standard transaction $was_standard";
             }
-            if ($was_burn && !$config->{regtest}) {
-                return "Coinbase transaction " . $transaction->hash_str . " must not be after burn transaction $was_burn";
-            }
-        }
-        elsif ($transaction->is_burn) {
-            if ($was_standard && !$config->{regtest}) {
-                return "Burn transaction " . $transaction->hash_str . " must not be after standard transaction $was_standard";
-            }
-            $was_burn = $transaction->hash_str;
         }
         elsif ($transaction->is_standard || $transaction->is_tokens) {
             $fee += $transaction->fee;
