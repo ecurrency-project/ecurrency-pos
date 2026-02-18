@@ -129,7 +129,7 @@ sub choose_for_block {
         $mempool_out{$mempool[$i]->hash} = scalar @{$mempool[$i]->out};
         $size += $mempool[$i]->size;
         my $low_fee_tx = 0;
-        if (!$mempool[$i]->is_coinbase && !$mempool[$i]->is_burn) {
+        if (!$mempool[$i]->is_coinbase) {
             my $min_fee = min_fee($prev_block, $size);
             # Calculate low-fee transactions in the block with this size and min_fee
             for (my $j = $i; $j >= 0; $j--) {
@@ -156,8 +156,7 @@ sub choose_for_block {
 sub compare_tx {
     # coinbase first
     return
-        ( $a->is_coinbase ? 0 : 1 ) <=> ( $b->is_coinbase ? 0 : 1 ) || # coinbase first
-        ( $a->is_burn     ? 0 : 1 ) <=> ( $b->is_burn     ? 0 : 1 ) || # burn second
+        ( $a->coins_created ? 0 : 1 ) <=> ( $b->coins_created ? 0 : 1 ) || # coinbase first
         $b->fee * $a->size <=> $a->fee * $b->size ||
         $a->received_time  <=> $b->received_time  ||
         $a->hash cmp $b->hash;
