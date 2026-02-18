@@ -1449,7 +1449,7 @@ sub stake_weight {
             if (!defined($in_block_time)) {
                 Warningf("Can't get stake_weight for %s with unconfirmed input %s:%u",
                     $self->hash_str, $in->tx_in_str, $in->num);
-                next;
+                return undef;
             }
             # TODO: Use Math::BigInt to prevent int64 overflow
             $weight += $in->value * (timeslot($block->time) - timeslot($in_block_time)) / BLOCK_INTERVAL;
