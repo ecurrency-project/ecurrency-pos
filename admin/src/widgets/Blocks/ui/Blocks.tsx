@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Card, Skeleton } from 'antd';
 import classNames from "classnames";
 
 import {
@@ -12,7 +13,6 @@ import {
 } from "@/entities/Block";
 
 import { Button } from "@/shared/ui/Button";
-import { VStack } from '@/shared/ui/Stack';
 
 import { useAppDispatch } from "@/shared/lib/hooks";
 import ArrowRightIcon from "@/shared/assets/icons/arrow_right.svg?react";
@@ -45,15 +45,20 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
 
     if (blocks.length === 0) {
         return (
-            <VStack className={classNames(cls.Blocks, className)} justify='start'>
-                <h3 className={cls.title}>{t('_loading')}</h3>
-            </VStack>
+            <Card className={classNames(cls.Blocks, className)}>
+                <div className={cls.header}>
+                    <span className={cls.headerTitle}>{t('_latest_blocks')}</span>
+                </div>
+                <Skeleton active paragraph={{ rows: 5 }} />
+            </Card>
         )
     }
 
     return (
-        <VStack className={classNames(cls.Blocks, className)}>
-            <h3 className={cls.title}>{t('_latest_blocks')}</h3>
+        <Card className={classNames(cls.Blocks, className)}>
+            <div className={cls.header}>
+                <span className={cls.headerTitle}>{t('_latest_blocks')}</span>
+            </div>
             <BlockItemHeader/>
             {!isLoadMore && blocks?.slice(0, 5).map((block) => (
                 <BlockItem block={block} key={block.id} />
@@ -78,9 +83,8 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
                     size='large'
                 >
                     <span>{t('_load_more')}</span>
-                    {/*<ExpandMoreIcon />*/}
                 </Button>
             )}
-        </VStack>
+        </Card>
     );
 })
