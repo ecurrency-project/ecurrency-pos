@@ -1,6 +1,7 @@
 import classNames from "classnames";
 
 import { Blocks } from "@/widgets/Blocks";
+import { Peers } from "@/widgets/Peers";
 import { TransactionsShort } from "@/widgets/TransactionsShort";
 
 import { ChainStatusInfo } from '@/entities/ChainStatus';
