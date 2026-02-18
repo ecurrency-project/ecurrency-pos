@@ -56,16 +56,11 @@ sub self_weight {
                 $self->{self_weight} = $stake_weight + @{$self->transactions};
                 # coinbase increases block weight
                 foreach my $transaction (@{$self->transactions}) {
-                    if ($transaction->is_coinbase) {
-                        $self->{self_weight} += $transaction->coinbase_weight($self->time);
-                    }
-                    elsif ($transaction->is_burn) {
-                        $self->{self_weight} += $transaction->burn_weight($self->time);
-                    }
-                    else {
+                    if (!$transaction->coins_created) {
                         last if $transaction->fee >= 0;
                         next;
                     }
+                    $self->{self_weight} += $transaction->coinbase_weight($self->time);
                 }
             }
             # otherwise we have unknown input in stake transaction; return undef and calculate next time

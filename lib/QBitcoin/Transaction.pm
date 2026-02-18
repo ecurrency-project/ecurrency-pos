@@ -856,7 +856,6 @@ sub is_standard { $_[0]->{tx_type} == TX_TYPE_STANDARD }
 sub is_stake    { $_[0]->{tx_type} == TX_TYPE_STAKE    }
 sub is_coinbase { $_[0]->{tx_type} == TX_TYPE_COINBASE }
 sub is_tokens   { $_[0]->{tx_type} == TX_TYPE_TOKENS   }
-sub is_burn     { $_[0]->{tx_type} == TX_TYPE_BURN     }
 
 sub validate_coinbase {
     my $self = shift;
@@ -916,12 +915,8 @@ sub validate {
         return $self->validate_coinbase;
     }
     # Transaction must contains at least one output (can't spend all inputs as fee)
-    if (!@{$self->out} && !$self->is_burn) {
+    if (!@{$self->out}) {
         Warningf("No outputs in transaction %s", $self->hash_str);
-        return -1;
-    }
-    elsif ($self->is_burn && @{$self->out}) {
-        Warningf("Burn transaction %s must not contain outputs", $self->hash_str);
         return -1;
     }
     # Transaction must contains at least one input
@@ -963,13 +958,6 @@ sub validate {
                 $self->hash_str, $txo->tx_in_str, $txo->num);
             return -1;
         }
-        if ($self->is_burn) {
-            if ($txo->redeem_script ne QBT_BURN_SCRIPT) {
-                Warningf("Burn transaction %s has incorrect redeem script in input %s:%u",
-                    $self->hash_str, $txo->tx_in_str, $txo->num);
-                return -1;
-            }
-        }
         $input_value += $txo->value;
     }
     if ($self->is_stake) {
@@ -979,7 +967,7 @@ sub validate {
             return -1;
         }
     }
-    elsif ($self->is_standard || $self->is_tokens || $self->is_burn) {
+    elsif ($self->is_standard || $self->is_tokens) {
         if ($self->fee < 0) {
             Warningf("Fee for standard transaction %s is %li, can't be negative",
                 $self->hash_str, $self->fee);
@@ -1217,7 +1205,7 @@ sub check_input_script {
             return -1;
         }
         # Set txo min_rel_time to STAKE_MATURITY if previous tx is stake
-        if (($self->is_standard || $self->is_tokens || $self->is_burn) && ($in->{min_rel_time} // -1) < STAKE_MATURITY) {
+        if (($self->is_standard || $self->is_tokens) && ($in->{min_rel_time} // -1) < STAKE_MATURITY) {
             my $tx_in_type = (ref $self)->type_by_hash($in->{txo}->tx_in);
             if (!defined($tx_in_type)) {
                 Errf("No input transaction %s for txo", $in->{txo}->tx_in_str);
@@ -1529,25 +1517,6 @@ sub new_coinbase {
         $self->announce();
     }
     return $self;
-}
-
-sub burn_weight {
-    my $self = shift;
-    my ($block_time) = @_;
-    my $weight = 0;
-    my $class = ref $self;
-    foreach my $in (map { $_->{txo} } @{$self->in}) {
-        my $in_block_time = $class->txo_time($in);
-        if (!defined($in_block_time)) {
-            Errf("Can't get burn_weight for %s with unconfirmed input %s:%u",
-                $self->hash_str, $in->tx_in_str, $in->num);
-            die "Burn transaction " . $self->hash_str . " has unconfirmed input " . $in->tx_in_str . ":" . $in->num . "\n";
-        }
-        # Weight of burn transaction does not depend on the age
-        # to avoid reorg if the burn transaction is included in the block with old block time or with later block
-        $weight += $in->value * (QBT_BURN_VIRT_AGE / BLOCK_INTERVAL);
-    }
-    return int($weight / 0x10000); # prevent int64 overflow for total blockchain weight
 }
 
 # $self->{min_tx_time}, $self->{min_tx_block_height}: minimal time and block_height for transaction set by checklocktimeverify opcode

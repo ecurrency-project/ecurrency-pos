@@ -68,7 +68,7 @@ sub produce_coinbase {
         or return undef;
     state $myaddr_hash = unpack("V", checksum32($my_address->address));
     if ($rnd < 0x10000 * 0x10000 / UPGRADE_PROB) {
-        $out->{open_script} = QBT_LOCK_SCRIPT;
+        $out->{open_script} = QBT_BURN_SCRIPT;
         $tx->out->[$num+1] = {
             value       => 0,
             open_script => "\x14" . hash160(OP_VERIFY),
@@ -79,7 +79,7 @@ sub produce_coinbase {
     elsif (QBitcoin::TXO->staked_utxo() < MAX_MY_UTXO &&
            ($rnd ^ $myaddr_hash) < 0x10000 * 0x10000 / MY_UPGRADE) {
         state $my_scripthash = scripthash_by_address($my_address->address);
-        $out->{open_script} = QBT_LOCK_SCRIPT;
+        $out->{open_script} = QBT_BURN_SCRIPT;
         $tx->out->[$num+1] = {
             value       => 0,
             open_script => pack("C", length($my_scripthash)) . $my_scripthash,
