@@ -60,7 +60,8 @@ sub process_request {
     if ($path[0] eq "tx") {
         if ($http_request->method eq "POST") {
             @path == 1 or return $self->http_response(404, "Unknown request");
-            return $self->tx_send($http_request->decoded_content);
+            $self->is_local or return $self->http_response(403, "Forbidden");
+            return $self->tx_send($http_request->decoded_content); # Unimplemented
         }
         ($path[1] && $path[1] =~ qr/^[0-9a-f]{64}\z/)
             or return $self->http_response(404, "Unknown request");
@@ -251,9 +252,11 @@ sub process_request {
         return $self->http_ok($token_info);
     }
     elsif ($path[0] eq "status") {
+        $self->is_local or return $self->http_response(403, "Forbidden");
         return $self->http_ok(node_status());
     }
     elsif ($path[0] eq "peers") {
+        $self->is_local or return $self->http_response(403, "Forbidden");
         return $self->http_ok(peer_info());
     }
     elsif ($path[0] eq "fee-estimates") {
@@ -663,6 +666,11 @@ sub peer_info {
         };
     }
     return \@peers;
+}
+
+sub is_local {
+    my $self = shift;
+    return $self->connection->my_ip eq "127.0.0.1";
 }
 
 1;
