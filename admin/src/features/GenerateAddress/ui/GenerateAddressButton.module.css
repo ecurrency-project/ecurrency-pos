@@ -1,0 +1,21 @@
+.generatedInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.generatedField {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.generatedValue {
+    word-break: break-all;
+}
+
+.privateKeyRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
