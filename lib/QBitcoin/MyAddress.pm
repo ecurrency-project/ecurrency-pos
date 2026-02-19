@@ -21,6 +21,8 @@ use constant FIELDS => {
     staked      => NUMERIC,
 };
 
+use constant PRIMARY_KEY => 'address';
+
 mk_accessors(qw(private_key staked));
 
 my $MY_ADDRESS;
