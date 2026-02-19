@@ -229,6 +229,9 @@ sub main_loop {
                 ip         => $peer_ip,
                 addr       => $peer_addr,
                 port       => $remote_port,
+                my_ip      => $my_ip,
+                my_port    => $my_port,
+                my_addr    => IPV6_V4_PREFIX . $my_addr,
                 direction  => DIR_IN,
             );
             $connection->protocol->startup();
@@ -250,6 +253,9 @@ sub main_loop {
                 ip         => $peer_ip,
                 addr       => $peer_addr,
                 port       => $remote_port,
+                my_ip      => $my_ip,
+                my_port    => $my_port,
+                my_addr    => IPV6_V4_PREFIX . $my_addr,
                 direction  => DIR_IN,
             );
             $connection->protocol->startup();
