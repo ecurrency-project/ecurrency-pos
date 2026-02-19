@@ -1,0 +1,25 @@
+.mobileCard {
+    border-radius: 8px;
+}
+
+.mobileRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+}
+
+.mobileLabel {
+    font-size: 12px;
+    color: var(--text-color-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mobileValue {
+    font-size: 13px;
+    font-weight: 500;
+    word-break: break-all;
+    text-align: right;
+    max-width: 60%;
+}
