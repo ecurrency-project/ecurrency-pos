@@ -84,26 +84,26 @@ send_blocks([ 0, "a0", undef, 0, 50 ]);
 send_blocks(map [ $_, "a$_", "a" . ($_-1), 1, $_*100 ], 1 .. 20);
 $connection->protocol->cmd_ihave(pack("VQ<a32", GENESIS_TIME + 20 * BLOCK_INTERVAL * FORCE_BLOCKS, 20*120-70, "\xaa" x 32));
 send_blocks([ 21, "a21", "a20", 1, 2021 ], [ 5, "b5", "a4", 1, 450 ]);
-send_blocks(map [ $_, "b$_", "b" . ($_-1), 1, $_*120-70 ], 6 .. 19);
+send_blocks(map [ $_, "b$_", "b" . ($_-1), 1, $_*2500-70 ], 6 .. 19);
 
 my $height = QBitcoin::Block->blockchain_height;
 my $weight = QBitcoin::Block->best_weight;
 my $block  = $height ? QBitcoin::Block->best_block($height) : undef;
 my $hash   = $block ? $block->hash : undef;
-is($height, 19,    "height");
+is($height,    19, "height");
 is($hash,   "b19", "hash");
-is($weight, 2210,  "weight");
+is($weight, 47430, "weight");
 
-send_blocks(map [ $_, "b$_", "b" . ($_-1), 1, $_*120-70 ], 21 .. 30);
-send_blocks(map [ $_, "b$_", "b" . ($_-1), 1, $_*120-70 ], 20);
-send_blocks(map [ $_, "b$_", "b" . ($_-1), 1, $_*120-70 ], 31 .. 35);
+send_blocks(map [ $_, "b$_", "b" . ($_-1), 1, $_*2500-70 ], 21 .. 30);
+send_blocks(map [ $_, "b$_", "b" . ($_-1), 1, $_*2500-70 ], 20);
+send_blocks(map [ $_, "b$_", "b" . ($_-1), 1, $_*2500-70 ], 31 .. 35);
 QBitcoin::Block->store_blocks();
 QBitcoin::Block->cleanup_old_blocks();
 my $incore = QBitcoin::Block->min_incore_height;
 is($incore, (QBitcoin::Block->blockchain_height // -1) - INCORE_LEVELS + 1, "incore levels");
 
 send_blocks([ 5, "c5", "a4", 1, 450 ]);
-send_blocks([ $_, "c$_", "c" . ($_-1), 1, $_*140-70 ]) foreach 6 .. 19;
+send_blocks([ $_, "c$_", "c" . ($_-1), 1, $_*25000-70 ]) foreach 6 .. 19;
 
 $block  = QBitcoin::Block->best_block;
 is($block->hash, "b35", "hash");
@@ -115,7 +115,7 @@ $incore = QBitcoin::Block->min_incore_height;
 is($incore, (QBitcoin::Block->blockchain_height // -1) - INCORE_LEVELS + 1, "incore levels");
 
 send_blocks([ 5, "d5", "a4", 1, 450 ]);
-send_blocks([ $_, "d$_", "d" . ($_-1), 1, $_*140-70 ]) foreach 6 .. 35;
+send_blocks([ $_, "d$_", "d" . ($_-1), 1, $_*50000-70 ]) foreach 6 .. 35;
 
 $block  = QBitcoin::Block->best_block;
 is($block->hash, "d35", "hash");

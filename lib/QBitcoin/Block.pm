@@ -155,4 +155,33 @@ sub reward {
     }
 }
 
+sub reorg_penalty {
+    my $self = shift;
+    my ($branch_start) = @_;
+
+    # It's not consensus rule, so we're able to use floating point arithmetic here
+    # It should be overweight twice for revert last 16 blocks, 4 times for 32 blocks, 8 times for 64 blocks, 16 times for 128 blocks, 32 times for 256 blocks
+    # But then decrease for prevent split-brain: 32 times for 900; 16 times for 3600; 8 times for 14400 blocks (~1 day), 4 times for 57600 blocks, 2 times for 230400 blocks, and no penalty for 921600 blocks (~3 months)
+
+    return 0 if $self->height - $branch_start->height < INCORE_LEVELS;
+    my $reorg_blocks = (timeslot($self->time) - timeslot($branch_start->time)) / BLOCK_INTERVAL - INCORE_LEVELS;
+    my $coef;
+    if ($reorg_blocks < 256) {
+        $coef = $reorg_blocks / 8;
+    }
+    elsif ($reorg_blocks < 900) {
+        $coef = 32;
+    }
+    elsif ($reorg_blocks < 921600) {
+        $coef = 960 / sqrt($reorg_blocks);
+    }
+    else {
+        $coef = 1;
+    }
+    Debugf("Reorg penalty for block %s height %u (%u reorg blocks, %u seconds): %.2f%%\n",
+        $self->hash_str, $self->height, $self->height - $branch_start->height,
+        $self->time - $branch_start->time, ($coef - 1) * 100);
+    return ($coef - 1) * ($self->weight - $branch_start->weight);
+}
+
 1;

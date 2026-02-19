@@ -159,6 +159,10 @@ sub receive {
     }
     # $new_best is first block in new branch after fork, i.e $new_nest->prev_block is in the current best branch
     if ($new_best->height < ($HEIGHT // -1)) {
+        if ($best_block[$HEIGHT]->weight + $best_block[$HEIGHT]->reorg_penalty($new_best->prev_block) >= $self->weight) {
+            Debugf("Alternate branch has weight %Lu more than current %Lu but prevent switching because of reorg penalty for %u levels", $self->weight, $best_block[$HEIGHT]->weight, $HEIGHT - $new_best->height + 1);
+            return 0;
+        }
         Infof("Check alternate branch started with block %s height %u with weight %Lu (current best weight %Lu)",
             $new_best->hash_str, $new_best->height, $self->weight, $self->best_weight);
     }

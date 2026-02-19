@@ -124,7 +124,7 @@ my $incore = QBitcoin::Block->min_incore_height;
 ok($incore > 7, "Transactions stored in database");
 
 # 11
-send_block(4, "d4", "c3", 2000, send_tx(0, undef));
+send_block(4, "d4", "c3", 50000, send_tx(0, undef));
 is(QBitcoin::Block->blockchain_height, 4, "branch switched");
 # 12
 block_hash("d5");
