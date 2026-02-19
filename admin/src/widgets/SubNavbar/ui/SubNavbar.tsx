@@ -21,6 +21,7 @@ export const SubNavbar = memo(function SubNavbar(props: SubNavbarProps) {
                     <Link to={RouterPath.main}>Dashboard</Link>
                     <Link to={RouterPath.blocks}>Blocks</Link>
                     <Link to={RouterPath.tx}>Transactions</Link>
+                    <Link to={RouterPath.my_addresses}>My Addresses</Link>
                 </div>
                 <SearchBar />
             </div>
