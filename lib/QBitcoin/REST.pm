@@ -14,10 +14,13 @@ use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::Log;
 use QBitcoin::ORM qw(dbh);
-use QBitcoin::Address qw(address_by_hash);
+use QBitcoin::Address qw(address_by_hash address_by_pubkey wallet_import_format wif_to_pk);
+use QBitcoin::MyAddress;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info);
+use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair);
+use QBitcoin::Generate;
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
 use QBitcoin::Coinbase;
 use QBitcoin::ConnectionList;
@@ -258,6 +261,75 @@ sub process_request {
     elsif ($path[0] eq "peers") {
         $self->is_local or return $self->http_response(403, "Forbidden");
         return $self->http_ok(peer_info());
+    }
+    elsif ($path[0] eq "my_addresses") {
+        $self->is_local or return $self->http_response(403, "Forbidden");
+        return $self->http_ok([
+            map +{
+                address => $_->address,
+                staked  => $_->staked ? TRUE : FALSE,
+                algo    => [ map { CRYPT_ALGO_NAMES->{$_} } $_->algo ],
+                # last_used => ... # TODO
+            }, QBitcoin::MyAddress->my_address()
+        ]);
+    }
+    elsif ($path[0] eq "my_address") {
+        $self->is_local or return $self->http_response(403, "Forbidden");
+        $http_request->method eq "POST"
+            or return $self->http_response(404, "Unknown request");
+        if (@path == 2) {
+            if ($path[1] eq "new") {
+                my $algo = CRYPT_ALGO_ECDSA; # TODO: support multiple algorithms
+                my $keypair = generate_keypair($algo);
+                my $address = address_by_pubkey($keypair->pubkey_by_privkey, $algo);
+                return $self->http_ok({ address => $address, private_key => wallet_import_format($keypair->pk_serialize) });
+            }
+            elsif ($path[1] eq "add") {
+                my $content = eval { $JSON->decode($http_request->decoded_content) };
+                ref($content) eq "HASH" && $content->{address} && $content->{private_key}
+                    or return $self->http_response(400, "Invalid request body");
+                validate_address($content->{address})
+                    or return $self->http_response(400, "Invalid address");
+                if (grep { $content->{address} eq $_->address } QBitcoin::MyAddress->my_address()) {
+                    return $self->http_ok({ address => $content->{address}, reason => "Address already imported" });
+                }
+                my $private_key = eval { wif_to_pk($content->{private_key}) }
+                    or return $self->http_response(400, "Invalid private key");
+                my ($pk_alg) = pk_alg($private_key)
+                    or return $self->http_response(400, "Unsupported private key algorithm");
+                my $privkey = pk_import($private_key, $pk_alg)
+                    or return $self->http_response(400, "Invalid private key");
+                my $pubkey = $privkey->pubkey_by_privkey
+                    or return $self->http_response(400, "Invalid private key");
+                $content->{address} eq address_by_pubkey($pubkey, $pk_alg)
+                    or return $self->http_response(400, "Private key does not match the address");
+                my $my_address = QBitcoin::MyAddress->create({
+                    private_key => wallet_import_format($private_key),
+                    address     => $content->{address},
+                });
+                QBitcoin::Generate->load_address_utxo($my_address);
+                return $self->http_ok({ address => $my_address->address });
+            }
+            else {
+                return $self->http_response(404, "Unknown request");
+            }
+        }
+        @path == 3
+            or return $self->http_response(404, "Unknown request");
+        validate_address($path[1])
+            or return $self->http_response(404, "Unknown request");
+        if ($path[2] eq "edit") {
+            my $content = eval { $JSON->decode($http_request->decoded_content) };
+            ref($content) eq "HASH" && defined($content->{staked})
+                or return $self->http_response(400, "Invalid request body");
+            my ($my_address) = grep { $_->address eq $path[1] } QBitcoin::MyAddress->my_address()
+                or return $self->http_response(404, "Address not found");
+            if (($my_address->staked && !$content->{staked}) || (!$my_address->staked && $content->{staked})) {
+                $my_address->update(staked => $content->{staked} ? 1 : 0);
+            }
+            return $self->http_ok({});
+        }
+        return $self->http_response(404, "Unknown request");
     }
     elsif ($path[0] eq "fee-estimates") {
         return $self->http_ok({ 1 => 0 }); # TODO
