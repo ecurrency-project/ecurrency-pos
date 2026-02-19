@@ -56,7 +56,7 @@ sub get_address_txs {
     my @txs_inmem;
     if (!$skip_before_id) {
         my $in_skip = $skip_before ? 1 : 0;
-        for (my $height = QBitcoin::Block->blockchain_height; $height > QBitcoin::Block->max_db_height; $height--) {
+        for (my $height = QBitcoin::Block->blockchain_height // -1; $height > QBitcoin::Block->max_db_height; $height--) {
             my $block = QBitcoin::Block->best_block($height)
                 or next;
             foreach my $tx (reverse @{$block->transactions}) {
@@ -148,7 +148,7 @@ sub address_stats {
         or return undef;
     my ($funded_sum, $funded_cnt, $spent_sum, $spent_cnt, $tx_cnt) = (0,0,0,0,0);
     my $max_db_height = QBitcoin::Block->max_db_height;
-    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height // -1;
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
         my $sql = "SELECT IFNULL(SUM(value), 0), COUNT(*), IFNULL(SUM(IF(tx_out IS NULL, 0, value)), 0), COUNT(tx_out), COUNT(DISTINCT tx_in)+COUNT(DISTINCT tx_out) FROM `" . QBitcoin::TXO->TABLE . "` WHERE scripthash = ?";
         my ($result) = dbh->selectall_array($sql, undef, $script->id);
@@ -215,7 +215,7 @@ sub address_received {
         or return undef;
     my $value = 0;
     my $max_db_height = QBitcoin::Block->max_db_height;
-    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height // -1;
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
         my $result;
         if ($minconf && $blockchain_height - $minconf + 1 < $max_db_height) {
@@ -254,7 +254,7 @@ sub address_balance {
         or return undef;
     my $value = 0;
     my $max_db_height = QBitcoin::Block->max_db_height;
-    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height // -1;
     my %fresh_inputs;
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
         my $result;
@@ -372,7 +372,7 @@ sub get_address_utxo {
             Infof("Too many UTXO for address %s", $address);
         }
     }
-    for (my $height = QBitcoin::Block->max_db_height + 1; $height <= QBitcoin::Block->blockchain_height; $height++) {
+    for (my $height = QBitcoin::Block->max_db_height + 1; $height <= QBitcoin::Block->blockchain_height // -1; $height++) {
         my $block = QBitcoin::Block->best_block($height)
             or next;
         foreach my $tx (@{$block->transactions}) {
@@ -452,7 +452,7 @@ sub tokens_received {
         or return undef;
     my $value = 0;
     my $max_db_height = QBitcoin::Block->max_db_height;
-    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height // -1;
     if ((my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) && (my ($token_tx) = QBitcoin::Transaction->fetch(hash => $token_hash))) {
         my $result;
         state $unpack_value = _unpack_data_value();
@@ -497,7 +497,7 @@ sub tokens_balance {
         or return undef;
     my $value = 0;
     my $max_db_height = QBitcoin::Block->max_db_height;
-    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height // -1;
     my %fresh_inputs;
     my $token_id;
     if ((my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) && (my ($token_tx) = QBitcoin::Transaction->fetch(hash => $token_hash))) {
@@ -594,7 +594,7 @@ sub all_tokens_balance {
     my %value;
     my %token_hash_by_id;
     my $max_db_height = QBitcoin::Block->max_db_height;
-    my $blockchain_height = QBitcoin::Block->blockchain_height;
+    my $blockchain_height = QBitcoin::Block->blockchain_height // -1;
     my %fresh_inputs;
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
         my @result;
@@ -754,7 +754,7 @@ sub get_tokens_txs {
     my @txs_inmem;
     if (!$skip_before_id) {
         my $in_skip = $skip_before ? 1 : 0;
-        for (my $height = QBitcoin::Block->blockchain_height; $height > QBitcoin::Block->max_db_height; $height--) {
+        for (my $height = QBitcoin::Block->blockchain_height // -1; $height > QBitcoin::Block->max_db_height; $height--) {
             my $block = QBitcoin::Block->best_block($height)
                 or next;
             foreach my $tx (reverse @{$block->transactions}) {
