@@ -1,6 +1,5 @@
 import { memo } from "react";
 import { Link } from "react-router-dom";
-import { useTranslation } from 'react-i18next';
 
 import { formatNumber, formatTime } from "@/shared/utils";
 
@@ -18,16 +17,15 @@ export const BlockItem = memo(function BlockItem(props: BlockItemProps) {
         className,
         block,
     } = props;
-    const { t } = useTranslation();
 
     return (
         <div className={className}>
             <Link className={cls.blockRow} to={`/blocks/${block.id}`}>
-                <div className={cls.blockSell} data-label={t('Height')}>{block.height}</div>
-                <div className={cls.blockSell} data-label={t('Timestamp')}>{formatTime(block.timestamp, false)}</div>
-                <div className={cls.blockSell} data-label={t('Transactions')}>{formatNumber(block.tx_count)}</div>
-                <div className={cls.blockSell} data-label={`${t('Size')} (KB)`}>{formatNumber(block.size / 1000)}</div>
-                <div className={cls.blockSell} data-label={`${t('Weight')} (KWU)`}>{formatNumber(block.weight / 1000)}</div>
+                <div className={cls.blockSell} data-label='Height'>{block.height}</div>
+                <div className={cls.blockSell} data-label='Timestamp'>{formatTime(block.timestamp, false)}</div>
+                <div className={cls.blockSell} data-label='Transactions'>{formatNumber(block.tx_count)}</div>
+                <div className={cls.blockSell} data-label='Size (KB)'>{formatNumber(block.size / 1000)}</div>
+                <div className={cls.blockSell} data-label='Weight (KWU)'>{formatNumber(block.weight / 1000)}</div>
             </Link>
         </div>
     );

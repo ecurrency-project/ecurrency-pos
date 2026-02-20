@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 import axios from 'axios';
 import { Tooltip } from 'antd';
@@ -35,7 +34,6 @@ interface BlockDetailsPageProps {
 
 const BlockDetailsPage = (props: BlockDetailsPageProps) => {
     const { className } = props;
-    const { t } = useTranslation();
     const { id } = useParams<{ id: string }>();
     const [status, setStatus] = useState<BlocksStatus | undefined>(undefined);
     const [expanded, setExpanded] = useState<boolean>(false);
@@ -69,11 +67,11 @@ const BlockDetailsPage = (props: BlockDetailsPageProps) => {
     }
 
     if (blockLoading) {
-        return <div className={classNames(cls.BlockDetailsPage, 'container', className)}>{t('_loading')}</div>
+        return <div className={classNames(cls.BlockDetailsPage, 'container', className)}>Loading...</div>
     }
 
     if (!block) {
-        return <div className={classNames(cls.BlockDetailsPage, 'container', className)}>{t('_block_not_found')}</div>
+        return <div className={classNames(cls.BlockDetailsPage, 'container', className)}>Block not found</div>
     }
 
     return (
@@ -81,7 +79,7 @@ const BlockDetailsPage = (props: BlockDetailsPageProps) => {
             <VStack gap="sm">
                 <HStack>
                     <CubeIcon fill="#ffbb00" width="50px" height="50px"/>
-                    <h1 className={cls.title}>{t('_block', { blockNumber: block.height })}</h1>
+                    <h1 className={cls.title}>Block { block.height }</h1>
                 </HStack>
                 <Clipboard text={id as string} className={cls.clipboard}/>
                 <HStack className={cls.blockLinks} justify="space-between">
@@ -91,7 +89,7 @@ const BlockDetailsPage = (props: BlockDetailsPageProps) => {
                         icon={<ArrowBackIcon/>}
                         type="dashed"
                     >
-                        <span>{t('_previous')}</span>
+                        <span>Previous</span>
                     </Button>
 
                     {status?.next_best && (
@@ -102,7 +100,7 @@ const BlockDetailsPage = (props: BlockDetailsPageProps) => {
                             iconPlacement="end"
                             type="dashed"
                         >
-                            <span>{t('_next')}</span>
+                            <span>Next</span>
                         </Button>
                     )}
                 </HStack>
@@ -113,38 +111,38 @@ const BlockDetailsPage = (props: BlockDetailsPageProps) => {
                     variant="outlined"
                     onClick={() => setExpanded(!expanded)}
                 >
-                    <span>{t('_details')}</span>
+                    <span>Details</span>
                     <ExpandMoreIcon fill="#FFBB00" className={expanded ? cls.expended : ''}/>
                 </Button>
                 <HStack justify="space-between" className={cls.statsTableItem}>
-                    <span>{t('_height')}</span>
+                    <span>Height</span>
                     <Link to={`/blocks/${id}`}>{block.height}</Link>
                 </HStack>
                 <HStack justify="space-between" className={cls.statsTableItem}>
-                    <span>{t('_status')}</span>
-                    <span>{t('_in_best_chain_confirmations', { confirmations : tipHeight - block.height + 1 })}</span>
+                    <span>Status</span>
+                    <span>In best chain (${tipHeight - block.height + 1} confirmations)</span>
                 </HStack>
                 <HStack justify="space-between" className={cls.statsTableItem}>
-                    <span>{t('_timestamp')}</span>
-                    <Tooltip title={t(useUTC ? '_click_show_local_time' : '_click_show_utc_time')} placement="top">
+                    <span>Timestamp</span>
+                    <Tooltip title={useUTC ? 'Show local time' : 'Show UTC time'} placement="top">
                         <span onClick={() => setUseUTC(!useUTC)} style={{cursor: 'pointer'}}>{formatTime(block.timestamp, useUTC)}</span>
                     </Tooltip>
                 </HStack>
                 <HStack justify="space-between" className={cls.statsTableItem}>
-                    <span>{t('_size')}</span>
+                    <span>Size</span>
                     <span>{formatNumber(block.size / 1000)} KB</span>
                 </HStack>
                 <HStack justify="space-between" className={cls.statsTableItem}>
-                    <span>{t('_block_weight')}</span>
+                    <span>Block weight</span>
                     <span>{formatNumber(block.block_weight / 1000000000)} GW</span>
                 </HStack>
                 <HStack justify="space-between" className={cls.statsTableItem}>
-                    <span>{t('_branch_units')}</span>
+                    <span>Branch units</span>
                     <span>{formatNumber(block.weight / 1000000000)} GW</span>
                 </HStack>
                 {expanded && (
                     <HStack justify="space-between" className={cls.statsTableItem}>
-                        <span>{t('_merkle_root')}</span>
+                        <span>Merkle root</span>
                         <span>{block.merkle_root}</span>
                     </HStack>
                 )}

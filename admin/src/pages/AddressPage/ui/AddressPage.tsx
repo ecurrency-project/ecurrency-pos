@@ -1,7 +1,5 @@
 import { useCallback, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import classNames from 'classnames';
 
 import { Transactions } from '@/widgets/Transactions';
@@ -22,14 +20,13 @@ interface AddressPageProps {
     className?: string
 }
 
-const fmtTxos = (count: number, sum: number, t: TFunction<'translation', undefined>) =>
-    (count > 0 ? t("outputs", { count }) : t`_no_outputs`)
+const fmtTxos = (count: number, sum: number) =>
+    (count > 0 ? `${count} outputs` : 'No Outputs')
     + (sum > 0 ? ` (${formatSat(sum)})` : '');
 
 const AddressPage = (props: AddressPageProps) => {
     const { className } = props;
     const { id } = useParams<{ id: string }>();
-    const { t } = useTranslation();
     const [chainHash, setChainHash] = useState<string>('');
 
     const {
@@ -51,18 +48,18 @@ const AddressPage = (props: AddressPageProps) => {
     const chainUtxoSum = address && address?.chain_stats.funded_txo_sum - address?.chain_stats.spent_txo_sum || 0;
 
     if (addressLoading) {
-        return <div className={classNames(cls.AddressPage, 'container', className)}>{t`_loading`}</div>
+        return <div className={classNames(cls.AddressPage, 'container', className)}>Loading...</div>
     }
 
     if (!address) {
-        return <div className={classNames(cls.AddressPage, 'container', className)}>{t`_not_found_address`}</div>
+        return <div className={classNames(cls.AddressPage, 'container', className)}>Not found Address</div>
     }
 
     return (
         <div className={classNames(cls.AddressPage, 'container', className)}>
             <HStack gap='sm' justify='space-between'>
                 <VStack gap='sm'>
-                    <h1 className={cls.title}>{t`_address`}</h1>
+                    <h1 className={cls.title}>Address</h1>
                     <Clipboard className={cls.clipboard} text={id as string}/>
                 </VStack>
                 <QrCode value={id as string} />
@@ -71,36 +68,36 @@ const AddressPage = (props: AddressPageProps) => {
             <VStack className={cls.statsTable}>
                 {address.chain_stats.tx_count > 0 && (
                     <HStack justify='space-between' className={cls.statsTableItem}>
-                        <span>{t`_confirmed_tx_count`}</span>
+                        <span>Confirmed tx count</span>
                         <span>{formatNumber(address.chain_stats.tx_count)}</span>
                     </HStack>
                 )}
 
                 {address.chain_stats.funded_txo_count > 0 && (
                     <HStack justify='space-between' className={cls.statsTableItem}>
-                        <span>{t`_confirmed_received`}</span>
-                        <span>{fmtTxos(address.chain_stats.funded_txo_count, address.chain_stats.funded_txo_sum, t)}</span>
+                        <span>Confirmed received</span>
+                        <span>{fmtTxos(address.chain_stats.funded_txo_count, address.chain_stats.funded_txo_sum)}</span>
                     </HStack>
                 )}
 
                 {address.chain_stats.spent_txo_count > 0 && (
                     <HStack justify='space-between' className={cls.statsTableItem}>
-                        <span>{t`Confirmed spent`}</span>
-                        <span>{fmtTxos(address.chain_stats.spent_txo_count, address.chain_stats.spent_txo_sum, t)}</span>
+                        <span>Confirmed spent</span>
+                        <span>{fmtTxos(address.chain_stats.spent_txo_count, address.chain_stats.spent_txo_sum)}</span>
                     </HStack>
                 )}
 
                 {address.chain_stats.tx_count > 0 && (
                     <HStack justify='space-between' className={cls.statsTableItem}>
-                        <span>{t`Confirmed unspent`}</span>
-                        <span>{fmtTxos(chainUtxoCount, chainUtxoSum, t)}</span>
+                        <span>Confirmed unspent</span>
+                        <span>{fmtTxos(chainUtxoCount, chainUtxoSum)}</span>
                     </HStack>
                 )}
             </VStack>
 
             {address.tokens && Object.keys(address.tokens).length > 0 && (
                 <VStack className={cls.statsTable}>
-                    <h2>{t`Tokens info`}</h2>
+                    <h2>Tokens info</h2>
                     {Object.entries(address.tokens).map(([tokenId, amount]) => (
                         <TokenItem
                             tokenId={tokenId}

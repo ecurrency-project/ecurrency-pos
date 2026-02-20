@@ -1,5 +1,4 @@
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card, Statistic, Skeleton, Progress } from 'antd';
 import {
     DatabaseOutlined,
@@ -23,7 +22,6 @@ interface ChainStatusInfoProps {
 
 export const ChainStatusInfo = memo(function ChainStatusInfo(props: ChainStatusInfoProps) {
     const { className } = props;
-    const { t } = useTranslation();
     const { data: status, isLoading, error } = useGetChainStatusQuery(undefined, {
         pollingInterval: 1000,
         refetchOnMountOrArgChange: true,
@@ -62,7 +60,7 @@ export const ChainStatusInfo = memo(function ChainStatusInfo(props: ChainStatusI
                     <div className={cls.syncRow}>
                         <SyncOutlined spin className={cls.syncIcon} />
                         <div className={cls.syncContent}>
-                            <span className={cls.syncLabel}>{t('Sync Progress')}</span>
+                            <span className={cls.syncLabel}>Sync Progress</span>
                             <Progress
                                 percent={Number(syncProgress.toFixed(2))}
                                 status="active"
@@ -79,7 +77,7 @@ export const ChainStatusInfo = memo(function ChainStatusInfo(props: ChainStatusI
                             title={(
                                 <span className={cls.title}>
                                     <DatabaseOutlined className={cls.icon} />
-                                    {t('Total Coins')}
+                                    Total Coins
                                 </span>
                             )}
                             value={pfmt(status.total_coins, 'sat', 'btc')}
@@ -91,7 +89,7 @@ export const ChainStatusInfo = memo(function ChainStatusInfo(props: ChainStatusI
                             title={(
                                 <span className={cls.title}>
                                     <SafetyCertificateOutlined className={cls.icon} />
-                                    {t('Confirmation Weight')}
+                                    Confirmation Weight
                                 </span>
                             )}
                             value={status.weight}
@@ -104,7 +102,7 @@ export const ChainStatusInfo = memo(function ChainStatusInfo(props: ChainStatusI
                             title={(
                                 <span className={cls.title}>
                                     <InboxOutlined className={cls.icon} />
-                                    {t('Mempool Size')}
+                                    Mempool Size
                                 </span>
                             )}
                             value={status.mempool_size}
@@ -117,7 +115,7 @@ export const ChainStatusInfo = memo(function ChainStatusInfo(props: ChainStatusI
                             title={(
                                 <span className={cls.title}>
                                     <LineChartOutlined className={cls.icon} />
-                                    {t('Block Reward')}
+                                    Block Reward
                                 </span>
                             )}
                             value={pfmt(status.reward, 'sat', 'btc')}
@@ -129,7 +127,7 @@ export const ChainStatusInfo = memo(function ChainStatusInfo(props: ChainStatusI
                             title={(
                                 <span className={cls.title}>
                                     <FieldTimeOutlined className={cls.icon} />
-                                    {t('Genesis Time')}
+                                    Genesis Time
                                 </span>
                             )}
                             value={genesisDate}
