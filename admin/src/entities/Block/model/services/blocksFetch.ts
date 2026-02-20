@@ -19,10 +19,10 @@ export const blocksFetch = createAsyncThunk<IBlock[], string | number | undefine
         } catch (err: unknown) {
             if (err instanceof AxiosError) {
                 if (err.response?.data) {
-                    return rejectWithValue(err.response.data?.message || '_error_server');
+                    return rejectWithValue(err.response.data?.message || 'Error Server');
                 }
             }
-            return rejectWithValue('_error_server');
+            return rejectWithValue('Error Server');
         }
     },
 );

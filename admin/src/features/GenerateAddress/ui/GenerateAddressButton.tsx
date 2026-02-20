@@ -1,5 +1,4 @@
 import { memo, useCallback, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Button, Modal, Typography, message } from 'antd';
 import { PlusOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 
@@ -14,8 +13,6 @@ import cls from './GenerateAddressButton.module.css';
 const { Text } = Typography;
 
 export const GenerateAddressButton = memo(function GenerateAddressButton() {
-    const { t } = useTranslation();
-
     const [generateNewAddress, { isLoading: isGenerating }] = useGenerateNewAddressMutation();
     const [addAddress] = useAddAddressMutation();
 
@@ -31,9 +28,9 @@ export const GenerateAddressButton = memo(function GenerateAddressButton() {
             setIsKeyVisible(false);
             setIsModalOpen(true);
         } catch {
-            message.error(t('Failed to generate address'));
+            message.error('Failed to generate address');
         }
-    }, [generateNewAddress, t]);
+    }, [generateNewAddress]);
 
     const handleSave = useCallback(async () => {
         if (!generatedAddress) return;
@@ -43,15 +40,15 @@ export const GenerateAddressButton = memo(function GenerateAddressButton() {
                 address: generatedAddress.address,
                 private_key: generatedAddress.private_key,
             }).unwrap();
-            message.success(t('Address saved'));
+            message.success('Address saved');
             setIsModalOpen(false);
             setGeneratedAddress(null);
         } catch {
-            message.error(t('Failed to save address'));
+            message.error('Failed to save address');
         } finally {
             setIsSaving(false);
         }
-    }, [addAddress, generatedAddress, t]);
+    }, [addAddress, generatedAddress]);
 
     const handleClose = useCallback(() => {
         setIsModalOpen(false);
@@ -66,16 +63,16 @@ export const GenerateAddressButton = memo(function GenerateAddressButton() {
                 onClick={handleGenerate}
                 loading={isGenerating}
             >
-                {t('Generate New')}
+                Generate New
             </Button>
 
             <Modal
-                title={t('Generated Address')}
+                title='Generated Address'
                 open={isModalOpen}
                 onCancel={handleClose}
                 footer={[
                     <Button key="cancel" onClick={handleClose}>
-                        {t('Cancel')}
+                        Cancel
                     </Button>,
                     <Button
                         key="save"
@@ -83,20 +80,20 @@ export const GenerateAddressButton = memo(function GenerateAddressButton() {
                         loading={isSaving}
                         onClick={handleSave}
                     >
-                        {t('Save')}
+                        Save
                     </Button>,
                 ]}
             >
                 {generatedAddress && (
                     <div className={cls.generatedInfo}>
                         <div className={cls.generatedField}>
-                            <Text type="secondary">{t('Address')}</Text>
+                            <Text type="secondary">Address</Text>
                             <Text copyable className={cls.generatedValue}>
                                 {generatedAddress.address}
                             </Text>
                         </div>
                         <div className={cls.generatedField}>
-                            <Text type="secondary">{t('Private Key')}</Text>
+                            <Text type="secondary">Private Key</Text>
                             <div className={cls.privateKeyRow}>
                                 {isKeyVisible ? (
                                     <Text copyable className={cls.generatedValue}>

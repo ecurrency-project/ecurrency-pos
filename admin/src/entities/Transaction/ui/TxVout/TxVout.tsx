@@ -1,6 +1,5 @@
 import { memo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import classNames from "classnames";
 
 import { HStack, VStack } from '@/shared/ui/Stack';
@@ -29,7 +28,6 @@ export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
         spend,
     } = props;
 
-    const { t } = useTranslation();
     const unspendable_types = [ 'op_return', 'provably_unspendable', 'fee' ];
 
     const wrapper = (children: ReactNode, description: ReactNode) => {
@@ -39,7 +37,7 @@ export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
                     <HStack align="start">
                         <span className={cls.index}>{`#${index}`}</span>
                         <div className={cls.wrapper}>
-                            {description || t('_nonstandard')}
+                            {description ||'Nonstandard'}
                             <span className={cls.amount}>
                                 {formatOutAmount(vout)}
                             </span>
@@ -59,70 +57,70 @@ export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
         expanded ? <VStack gap="sm" className={classNames(cls.voutBody)}>
             {vout.scriptpubkey_type &&
                 <div className={cls.voutBodyRow}>
-                    <div>{t('_type')}</div>
+                    <div>Type</div>
                     <div>{vout.scriptpubkey_type.toUpperCase()}</div>
                 </div>
             }
 
             <div className={cls.voutBodyRow}>
-                <div>{t('_scripthash_hex')}</div>
+                <div>script hash (hex)</div>
                 <div className="mono">{vout.scripthash}</div>
             </div>
 
             { vout.assetcommitment &&
                 <div className={cls.voutBodyRow}>
-                    <div>{t('_asset_commitment')}</div>
+                    <div>Asset commitment</div>
                     <div className="mono">{vout.assetcommitment}</div>
                 </div>
             }
 
             { vout.asset &&
                 <div className={cls.voutBodyRow}>
-                    <div>{t('_asset_id')}</div>
+                    <div>Asset ID</div>
                     <div className="mono"><Link to={`/asset/${vout.asset}`}>{vout.asset}</Link></div>
                 </div>
             }
 
             { vout.token_id &&
                 <div className={cls.voutBodyRow}>
-                    <div>{t('token id')}</div>
+                    <div>token id</div>
                     <div className="mono">{vout.token_id}</div>
                 </div>
             }
 
             { vout.token_amount !== undefined && vout.token_amount !== 0 &&
                 <div className={cls.voutBodyRow}>
-                    <div>{t('token amount')}</div>
+                    <div>token amount</div>
                     <div className="mono">{moveDecimalPoint(vout.token_amount, -vout.token_decimals)}</div>
                 </div>
             }
 
             { vout.token_permissions !== undefined &&
                 <div className={cls.voutBodyRow}>
-                    <div>{t('token permissions')}</div>
+                    <div>token permissions</div>
                     <div className="mono">{vout.token_permissions}</div>
                 </div>
             }
 
             { vout.valuecommitment &&
                 <div className={cls.voutBodyRow}>
-                    <div>{t('_value_commitment')}</div>
+                    <div>Value commitment</div>
                     <div className="mono">{vout.valuecommitment}</div>
                 </div>
             }
 
             { !unspendable_types.includes(vout.scriptpubkey_type) &&
                 <div className={cls.voutBodyRow}>
-                    <div>{t('_spending_tx')}</div>
+                    <div>Spending Tx</div>
                     <div>
                         {!spend
-                            ? t('_loading')
+                            ? 'Loading...'
                             : spend.spent
                                 ? <span>
-                                    {t('_spent_by')} <Link to={`/tx/${spend.txid}`} className="mono">{`${spend.txid}`}</Link> {' '}
-                                    { spend.status ? spend.status.confirmed ? <span>{t('_in_block')} <Link to={`/block/${spend.status.block_hash}`}>#{spend.status.block_height}</Link></span> : `(${t('_unconfirmed')})` : `` }
+                                    Spent by <Link to={`/tx/${spend.txid}`} className="mono">{`${spend.txid}`}</Link> {' '}
+                                    { spend.status ? spend.status.confirmed ? <span>in block <Link to={`/block/${spend.status.block_hash}`}>#{spend.status.block_height}</Link></span> : `(Unconfirmed)` : `` }
                                 </span>
-                                : t('_unspent')
+                                : 'Unspent'
                         }
                     </div>
                 </div>
