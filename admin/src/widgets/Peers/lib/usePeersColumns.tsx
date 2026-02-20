@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Tag } from 'antd';
 import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 
@@ -8,17 +7,16 @@ import type { IPeer } from '@/entities/Peer';
 import { formatBytes, formatUptime } from './formatters';
 
 export function usePeersColumns() {
-    const { t } = useTranslation();
 
     return useMemo(() => [
         {
-            title: t('Address'),
+            title: 'Address',
             dataIndex: 'addr',
             key: 'addr',
             ellipsis: true,
         },
         {
-            title: t('Network'),
+            title: 'Network',
             dataIndex: 'network',
             key: 'network',
             width: 90,
@@ -27,22 +25,22 @@ export function usePeersColumns() {
             ),
         },
         {
-            title: t('Direction'),
+            title: 'Direction',
             dataIndex: 'inbound',
             key: 'inbound',
             width: 110,
             render: (inbound: boolean) => inbound
-                ? <Tag icon={<ArrowDownOutlined/>} color="blue">{t('Inbound')}</Tag>
-                : <Tag icon={<ArrowUpOutlined/>} color="green">{t('Outbound')}</Tag>,
+                ? <Tag icon={<ArrowDownOutlined/>} color="blue">Inbound</Tag>
+                : <Tag icon={<ArrowUpOutlined/>} color="green">Outbound</Tag>,
         },
         {
-            title: t('Protocol'),
+            title: 'Protocol',
             dataIndex: 'protocol',
             key: 'protocol',
             width: 120,
         },
         {
-            title: t('Reputation'),
+            title: 'Reputation',
             dataIndex: 'reputation',
             key: 'reputation',
             width: 110,
@@ -51,25 +49,25 @@ export function usePeersColumns() {
             defaultSortOrder: 'descend' as const,
         },
         {
-            title: t('Sent'),
+            title: 'Sent',
             dataIndex: 'bytessent',
             key: 'bytessent',
             width: 90,
             render: (v: number) => formatBytes(v),
         },
         {
-            title: t('Received'),
+            title: 'Received',
             dataIndex: 'bytesrecv',
             key: 'bytesrecv',
             width: 90,
             render: (v: number) => formatBytes(v),
         },
         {
-            title: t('Uptime'),
+            title: 'Uptime',
             dataIndex: 'createtime',
             key: 'createtime',
             width: 100,
             render: (v: number) => formatUptime(v),
         },
-    ], [t]);
+    ], []);
 }

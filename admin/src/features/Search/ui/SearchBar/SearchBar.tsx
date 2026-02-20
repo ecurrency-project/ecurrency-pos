@@ -1,6 +1,5 @@
 import { type ChangeEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { Input } from 'antd';
 import classNames from "classnames";
 
@@ -19,7 +18,6 @@ classname?: string;
 
 export const SearchBar = (props: SearchBarProps) => {
     const { classname } = props;
-    const { t } = useTranslation();
     const [query, setQuery] = useState('');
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -48,7 +46,7 @@ export const SearchBar = (props: SearchBarProps) => {
     return (
         <div className={classNames(cls.SearchBar, classname)}>
             <Input.Search
-                placeholder={t('Search for block height, hash, transaction, or address')}
+                placeholder='Search for block height, hash, transaction, or address'
                 enterButton
                 value={query}
                 onChange={handleChange}

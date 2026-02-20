@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card, Skeleton, Table, message } from 'antd';
 import { WalletOutlined } from '@ant-design/icons';
 import classNames from 'classnames';
@@ -16,7 +15,6 @@ import { ImportAddressButton } from '@/features/ImportAddress';
 import cls from './MyAddressesPage.module.css';
 
 const MyAddressesPage = () => {
-    const { t } = useTranslation();
     const { data: addresses, isLoading } = useGetMyAddressesQuery(undefined, {
         pollingInterval: 10000,
     });
@@ -28,9 +26,9 @@ const MyAddressesPage = () => {
         setEditingAddresses((prev) => new Set(prev).add(address));
         try {
             await editStaked({ address, staked: staked ? 1 : 0 }).unwrap();
-            message.success(t('Staked status updated'));
+            message.success('Staked status updated');
         } catch {
-            message.error(t('Failed to update staked status'));
+            message.error('Failed to update staked status');
         } finally {
             setEditingAddresses((prev) => {
                 const next = new Set(prev);
@@ -38,7 +36,7 @@ const MyAddressesPage = () => {
                 return next;
             });
         }
-    }, [editStaked, t]);
+    }, [editStaked]);
 
     const columns = useMyAddressColumns({ editingAddresses, onStakedChange: handleStakedChange });
 
@@ -46,7 +44,7 @@ const MyAddressesPage = () => {
         <div className={cls.header}>
             <div className={cls.headerLeft}>
                 <WalletOutlined/>
-                <span className={cls.headerTitle}>{t('My Addresses')}</span>
+                <span className={cls.headerTitle}>My Addresses</span>
                 {addresses && addresses.length > 0 && (
                     <span className={cls.addressCount}>({addresses.length})</span>
                 )}

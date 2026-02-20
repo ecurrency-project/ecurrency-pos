@@ -1,5 +1,4 @@
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card, Table, Skeleton } from 'antd';
 import { TeamOutlined } from '@ant-design/icons';
 import classNames from 'classnames';
@@ -17,7 +16,6 @@ interface PeersProps {
 
 export const Peers = memo(function Peers(props: PeersProps) {
     const { className } = props;
-    const { t } = useTranslation();
     const { data: peers, isLoading } = useGetPeersQuery(undefined, {
         pollingInterval: 10000,
     });
@@ -27,7 +25,7 @@ export const Peers = memo(function Peers(props: PeersProps) {
     const header = (
         <div className={cls.header}>
             <TeamOutlined/>
-            <span className={cls.headerTitle}>{t('Peers')}</span>
+            <span className={cls.headerTitle}>Peers</span>
             {peers && peers.length > 0 && (
                 <span className={cls.peerCount}>({peers.length})</span>
             )}
