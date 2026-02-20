@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Switch } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -15,11 +14,10 @@ interface UseMyAddressColumnsProps {
 
 export function useMyAddressColumns(props: UseMyAddressColumnsProps) {
     const { editingAddresses, onStakedChange } = props;
-    const { t } = useTranslation();
 
     return useMemo((): ColumnsType<IMyAddress> => [
         {
-            title: t('Address'),
+            title: 'Address',
             dataIndex: 'address',
             key: 'address',
             render: (addr: string) => (
@@ -27,7 +25,7 @@ export function useMyAddressColumns(props: UseMyAddressColumnsProps) {
             ),
         },
         {
-            title: t('Staked'),
+            title: 'Staked',
             dataIndex: 'staked',
             key: 'staked',
             width: 120,
@@ -40,5 +38,5 @@ export function useMyAddressColumns(props: UseMyAddressColumnsProps) {
                 />
             ),
         },
-    ], [t, editingAddresses, onStakedChange]);
+    ], [editingAddresses, onStakedChange]);
 }

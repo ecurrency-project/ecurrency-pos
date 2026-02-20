@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 import { Card, Skeleton } from 'antd';
 import classNames from "classnames";
 
@@ -30,7 +29,6 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
         className,
         isLoadMore = false
     } = props;
-    const { t } = useTranslation();
     const dispatch = useAppDispatch();
     const blocks = useSelector(getBlocksAdapterData.selectAll);
 
@@ -47,7 +45,7 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
         return (
             <Card className={classNames(cls.Blocks, className)}>
                 <div className={cls.header}>
-                    <span className={cls.headerTitle}>{t('_latest_blocks')}</span>
+                    <span className={cls.headerTitle}>Latest blocks</span>
                 </div>
                 <Skeleton active paragraph={{ rows: 5 }} />
             </Card>
@@ -57,7 +55,7 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
     return (
         <Card className={classNames(cls.Blocks, className)}>
             <div className={cls.header}>
-                <span className={cls.headerTitle}>{t('_latest_blocks')}</span>
+                <span className={cls.headerTitle}>Latest blocks</span>
             </div>
             <BlockItemHeader/>
             {!isLoadMore && blocks?.slice(0, 5).map((block) => (
@@ -65,7 +63,7 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
             ))}
             {!isLoadMore && (
                 <Link className={cls.viewMore} to="/blocks">
-                    <span>{t('_view_more_blocks')}</span>
+                    <span>View more blocks</span>
                     <ArrowRightIcon className={cls.svg}/>
                 </Link>
             )}
@@ -82,7 +80,7 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
                     iconPlacement='end'
                     size='large'
                 >
-                    <span>{t('_load_more')}</span>
+                    <span>Load more</span>
                 </Button>
             )}
         </Card>

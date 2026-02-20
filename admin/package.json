@@ -15,12 +15,9 @@
     "antd": "6.2.2",
     "axios": "1.13.3",
     "classnames": "2.5.1",
-    "i18next": "25.8.0",
-    "i18next-http-backend": "3.0.2",
     "qr-scanner": "1.4.2",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "react-i18next": "16.5.4",
     "react-redux": "9.2.0",
     "react-router-dom": "7.13.0"
   },
