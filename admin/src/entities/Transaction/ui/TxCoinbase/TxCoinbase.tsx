@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
 import { NATIVE_PRECISION } from '@/entities/Transaction/ui/utils';
@@ -18,7 +17,6 @@ interface TxCoinbaseProps {
 
 export const TxCoinbase = (props: TxCoinbaseProps) => {
     const { className, value, index } = props;
-    const { t } = useTranslation();
 
     return (
         <div className={classNames(cls.TxCoinbase, className)}>
@@ -26,7 +24,7 @@ export const TxCoinbase = (props: TxCoinbaseProps) => {
                 <HStack align="start">
                     <span className={cls.index}>{`#${index}`}</span>
                     <div className={cls.wrapper}>
-                        {t`_coinbase`}
+                        Coinbase
                         <span className={cls.amount}>{formatNumber(sat2btc(value), NATIVE_PRECISION)}{' '}{nativeAssetLabel}</span>
                     </div>
                 </HStack>

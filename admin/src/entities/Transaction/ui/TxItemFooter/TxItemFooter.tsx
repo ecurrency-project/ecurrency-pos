@@ -1,6 +1,5 @@
 import { memo } from 'react';
 import { useSelector } from 'react-redux';
-import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
 
 import { getTipHeight } from '@/entities/TipHeight';
@@ -28,12 +27,10 @@ export const TxItemFooter = memo(function TxItemFooter(props: TransactionBoxProp
         vin,
         vout,
     } = props;
-    const { t } = useTranslation();
 
     const tipHeight = useSelector(getTipHeight);
 
-    const confirmationText = !txStatus?.confirmed ? t('_unconfirmed') : tipHeight ? t('_height_confirmation', { confirm: tipHeight - txStatus.block_height + 1 }) : t('_confirmed');
-
+    const confirmationText = !txStatus?.confirmed ? 'Unconfirmed' : tipHeight ? `${tipHeight - txStatus.block_height + 1} confirmations` : 'Confirmed';
 
     return (
         <HStack
@@ -45,7 +42,7 @@ export const TxItemFooter = memo(function TxItemFooter(props: TransactionBoxProp
                 <span>{confirmationText} {!txStatus.confirmed && isRbf(vin) ? '(RBF)' : ''}</span>
             )}
             <span>
-                {!isAllUnconfidential(vout) ? t('_confidential') : isAllNative(vout) ? formatSat(outTotal(vout)) : ''}
+                {!isAllUnconfidential(vout) ? 'Confidential' : isAllNative(vout) ? formatSat(outTotal(vout)) : ''}
             </span>
         </HStack>
     );
