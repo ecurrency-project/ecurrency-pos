@@ -600,6 +600,7 @@ Arguments:
 Result:
 {                             (json object)
   "hex" : "hex",              (string) The hex-encoded raw transaction with signature(s)
+  "hash" : "hex",             (string) The hex-encoded transaction hash (txid)
   "complete" : true|false,    (boolean) If the transaction has a complete set of signatures
   "errors" : [                (json array, optional) Script verification errors (if there are any)
     {                         (json object)
@@ -690,6 +691,7 @@ sub cmd_signrawtransactionwithkey {
 
     return $self->response_ok({
         hex      => unpack("H*", $tx_data),
+        hash     => unpack("H*", $tx->hash),
         complete => @errors ? FALSE : TRUE,
         errors   => \@errors,
     });
