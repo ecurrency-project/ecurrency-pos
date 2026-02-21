@@ -393,7 +393,7 @@ sub hash_str {
 
 sub token_hash_str {
     my $self = shift;
-    return unpack("H*", substr($self->token_hash, 0, 4));
+    return unpack("H*", substr($self->token_hash // "", 0, 4));
 }
 
 sub serialize {
@@ -484,7 +484,7 @@ sub as_hashref {
     $res->{up} = $self->up->as_hashref if $self->up;
     $res->{coins_created} = $self->coins_created / DENOMINATOR if !UPGRADE_POW && defined $self->coins_created;
     $res->{time} = $self->received_time if defined $self->received_time;
-    $res->{token_id} = unpack("H*", $self->token_hash) if $self->is_tokens && defined $self->token_hash;
+    $res->{token_id} = unpack("H*", $self->token_hash // "") if $self->is_tokens;
     return $res;
 }
 
