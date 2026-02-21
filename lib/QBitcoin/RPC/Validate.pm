@@ -39,7 +39,7 @@ my %SPEC = (
 
 sub validate {
     my $self = shift;
-    my @spec = split(/\s+/, $_[0]); 
+    my @spec = split(/\s+/, $_[0]);
     my $args = $self->args;
 
     if (@$args > @spec) {
@@ -172,6 +172,12 @@ sub validate_outputs {
             }
             elsif ($key eq "token_name" || $key eq "token_symbol") {
                 (defined($out->{$key}) && ref($out->{$key}) eq "")
+                    or return 0;
+                $token_control = 1;
+                next;
+            }
+            elsif ($key eq "token_decimals") {
+                (defined($out->{$key}) && ref($out->{$key}) eq "" && $out->{$key} =~ /^(?:[1-9]|1[0-8])\z/)
                     or return 0;
                 $token_control = 1;
                 next;
