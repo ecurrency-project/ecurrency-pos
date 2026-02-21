@@ -507,7 +507,7 @@ sub tx_obj {
                 value        => $tx->up->value,
             },
         ) : (),
-        $tx->is_tokens ? ( token_id => unpack("H*", $tx->token_hash) ) : (),
+        $tx->is_tokens ? ( token_id => unpack("H*", $tx->token_hash // "") ) : (),
     };
 }
 
