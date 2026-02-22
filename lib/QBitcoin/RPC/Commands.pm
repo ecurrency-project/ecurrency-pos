@@ -1758,7 +1758,7 @@ sub cmd_gettokensreceived {
 }
 
 $PARAMS{gettokensinfo} = "token_id";
-$HELP{gettokensreceived} = qq{
+$HELP{gettokensinfo} = qq{
 gettokensinfo "token_id"
 
 Returns common information about the given token.
