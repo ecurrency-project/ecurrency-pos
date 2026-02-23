@@ -581,9 +581,9 @@ sub cmd_sendrawtransaction {
     return $self->response_ok(unpack("H*", $tx->hash));
 }
 
-$PARAMS{signrawtransactionwithkey} = "hexstring privatekeys";
+$PARAMS{signrawtransactionwithkey} = "hexstring privatekeys replace?";
 $HELP{signrawtransactionwithkey} = qq(
-signrawtransactionwithkey "hexstring" ["privatekey",...]
+signrawtransactionwithkey "hexstring" ["privatekey",...] ( replace )
 
 Sign inputs for raw transaction (serialized, hex-encoded).
 The second argument is an array of base58-encoded private
@@ -596,6 +596,7 @@ Arguments:
        "privatekey",                (string) private key in base58-encoding
        ...
      ]
+3. replace                           (boolean, optional, default=false) Whether to allow signing with already spent inputs (only if not confirmed yet)
 
 Result:
 {                             (json object)
@@ -621,6 +622,7 @@ sub cmd_signrawtransactionwithkey {
     my $self = shift;
     my $data = Bitcoin::Serialized->new(pack("H*", $self->args->[0]));
     my $privkeys = $self->args->[1];
+    my $replace = $self->args->[2] // FALSE;
     my $tx = QBitcoin::Transaction->deserialize($data);
     if (!$tx || $data->length) {
         return $self->response_error("", ERR_DESERIALIZATION_ERROR, "TX decode failed.");
@@ -644,6 +646,10 @@ sub cmd_signrawtransactionwithkey {
         if ($txo->tx_out) {
             # Already confirmed spent
             return $self->response_error("", ERR_DESERIALIZATION_ERROR, "Input " . $txo->tx_in_str . ":" . $txo->num . " already confirmed spent.");
+        }
+        elsif (!$txo->unspent && !$replace) {
+            # Unconfirmed spent
+            return $self->response_error("", ERR_DESERIALIZATION_ERROR, "Input " . $txo->tx_in_str . ":" . $txo->num . " already spent.");
         }
         $input_amount += $txo->value;
         my ($address, $script);
