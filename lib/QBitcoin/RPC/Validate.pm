@@ -29,6 +29,7 @@ my %SPEC = (
     estimate_mode  => qr/^(?:economical|conservative)\z/i,
     token_id       => qr/^[0-9a-f]{64}\z/,
     verbose        => \&validate_boolean,
+    replace        => \&validate_boolean,
     address        => \&validate_address,
     inputs         => \&validate_inputs,
     outputs        => \&validate_outputs,
