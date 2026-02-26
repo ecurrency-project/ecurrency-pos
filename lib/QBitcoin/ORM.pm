@@ -87,7 +87,7 @@ sub parse_condition {
                 $condition .= "`$key` $op $$v ";
             }
             elsif (ref $v eq 'ARRAY') { # key => { NOT => [ 'value1', 'value2' ] }
-                $condition .= " `$key` $op IN (" . (@$value ? join(',', ('?')x@$value) : "NULL") . ")";
+                $condition .= " `$key` $op IN (" . (@$v ? join(',', ('?')x@$v) : "NULL") . ")";
                 push @$values, @$v;
             }
             elsif (ref $v) {
