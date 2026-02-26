@@ -1171,7 +1171,7 @@ sub check_tokens_tx {
             my $data = $self->unpack_token_info($out->data)
                 or return -1;
             if ($self->token_hash) {
-                if ($data->{permissions} && ($data->{permissions} & !$permissions)) {
+                if ($data->{permissions} && ($data->{permissions} & ~$permissions)) {
                     Warningf("Attempt to gain token %s permission in transaction %s", $self->token_hash_str, $self->hash_str);
                     return -1;
                 }
