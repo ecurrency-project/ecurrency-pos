@@ -1003,7 +1003,7 @@ sub unpack_token_info {
         my $type = substr($data, $i, 1);
         my $attr = unpack("C", $type);
         if ($attr <= $last_attr) {
-            Watningf("Incorrect token attribute order in transaction %s token %s", $self->hash_str, $self->token_hash_str);
+            Warningf("Incorrect token attribute order in transaction %s token %s", $self->hash_str, $self->token_hash_str);
             return undef;
         }
         $last_attr = $attr;
