@@ -59,7 +59,7 @@ use constant {
     REJECT_INVALID => 1,
 };
 
-mk_accessors(qw(has_weight));
+mk_accessors(qw(has_weight best_block_hash));
 
 sub type_id() { PROTOCOL_QBITCOIN }
 
@@ -201,7 +201,10 @@ sub cmd_block {
     }
 
     $block->received_from = $self;
-    $self->has_weight = $block->weight if ($self->has_weight // -1) < $block->weight;
+    if (($self->has_weight // -1) < $block->weight) {
+        $self->has_weight = $block->weight;
+        $self->best_block_hash = $block->hash;
+    }
 
     if (!$block->prev_hash) {
         $block->height = 0;
@@ -293,7 +296,10 @@ sub cmd_blocks {
         }
 
         $block->received_from = $self;
-        $self->has_weight = $block->weight if ($self->has_weight // -1) < $block->weight;
+        if (($self->has_weight // -1) < $block->weight) {
+            $self->has_weight = $block->weight;
+            $self->best_block_hash = $block->hash;
+        }
 
         if ($num > 1) {
             if ($block->prev_hash ne $prev_block->hash) {
@@ -457,7 +463,8 @@ sub request_new_block {
                 }
             }
         }
-        if (($self->has_weight // -1) > $best_weight) {
+        my $best_block_hash = $hash // $self->best_block_hash;
+        if (($self->has_weight // -1) > $best_weight && !QBitcoin::Block->block_pool($best_block_hash) && !QBitcoin::Block->is_pending($best_block_hash)) {
             if (blockchain_synced()) {
                 Debugf("Remote %s has block weight %Lu more than our %Lu, request block", $self->peer->id, $self->has_weight, $best_weight);
                 $self->send_message("sendblock", $hash // ZERO_HASH);
@@ -652,11 +659,10 @@ sub cmd_ihave {
         $self->syncing(0); # prevent blocking connection on infinite wait
     }
     $self->has_weight = $weight;
+    $self->best_block_hash = $hash;
     if (!UPGRADE_POW || btc_synced()) {
         if ($weight > QBitcoin::Block->best_weight) {
-            if (!QBitcoin::Block->block_pool($hash) && !QBitcoin::Block->is_pending($hash)) {
-                $self->request_new_block($hash);
-            }
+            $self->request_new_block($hash);
         }
     }
     return 0;
