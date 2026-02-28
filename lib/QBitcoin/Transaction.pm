@@ -135,6 +135,7 @@ sub save {
 }
 
 sub receive {
+    no warnings 'recursion'; # recursion may be deeper than perl default 100 levels
     my $self = shift;
 
     if ($self->validate_hash() or $self->validate() or $self->save()) {
