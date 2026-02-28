@@ -407,6 +407,7 @@ sub cmd_tx {
 }
 
 sub process_tx {
+    no warnings 'recursion'; # recursion may be deeper than perl default 100 levels
     my $self = shift;
     my ($tx) = @_;
 
