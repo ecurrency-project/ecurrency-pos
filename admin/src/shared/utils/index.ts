@@ -39,8 +39,13 @@ export const formatTime = (unix: number, useUTC: boolean = false) => {
 }
 
 export const formatNumber = (s: number, precision: number | null = null): string => {
+    let str = s.toString();
+    if (str.includes('e')) {
+        const digits = precision != null ? precision : 20;
+        str = s.toFixed(digits);
+    }
     // eslint-disable-next-line prefer-const
-    let [whole, dec] = s.toString().split('.');
+    let [whole, dec] = str.split('.');
 
     // divide numbers into groups of three separated with a thin space (U+202F, "NARROW NO-BREAK SPACE"),
     // but only when there are more than a total of 5 non-decimal digits.
