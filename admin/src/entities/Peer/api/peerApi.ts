@@ -5,7 +5,7 @@ import type { IPeer } from '../model/types/peer';
 const peerApi = rtkApi.injectEndpoints({
     endpoints: (build) => ({
         getPeers: build.query<IPeer[], void>({
-            query: () => '/peers',
+            query: () => '/admin/peers',
         }),
     }),
 });

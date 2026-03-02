@@ -4,7 +4,7 @@ import type { ITransaction, TxShort } from '@/entities/Transaction';
 const transactionApi = rtkApi.injectEndpoints({
     endpoints: (build) => ({
         getTransaction: build.query<ITransaction, { id: string }>({
-            query: ({ id }) => `/tx/${id}`,
+            query: ({ id }) => `/api/tx/${id}`,
         }),
         getTransactionsByBlock: build.query<ITransaction[], { blockHeight: string, offset?: number }>({
             query: ({ blockHeight, offset = 0 }) => `/block/${blockHeight}/txs/${offset}`,
