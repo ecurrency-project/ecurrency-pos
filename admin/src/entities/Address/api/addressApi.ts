@@ -4,7 +4,7 @@ import type { IAddress } from '@/entities/Address';
 const addressApi = rtkApi.injectEndpoints({
     endpoints: (build) => ({
         getAddress: build.query<IAddress, { id: string }>({
-            query: ({ id }) => `/address/${id}`,
+            query: ({ id }) => `/api/address/${id}`,
         }),
     }),
     overrideExisting: true,
