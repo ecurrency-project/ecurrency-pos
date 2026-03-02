@@ -13,7 +13,7 @@ export const blockOneFetch = createAsyncThunk<IBlock, string, ThunkConfig<string
         } = thunkAPI;
 
         try {
-            const response = await extra.api.get(`/block/${blockHeight}`);
+            const response = await extra.api.get(`/api/block/${blockHeight}`);
             return response.data;
         } catch (err: unknown) {
             if (err instanceof AxiosError) {

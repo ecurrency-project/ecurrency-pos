@@ -14,7 +14,7 @@ export const blocksFetch = createAsyncThunk<IBlock[], string | number | undefine
         } = thunkAPI;
 
         try {
-            const response = await extra.api.get(`/blocks${blockHeight ? `/${blockHeight}` : ''}`);
+            const response = await extra.api.get(`/api/blocks${blockHeight ? `/${blockHeight}` : ''}`);
             return response.data;
         } catch (err: unknown) {
             if (err instanceof AxiosError) {

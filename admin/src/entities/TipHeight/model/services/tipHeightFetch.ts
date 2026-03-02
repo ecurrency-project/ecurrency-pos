@@ -7,7 +7,7 @@ export const tipHeightFetch = createAsyncThunk<number, void, ThunkConfig<number>
         const { rejectWithValue, extra } = thunkAPI;
 
         try {
-            const response = await extra.api.get('/blocks/tip/height');
+            const response = await extra.api.get('/api/blocks/tip/height');
             return response.data
         } catch (err) {
             console.error(err);
