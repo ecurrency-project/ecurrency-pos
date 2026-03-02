@@ -19,12 +19,14 @@ import cls from './TxBox.module.css';
 interface TxBoxProps {
     className?: string
     tx: ITransaction
+    highlightAddress?: string;
 }
 
 export const TxBox = memo(function TxBox(props: TxBoxProps) {
     const {
         className,
         tx,
+        highlightAddress,
     } = props;
 
     const [expanded, setExpanded] = useState<boolean>(false);
@@ -59,7 +61,7 @@ export const TxBox = memo(function TxBox(props: TxBoxProps) {
             <HStack className={cls.wrapper} gap='xs'>
                 <VStack className={cls.vins} gap='xs'>
                     {tx.is_coinbase && !tx.vin.length && <TxCoinbase key="coinbase" index={0} value={tx.value}/>}
-                    {tx.vin.map((v, index) => (<TxVin vin={v} key={v.txid} index={index} expanded={expanded}/> ))}
+                    {tx.vin.map((v, index) => (<TxVin vin={v} key={v.txid} index={index} expanded={expanded} highlightAddress={highlightAddress}/> ))}
                 </VStack>
                 <div className="ins-and-outs_spacer">
                     <ArrowForwardIcon fill='#1187C1' className={cls.arrow}/>
@@ -72,6 +74,7 @@ export const TxBox = memo(function TxBox(props: TxBoxProps) {
                             index={index}
                             expanded={expanded}
                             spend={spends[index]}
+                            highlightAddress={highlightAddress}
                         />
                     ))}
                 </VStack>
