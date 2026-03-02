@@ -7,18 +7,18 @@ const myAddressApi = rtkApi
     .injectEndpoints({
         endpoints: (build) => ({
             getMyAddresses: build.query<IMyAddress[], void>({
-                query: () => '/my_addresses',
+                query: () => '/wallet/my_addresses',
                 providesTags: ['MyAddresses'],
             }),
             generateNewAddress: build.mutation<AddAddressParams, void>({
                 query: () => ({
-                    url: '/my_address/new',
+                    url: '/wallet/my_address/new',
                     method: 'POST',
                 }),
             }),
             addAddress: build.mutation<IMyAddress, AddAddressParams>({
                 query: (body) => ({
-                    url: '/my_address/add',
+                    url: '/wallet/my_address/add',
                     method: 'POST',
                     body,
                 }),
@@ -26,7 +26,7 @@ const myAddressApi = rtkApi
             }),
             editAddressStaked: build.mutation<void, EditStakedParams>({
                 query: ({ address, staked }) => ({
-                    url: `/my_address/${address}/edit`,
+                    url: `/wallet/my_address/${address}/edit`,
                     method: 'POST',
                     body: { staked },
                 }),
