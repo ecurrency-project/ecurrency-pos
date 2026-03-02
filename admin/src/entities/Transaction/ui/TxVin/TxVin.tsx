@@ -17,6 +17,7 @@ interface TransactionVinProps {
     vin: Vin;
     index?: number;
     expanded?: boolean;
+    highlightAddress?: string;
 }
 
 export const TxVin = memo(function TxVin(props: TransactionVinProps) {
@@ -25,10 +26,13 @@ export const TxVin = memo(function TxVin(props: TransactionVinProps) {
         vin,
         index,
         expanded,
+        highlightAddress,
     } = props;
 
+    const isHighlighted = highlightAddress && vin.prevout?.scripthash_address === highlightAddress;
+
     const wrapper = (children: ReactNode, description: ReactNode) => (
-        <div className={classNames(cls.TransactionVin, className)}>
+        <div className={classNames(cls.TransactionVin, className, { [cls.highlighted]: isHighlighted })}>
             <div className={cls.header}>
                 <HStack align="start">
                     <span className={cls.index}>{`#${index}`}</span>
@@ -58,7 +62,9 @@ export const TxVin = memo(function TxVin(props: TransactionVinProps) {
 
     const description = vin.is_coinbase
         ? 'Coinbase'
-        : <Link to={`/tx/${vin.txid}?output:${vin.vout}`}>{vin.txid}:{vin.vout}</Link>;
+        : vin.prevout?.scripthash_address
+            ? linkToAddr(vin.prevout.scripthash_address)
+            : <Link to={`/tx/${vin.txid}?output:${vin.vout}`}>{`${vin.txid}:${vin.vout}`}</Link>;
 
     const body = (
         expanded ? <VStack gap="sm" className={classNames(cls.vinBody)}>
@@ -81,6 +87,11 @@ export const TxVin = memo(function TxVin(props: TransactionVinProps) {
                 <div className={cls.vinBodyRow}>
                     <div>Asset entropy</div>
                     <div className="mono">{vin.issuance.asset_entropy}</div>
+                </div>
+
+                <div className={cls.vinBodyRow}>
+                    <div>{t('txid:vout')}</div>
+                    <div>{linkToParentOut(vin.txid, vin.vout.toString())}</div>
                 </div>
 
                 {/*<div className={cls.vinBodyRow}>*/}
@@ -139,11 +150,6 @@ export const TxVin = memo(function TxVin(props: TransactionVinProps) {
                         {vin.prevout.scriptpubkey_type && <em> ({vin.prevout.scriptpubkey_type})</em>}
                     </div>
                 </div>
-
-                {vin.prevout.scripthash_address && <div className={cls.vinBodyRow}>
-                    <div>Previous output address</div>
-                    <div>{linkToAddr(vin.prevout.scripthash_address)}</div>
-                </div>}
 
                 { vin.prevout.token_id &&
                     <div className={cls.vinBodyRow}>
