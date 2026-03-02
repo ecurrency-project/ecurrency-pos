@@ -15,6 +15,7 @@ interface TransactionsProps {
     totalTxs?: number;
     txs?: ITransaction[];
     loadMore?: () => void;
+    highlightAddress?: string;
 }
 
 export const Transactions = memo(function Transactions(props: TransactionsProps) {
@@ -24,13 +25,14 @@ export const Transactions = memo(function Transactions(props: TransactionsProps)
         totalTxs = 0,
         txs = [],
         loadMore,
+        highlightAddress,
     } = props;
 
     return (
         <div className={classNames(cls.Transactions, className)}>
             {isTitleVisible && <h2 className={cls.title}>{txs?.length} {txs.length < totalTxs && `of ${totalTxs} transactions`}</h2>}
             {txs.map((tx) => (
-                <TxBox key={tx.txid} tx={tx}/>
+                <TxBox key={tx.txid} tx={tx} highlightAddress={highlightAddress}/>
             ))}
 
             {txs.length < totalTxs &&
