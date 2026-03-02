@@ -83,3 +83,7 @@
     color: var(--link-color);
     text-decoration: none;
 }
+
+.highlighted {
+    border-left: 3px solid #e05a2b;
+}

@@ -113,6 +113,7 @@ const AddressPage = (props: AddressPageProps) => {
                 totalTxs={address.chain_stats.tx_count}
                 isTitleVisible
                 loadMore={handleLoadMore}
+                highlightAddress={id}
             />}
         </div>
     )

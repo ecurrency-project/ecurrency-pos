@@ -17,6 +17,7 @@ interface TransactionVoutProps {
     index?: number
     expanded?: boolean;
     spend: ISpend;
+    highlightAddress?: string;
 }
 
 export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
@@ -26,13 +27,16 @@ export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
         index,
         expanded,
         spend,
+        highlightAddress,
     } = props;
 
     const unspendable_types = [ 'op_return', 'provably_unspendable', 'fee' ];
 
+    const isHighlighted = highlightAddress && vout.scripthash_address === highlightAddress;
+
     const wrapper = (children: ReactNode, description: ReactNode) => {
         return (
-            <div className={classNames(cls.TxVout, className)}>
+            <div className={classNames(cls.TxVout, className, { [cls.highlighted]: isHighlighted })}>
                 <div className={cls.header}>
                     <HStack align="start">
                         <span className={cls.index}>{`#${index}`}</span>
