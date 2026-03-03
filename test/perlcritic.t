@@ -11,7 +11,7 @@ eval "require Perl::Critic" or do { ## no critic (BuiltinFunctions::ProhibitStri
     exit;
 };
 
-my $critic = Perl::Critic->new(-severity => 5);
+my $critic = Perl::Critic->new(-severity => 5, -profile => "$Bin/../.perlcriticrc");
 my @violations;
 
 sub check_file {
