@@ -90,7 +90,7 @@ export const TxVin = memo(function TxVin(props: TransactionVinProps) {
                 </div>
 
                 <div className={cls.vinBodyRow}>
-                    <div>{t('txid:vout')}</div>
+                    <div>txid:vout</div>
                     <div>{linkToParentOut(vin.txid, vin.vout.toString())}</div>
                 </div>
 
