@@ -6,7 +6,6 @@ CREATE TABLE `block` (
   size int unsigned NOT NULL,
   weight bigint unsigned NOT NULL,
   upgraded bigint unsigned NOT NULL DEFAULT 0,
-  downgraded bigint unsigned NOT NULL DEFAULT 0,
   reward_fund bigint unsigned NOT NULL DEFAULT 0,
   min_fee bigint unsigned NOT NULL DEFAULT 0,
   prev_hash binary(32) DEFAULT NULL,

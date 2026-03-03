@@ -27,7 +27,6 @@ use constant FIELDS => {
     size        => NUMERIC,
     weight      => NUMERIC,
     upgraded    => NUMERIC,
-    downgraded  => NUMERIC,
     reward_fund => NUMERIC,
     min_fee     => NUMERIC,
     prev_hash   => BINARY,
@@ -173,14 +172,9 @@ sub reorg_penalty {
     return 0 if $self->height - $branch_start->height < INCORE_LEVELS;
     my $reorg_blocks = (timeslot($self->time) - timeslot($branch_start->time)) / BLOCK_INTERVAL - FORCE_BLOCKS;
     return 0 if $reorg_blocks <= 0;
-    my $upgraded_btc   = $self->upgraded   - $branch_start->upgraded;
-    my $downgraded_btc = ($self->downgraded // 0) - ($branch_start->downgraded // 0);
-    my $coinbase_btc   = $upgraded_btc + $downgraded_btc; # gross BTC from coinbases
-    my $level_end   = level_by_total($self->upgraded);
-    my $level_start = level_by_total($branch_start->upgraded);
-    my $coinbase_qbtc = sqrt(upgrade_value($coinbase_btc,   $level_end) * upgrade_value($coinbase_btc,   $level_start)); # not fully accurate, but good enough for penalty calculation
-    my $burn_qbtc     = sqrt(upgrade_value($downgraded_btc, $level_end) * upgrade_value($downgraded_btc, $level_start));
-    my $coinbase_weight = ($coinbase_qbtc * COINBASE_WEIGHT_TIME + $burn_qbtc * QBT_BURN_VIRT_AGE) / BLOCK_INTERVAL;
+    my $upgraded_btc = $self->upgraded - $branch_start->upgraded;
+    my $upgraded = sqrt(upgrade_value($upgraded_btc, level_by_total($self->upgraded)) * upgrade_value($upgraded_btc, level_by_total($branch_start->upgraded))); # not fully accurate, but good enough for penalty calculation
+    my $coinbase_weight = $upgraded * COINBASE_WEIGHT_TIME / BLOCK_INTERVAL;
     my $stake_weight = $self->weight - $branch_start->weight - $coinbase_weight;
     return 0 if $stake_weight <= 0;
     my $coef;
