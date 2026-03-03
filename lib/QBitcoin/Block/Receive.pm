@@ -318,7 +318,8 @@ sub want_cleanup_branch {
     no warnings 'recursion'; # recursion may be deeper than perl default 100 levels
     my ($block) = @_;
     while (1) {
-        return 0 if $block->received_from && $block->received_from->syncing;
+        return 0 if $block->received_from && $block->received_from->syncing
+            && ($block->received_from->has_weight // -1) > QBitcoin::Block->best_weight;
         return 0 if $block->height > ($HEIGHT // -1) - INCORE_LEVELS;
         my @descendants = $block->descendants;
         # avoid too deep recursion
