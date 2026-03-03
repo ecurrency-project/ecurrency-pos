@@ -12,7 +12,7 @@ use Time::HiRes;
 use List::Util qw(sum0);
 use QBitcoin::Const;
 use QBitcoin::Config;
-use QBitcoin::ValueUpgraded qw(level_by_total downgrade_value);
+use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::Log;
 use QBitcoin::Transaction;
 use QBitcoin::MinFee qw(min_fee);
@@ -32,8 +32,7 @@ sub validate {
             my $genesis_hash = $config->{testnet} ? GENESIS_HASH_TESTNET : GENESIS_HASH;
             $block->hash eq $genesis_hash
                 or return "Incorrect genesis block hash " . unpack("H*", $block->hash) . ", must be " . unpack("H*", $genesis_hash);
-            $block->upgraded   = 0; # Genesis block has no upgrades
-            $block->downgraded = 0; # Genesis block has no downgrades
+            $block->upgraded = 0; # Genesis block has no upgrades
             $block->reward_fund = 0;
             $block->size = sum0(map { $_->size } @{$block->transactions});
             $block->min_fee = 0;
@@ -57,8 +56,7 @@ sub validate {
     my $empty_tx = 0;
     my $low_fee_tx = 0;
     my $min_fee = min_fee($block->prev_block, $block_size);
-    my $upgraded   = $block->prev_block ? $block->prev_block->upgraded   // 0 : 0;
-    my $downgraded = $block->prev_block ? $block->prev_block->downgraded // 0 : 0;
+    my $upgraded = $block->prev_block ? $block->prev_block->upgraded // 0 : 0;
     my $min_block_fee;
     my $was_standard;
     my $was_burn;
@@ -89,9 +87,6 @@ sub validate {
             if ($was_standard && !$config->{regtest}) {
                 return "Burn transaction " . $transaction->hash_str . " must not be after standard transaction $was_standard";
             }
-            my $btc_value = downgrade_value($transaction->fee, $upgraded);
-            $upgraded   -= $btc_value;
-            $downgraded += $btc_value;
             $was_burn = $transaction->hash_str;
         }
         elsif ($transaction->is_standard || $transaction->is_tokens) {
@@ -125,8 +120,7 @@ sub validate {
     }
     $stake_reward == $block_reward
         or return "Incorrect stake reward for block " . $block->height . ": $stake_reward, expected $block_reward";
-    $block->upgraded   = $upgraded;
-    $block->downgraded = $downgraded;
+    $block->upgraded = $upgraded;
     $block->reward_fund = $block->prev_block ? $block->prev_block->reward_fund + $fee - $block_reward : 0;
     $block->size = $block_size;
     $block->min_fee = $block_size > MAX_BLOCK_SIZE / 2 ? $min_block_fee : $min_fee;
