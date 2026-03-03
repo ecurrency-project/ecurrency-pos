@@ -263,8 +263,9 @@ sub generate {
         Infof("Generated stake tx %s with input amount %lu, consume %lu fee", $stake_tx->hash_str,
             sum0(map { $_->{txo}->value } @{$stake_tx->in}), -$stake_tx->fee);
         # It's possible that the $stake_tx has no my_txo, so it may be not unique, already received or pending
-        # Ignore if already received; process if pending
-        if (QBitcoin::Transaction->check_by_hash($stake_tx->hash)) {
+        # Ignore if already received or pending (pending means its output TXO is already in %TXO cache)
+        if (QBitcoin::Transaction->check_by_hash($stake_tx->hash) ||
+            QBitcoin::Transaction->has_pending($stake_tx->hash)) {
             Warningf("Generated stake tx %s already known, skip block generation", $stake_tx->hash_str);
             return;
         }
