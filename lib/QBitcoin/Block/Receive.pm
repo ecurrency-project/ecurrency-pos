@@ -10,6 +10,7 @@ use QBitcoin::TXO;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced);
 use QBitcoin::ConnectionList;
 use QBitcoin::Generate::Control;
+use QBitcoin::Notify;
 use QBitcoin::Peer;
 use Role::Tiny; # This is role for QBitcoin::Block;
 
@@ -221,6 +222,13 @@ sub receive {
     }
     for (my $bl = $new_best; $bl; $bl = $bl->next_block) {
         $best_block[$bl->height] = $bl;
+    }
+
+    # Notify about confirmed transactions to tracked addresses
+    if (!$loaded && blockchain_synced() && QBitcoin::Notify->enabled()) {
+        for (my $bl = $new_best; $bl; $bl = $bl->next_block) {
+            QBitcoin::Notify->check_block($bl);
+        }
     }
 
     if ($self->received_from && $self->self_weight) {
