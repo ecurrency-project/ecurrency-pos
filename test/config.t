@@ -1,6 +1,9 @@
-#! /usr/bin/perl
+#! /usr/bin/env perl
 use warnings;
 use strict;
+
+use FindBin '$Bin';
+use lib ("$Bin/../lib", "$Bin/lib");
 
 use Test::More;
 use QBitcoin::Config qw($config read_config);
