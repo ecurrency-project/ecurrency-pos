@@ -1175,6 +1175,41 @@ sub cmd_importprivkey {
     return $self->response_ok("Private key for address $address imported");
 }
 
+$PARAMS{importaddress} = "address";
+$HELP{importaddress} = qq(
+importaddress "address"
+
+Adds a watch-only address to the wallet.
+Transactions to this address will be tracked and generate notifications
+if a notification channel is configured.
+
+Arguments:
+1. address    (string, required) The qbitcoin address to watch
+
+Result:
+"str"    (string) Result message
+
+Examples:
+> qbitcoin-cli importaddress "bqXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+);
+sub cmd_importaddress {
+    my $self = shift;
+    my $address_str = $self->args->[0];
+    my $scripthash = scripthash_by_address($address_str);
+
+    # Check if already exists
+    if (QBitcoin::MyAddress->get_by_hash($scripthash)) {
+        return $self->response_ok("Address $address_str is already in the wallet");
+    }
+
+    # Create watch-only address (no private_key)
+    QBitcoin::MyAddress->create({
+        address => $address_str,
+    });
+
+    return $self->response_ok("Watch-only address $address_str imported");
+}
+
 $PARAMS{dumpprivkey} = "address";
 $HELP{dumpprivkey} = qq(
 dumpprivkey "address"
@@ -1466,10 +1501,11 @@ $HELP{listmyaddresses} = qq(
 Returns the list of addresses in the wallet.
 
 Result:
-{                           (json object) json object with addresses as keys
-  "address" : {             (json object) json object with information about address
-    "algo" : [ "str" ],     (json array) list of crypto algorithms supported by the address
-    "staked" : true|false   (boolean) whether the address is used for staking (block validation)
+{                              (json object) json object with addresses as keys
+  "address" : {                (json object) json object with information about address
+    "algo" : [ "str" ],        (json array) list of crypto algorithms supported by the address
+    "staked" : true|false      (boolean) whether the address is used for staking (block validation)
+    "watchonly" : true|false   (boolean) whether the address is watch-only (no private key)
   },
   ...
 }
@@ -1483,8 +1519,11 @@ sub cmd_listmyaddresses {
     my %list;
     foreach my $my_address (QBitcoin::MyAddress->my_address) {
         $list{$my_address->address} = {
-            algo   => [ map { CRYPT_ALGO_NAMES->{$_} } $my_address->algo ],
-            staked => $my_address->staked ? TRUE : FALSE,
+            algo      => $my_address->private_key
+                           ? [ map { CRYPT_ALGO_NAMES->{$_} } $my_address->algo ]
+                           : [],
+            staked    => $my_address->staked ? TRUE : FALSE,
+            watchonly => $my_address->is_watchonly ? TRUE : FALSE,
         };
     }
     $self->response_ok(\%list);

@@ -1,0 +1,212 @@
+#! /usr/bin/env perl
+use warnings;
+use strict;
+
+use Getopt::Long qw(:config bundling no_ignore_case no_auto_abbrev require_order);
+use HTTP::Tiny;
+use JSON::XS;
+use IO::Socket::INET;
+use POSIX qw(strftime);
+
+my $JSON = JSON::XS->new->utf8;
+
+sub main {
+    my ($help, $source_file, $source_udp, $url, $conffile, $verbose);
+
+    unless (GetOptions(
+        'help|h|?'      => \$help,
+        'source-file=s' => \$source_file,
+        'source-udp=s'  => \$source_udp,
+        'url=s'         => \$url,
+        'config|f=s'    => \$conffile,
+        'verbose|v'     => \$verbose,
+    )) {
+        select STDERR;
+        usage();
+        return 1;
+    }
+    if ($help) {
+        usage();
+        return 0;
+    }
+
+    if ($conffile) {
+        read_config($conffile, \$source_file, \$source_udp, \$url);
+    }
+
+    if (!$source_file && !$source_udp) {
+        print STDERR "Error: specify --source-file or --source-udp\n";
+        usage();
+        return 1;
+    }
+    if (!$url) {
+        print STDERR "Error: --url is required\n";
+        usage();
+        return 1;
+    }
+
+    if ($source_udp) {
+        return run_udp($source_udp, $url, $verbose);
+    }
+    else {
+        return run_file($source_file, $url, $verbose);
+    }
+}
+
+sub read_config {
+    my ($conffile, $source_file_ref, $source_udp_ref, $url_ref) = @_;
+    open(my $fh, '<', $conffile) or die "Cannot open config file $conffile: $!\n";
+    while (<$fh>) {
+        s/#.*//;
+        s/^\s+//;
+        s/\s+$//;
+        next unless length;
+        my ($key, $value) = split(/\s*=\s*/, $_, 2);
+        $key = lc $key;
+        $key =~ s/-/_/g;
+        $value =~ s/^["']|["']$//g if defined $value;
+        if ($key eq 'source_file' && !$$source_file_ref) {
+            $$source_file_ref = $value;
+        }
+        elsif ($key eq 'source_udp' && !$$source_udp_ref) {
+            $$source_udp_ref = $value;
+        }
+        elsif ($key eq 'url' && !$$url_ref) {
+            $$url_ref = $value;
+        }
+    }
+    close $fh;
+}
+
+sub usage {
+    print "QBitcoin Address Notification Service\n";
+    print "Usage:  qbitcoin-notify [options]\n";
+    print "Options:\n";
+    print "   -h, -? --help              - print this help message and exit,\n";
+    print "   --source-file <path>       - read events from file or named pipe,\n";
+    print "   --source-udp <port>        - listen for events on UDP port,\n";
+    print "   --url <http://...>         - destination URL for HTTP POST notifications,\n";
+    print "   -f, --config <file>        - config file,\n";
+    print "   -v, --verbose              - print events to stdout.\n";
+}
+
+sub send_notification {
+    my ($url, $event, $verbose) = @_;
+
+    my $payload = $JSON->encode($event);
+
+    if ($verbose) {
+        my $time_str = strftime("%Y-%m-%d %H:%M:%S", localtime($event->{timestamp}));
+        printf("[%s] %s address=%s value=%s txid=%s height=%d\n",
+            $time_str,
+            $event->{block_height} == -1 ? "MEMPOOL" : "CONFIRMED",
+            $event->{address}, $event->{value}, substr($event->{txid}, 0, 16) . "...",
+            $event->{block_height});
+    }
+
+    my $ua = HTTP::Tiny->new(timeout => 10);
+    my $response = $ua->post($url, {
+        headers => { 'Content-Type' => 'application/json' },
+        content => $payload,
+    });
+
+    if (!$response->{success}) {
+        warn sprintf("HTTP POST failed: %s %s (url: %s)\n",
+            $response->{status}, $response->{reason}, $url);
+    }
+
+    return $response->{success};
+}
+
+sub parse_event {
+    my ($line) = @_;
+    chomp $line;
+    return undef unless length $line;
+
+    my @fields = split(/\t/, $line);
+    if (@fields != 5) {
+        warn "Invalid event line (expected 5 fields, got " . scalar(@fields) . "): $line\n";
+        return undef;
+    }
+
+    return {
+        timestamp    => $fields[0] + 0,
+        address      => $fields[1],
+        value        => $fields[2] + 0,
+        txid         => $fields[3],
+        block_height => $fields[4] + 0,
+    };
+}
+
+sub run_udp {
+    my ($port, $url, $verbose) = @_;
+
+    my $socket = IO::Socket::INET->new(
+        LocalPort => $port,
+        Proto     => 'udp',
+    ) or die "Cannot bind UDP port $port: $!\n";
+
+    print "Listening for events on UDP port $port\n";
+    print "Sending notifications to $url\n";
+
+    while (1) {
+        my $data;
+        $socket->recv($data, 4096);
+        next unless defined $data && length $data;
+
+        # A single UDP packet may contain multiple lines
+        foreach my $line (split(/\n/, $data)) {
+            my $event = parse_event($line);
+            next unless $event;
+            send_notification($url, $event, $verbose);
+        }
+    }
+
+    return 0;
+}
+
+sub run_file {
+    my ($path, $url, $verbose) = @_;
+
+    print "Reading events from $path\n";
+    print "Sending notifications to $url\n";
+
+    while (1) {
+        if (!open(my $fh, '<', $path)) {
+            warn "Cannot open $path: $! (retrying in 5s)\n";
+            sleep 5;
+            next;
+        }
+        else {
+            # For regular files, seek to end to only process new events
+            # For pipes/FIFOs, seek has no effect (which is fine)
+            seek($fh, 0, 2);
+
+            while (1) {
+                my $line = <$fh>;
+                if (defined $line) {
+                    my $event = parse_event($line);
+                    if ($event) {
+                        send_notification($url, $event, $verbose);
+                    }
+                }
+                else {
+                    # EOF: for regular file, wait and retry; for pipe, reader sees EOF when writer closes
+                    if (-p $path) {
+                        # Named pipe: writer closed, reopen
+                        last;
+                    }
+                    # Regular file: wait for more data (like tail -f)
+                    sleep 1;
+                    # Clear EOF condition
+                    seek($fh, 0, 1);
+                }
+            }
+            close $fh;
+        }
+    }
+
+    return 0;
+}
+
+exit main();

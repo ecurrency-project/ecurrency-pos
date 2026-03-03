@@ -13,6 +13,7 @@ use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::Network;
 use QBitcoin::Revalidate qw(revalidate);
+use QBitcoin::Notify;
 use Bitcoin::Protocol;
 
 sub main {
@@ -46,6 +47,8 @@ sub main {
         'log=s'           => \$opts{log},
         'loglevel=s'      => \$opts{loglevel},
         'revalidate'      => \$opts{revalidate},
+        'notify-file=s'   => \$opts{notify_file},
+        'notify-udp=s'    => \$opts{notify_udp},
         'config|f=s'      => \$conffile,
     )) {
         select STDERR;
@@ -80,6 +83,10 @@ sub main {
     }
 
     QBitcoin::Log->init();
+
+    if ($config->{notify_file} || $config->{notify_udp}) {
+        QBitcoin::Notify->init();
+    }
 
     if ($opts{revalidate}) {
         revalidate();
@@ -123,7 +130,9 @@ sub usage {
     print "   -G, --genesis               - run as genesis node, do not need to synchronize with other nodes for authoritative answers,\n";
     print "   -t, --testnet               - run for testnet, by default mainnet,\n";
     print "   --log <file>                - write log to <file>, 'syslog' for syslog (default),\n";
-    print "   --loglevel <prio>           - set log level: 'debug', 'info' (default), 'notice', 'warning', 'err', 'crit'.\n";
+    print "   --loglevel <prio>           - set log level: 'debug', 'info' (default), 'notice', 'warning', 'err', 'crit',\n";
+    print "   --notify-file <path>        - write address tracking events to <path> (file or named pipe),\n";
+    print "   --notify-udp <host:port>    - send address tracking events via UDP to <host>:<port>.\n";
 }
 
 exit main();

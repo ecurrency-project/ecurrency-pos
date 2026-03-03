@@ -15,6 +15,7 @@ use QBitcoin::TXO;
 use QBitcoin::Coinbase;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::ConnectionList;
+use QBitcoin::Notify;
 use Bitcoin::Serialized;
 use Bitcoin::Address qw(is_btc_address);
 
@@ -135,6 +136,13 @@ sub save {
     foreach my $in (@{$self->in}) {
         # Exclude from my utxo spent unconfirmed, do not use them for stake transactions
         $in->{txo}->del_my_utxo() if $self->fee >= 0 && $in->{txo}->is_my;
+    }
+
+    # Notify about outputs to tracked addresses (mempool event)
+    if (QBitcoin::Notify->enabled()) {
+        foreach my $txo (@{$self->out}) {
+            QBitcoin::Notify->check_output($txo, $self) if $txo->is_my;
+        }
     }
 
     return 0;

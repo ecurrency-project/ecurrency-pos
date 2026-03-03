@@ -8,7 +8,7 @@ use QBitcoin::Accessors qw(mk_accessors new);
 use QBitcoin::Const;
 use QBitcoin::ORM qw(find update :types);
 use QBitcoin::Crypto qw(hash160 hash256 pk_import pk_alg);
-use QBitcoin::Address qw(wif_to_pk address_by_pubkey script_by_pubkey script_by_pubkeyhash addresses_by_pubkey);
+use QBitcoin::Address qw(wif_to_pk address_by_pubkey script_by_pubkey script_by_pubkeyhash addresses_by_pubkey scripthash_by_address);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(my_address stake_address);
@@ -83,8 +83,14 @@ sub create {
     return $self;
 }
 
+sub is_watchonly {
+    my $self = shift;
+    return !$self->private_key;
+}
+
 sub address {
     my $self = shift;
+    return $self->{address} if $self->is_watchonly;
     if (!$self->{addr}) {
         $self->{addr} = address_by_pubkey($self->pubkey // (return undef), $self->algo // return undef);
         if ($self->{address} && $self->{address} ne $self->{addr}) {
@@ -120,7 +126,14 @@ sub get_by_hash {
     if (!$MY_HASHES) {
         $MY_HASHES = {};
         foreach my $address (my_address()) {
-            foreach my $scripthash ($address->scripthash) {
+            if ($address->private_key) {
+                foreach my $scripthash ($address->scripthash) {
+                    $MY_HASHES->{$scripthash} = $address;
+                }
+            }
+            else {
+                # Watch-only: derive scripthash from address string
+                my $scripthash = scripthash_by_address($address->{address});
                 $MY_HASHES->{$scripthash} = $address;
             }
         }
