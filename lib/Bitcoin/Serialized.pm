@@ -35,8 +35,8 @@ sub get {
 sub varint {
     my ($num) = @_;
     return $num < 0xFD ? pack("C", $num) :
-        $num < 0xFFFF ? pack("Cv", 0xFD, $num) :
-        $num < 0xFFFFFFFF ? pack("CV", 0xFE, $num) :
+        $num <= 0xFFFF ? pack("Cv", 0xFD, $num) :
+        $num <= 0xFFFFFFFF ? pack("CV", 0xFE, $num) :
         pack("CQ<", 0xFF, $num);
 }
 
