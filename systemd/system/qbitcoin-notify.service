@@ -1,0 +1,16 @@
+[Unit]
+Description=QBitcoin address notification service
+After=qbitcoind.service
+BindsTo=qbitcoind.service
+
+[Service]
+ExecStart=/usr/local/bin/qbitcoin-notify
+User=qbitcoin
+Group=qbitcoin
+ProtectSystem=full
+PrivateTmp=true
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
