@@ -64,6 +64,11 @@ RUN { \
     exit 1; \
   fi; \
   /qbitcoin/bin/qbitcoin-init --dbi=${dbi} --database=${database} /qbitcoin/db && \
+  notify_args=""; \
+  if [ -n "${notify_url}" ]; then \
+    /qbitcoin/bin/qbitcoin-notify --source-udp="9554" --url="${notify_url}" --verbose & \
+    notify_args="--notify-udp=127.0.0.1:9554"; \
+  fi; \
   exec /qbitcoin/bin/qbitcoind \
       --peer=node.qbitcoin.net \
       --dbi=${dbi} \
@@ -71,6 +76,7 @@ RUN { \
       --rpc="*:9556" \
       --log=/dev/null \
       --verbose ${debug:+$( [ "$debug" = "0" ] || echo --debug )} \
+      ${notify_args:+${notify_args}} \
       $@'; \
   } > /qbitcoin/bin/run-qbitcoin.sh \
   && chmod +x /qbitcoin/bin/run-qbitcoin.sh
@@ -80,6 +86,7 @@ ENV PATH=${PATH}:/qbitcoin/bin
 ENV dbi=sqlite
 ENV database=qbitcoin
 ENV debug=
+ENV notify_url=
 # Workaround mariadb-connector-c 3.4x in alpine 3.23 which fail to connect without SSL by default
 ENV MARIADB_TLS_DISABLE_PEER_VERIFICATION=1
 
