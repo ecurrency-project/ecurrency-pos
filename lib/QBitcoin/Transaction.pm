@@ -10,7 +10,7 @@ use QBitcoin::Log;
 use QBitcoin::Config;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ORM qw(find fetch create delete :types);
-use QBitcoin::Crypto qw(hash256);
+use QBitcoin::Crypto qw(hash256 hash160);
 use QBitcoin::TXO;
 use QBitcoin::Coinbase;
 use QBitcoin::ValueUpgraded qw(level_by_total);
@@ -19,6 +19,11 @@ use Bitcoin::Serialized;
 
 use Role::Tiny::With;
 with 'QBitcoin::Transaction::Signature';
+
+# Scripthash of the qbt_burn address (QBT_BURN_SCRIPT), precomputed once.
+# Outputs to this scripthash whose data field contains a valid Bitcoin address
+# string (ASCII) are downgrade requests; the address is shown by decoderawtransaction.
+use constant QBT_BURN_SCRIPTHASH => hash160(QBT_BURN_SCRIPT);
 
 use constant FIELDS => {
     id           => NUMERIC, # db primary key for reference links
@@ -970,6 +975,11 @@ sub validate {
                     $self->hash_str, $txo->tx_in_str, $txo->num);
                 return -1;
             }
+        }
+        elsif (($txo->scripthash // "") eq QBT_BURN_SCRIPTHASH) {
+            Warningf("Non-burn transaction %s attempts to spend qbt_burn output %s:%u",
+                $self->hash_str, $txo->tx_in_str, $txo->num);
+            return -1;
         }
         $input_value += $txo->value;
     }
