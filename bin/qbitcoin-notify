@@ -6,20 +6,38 @@ use Getopt::Long qw(:config bundling no_ignore_case no_auto_abbrev require_order
 use HTTP::Tiny;
 use JSON::XS;
 use IO::Socket::INET;
-use POSIX qw(strftime);
+use POSIX qw(strftime :sys_wait_h);
+
+use constant MAX_CHILDREN_DEFAULT => 10;
 
 my $JSON = JSON::XS->new->utf8;
 
+my %children_per_url; # $url => count of active child processes
+
+sub reap_children {
+    while ((my $pid = waitpid(-1, WNOHANG)) > 0) {
+        # Find which URL this child belonged to and decrement
+        for my $url (keys %children_per_url) {
+            if (delete $children_per_url{$url}{$pid}) {
+                last;
+            }
+        }
+    }
+}
+
+$SIG{CHLD} = \&reap_children;
+
 sub main {
-    my ($help, $source_file, $source_udp, $url, $conffile, $verbose);
+    my ($help, $source_file, $source_udp, @urls, $conffile, $verbose, $max_children);
 
     unless (GetOptions(
         'help|h|?'      => \$help,
         'source-file=s' => \$source_file,
         'source-udp=s'  => \$source_udp,
-        'url=s'         => \$url,
+        'url=s'         => \@urls,
         'config|f=s'    => \$conffile,
         'verbose|v'     => \$verbose,
+        'max-children=i' => \$max_children,
     )) {
         select STDERR;
         usage();
@@ -31,7 +49,7 @@ sub main {
     }
 
     if ($conffile) {
-        read_config($conffile, \$source_file, \$source_udp, \$url);
+        read_config($conffile, \$source_file, \$source_udp, \@urls, \$max_children);
     }
 
     if (!$source_file && !$source_udp) {
@@ -39,22 +57,24 @@ sub main {
         usage();
         return 1;
     }
-    if (!$url) {
+    if (!@urls) {
         print STDERR "Error: --url is required\n";
         usage();
         return 1;
     }
 
+    $max_children //= MAX_CHILDREN_DEFAULT;
+
     if ($source_udp) {
-        return run_udp($source_udp, $url, $verbose);
+        return run_udp($source_udp, \@urls, $verbose, $max_children);
     }
     else {
-        return run_file($source_file, $url, $verbose);
+        return run_file($source_file, \@urls, $verbose, $max_children);
     }
 }
 
 sub read_config {
-    my ($conffile, $source_file_ref, $source_udp_ref, $url_ref) = @_;
+    my ($conffile, $source_file_ref, $source_udp_ref, $urls_ref, $max_children_ref) = @_;
     open(my $fh, '<', $conffile) or die "Cannot open config file $conffile: $!\n";
     while (<$fh>) {
         s/#.*//;
@@ -71,8 +91,11 @@ sub read_config {
         elsif ($key eq 'source_udp' && !$$source_udp_ref) {
             $$source_udp_ref = $value;
         }
-        elsif ($key eq 'url' && !$$url_ref) {
-            $$url_ref = $value;
+        elsif ($key eq 'url') {
+            push @$urls_ref, $value;
+        }
+        elsif ($key eq 'max_children' && !$$max_children_ref) {
+            $$max_children_ref = $value + 0;
         }
     }
     close $fh;
@@ -85,15 +108,20 @@ sub usage {
     print "   -h, -? --help              - print this help message and exit,\n";
     print "   --source-file <path>       - read events from file or named pipe,\n";
     print "   --source-udp <port>        - listen for events on UDP port,\n";
-    print "   --url <http://...>         - destination URL for HTTP POST notifications,\n";
+    print "   --url <http://...>         - destination URL for HTTP POST notifications\n";
+    print "                                (can be specified multiple times),\n";
+    print "   --max-children <N>         - max parallel HTTP requests per URL (default: " . MAX_CHILDREN_DEFAULT . "),\n";
     print "   -f, --config <file>        - config file,\n";
     print "   -v, --verbose              - print events to stdout.\n";
 }
 
-sub send_notification {
-    my ($url, $event, $verbose) = @_;
+sub url_children_count {
+    my ($url) = @_;
+    return scalar keys %{$children_per_url{$url} // {}};
+}
 
-    my $payload = $JSON->encode($event);
+sub send_notifications {
+    my ($urls, $event, $verbose, $max_children) = @_;
 
     if ($verbose) {
         my $time_str = strftime("%Y-%m-%d %H:%M:%S", localtime($event->{timestamp}));
@@ -104,18 +132,35 @@ sub send_notification {
             $event->{block_height});
     }
 
-    my $ua = HTTP::Tiny->new(timeout => 10);
-    my $response = $ua->post($url, {
-        headers => { 'Content-Type' => 'application/json' },
-        content => $payload,
-    });
+    my $payload = $JSON->encode($event);
 
-    if (!$response->{success}) {
-        warn sprintf("HTTP POST failed: %s %s (url: %s)\n",
-            $response->{status}, $response->{reason}, $url);
+    for my $url (@$urls) {
+        reap_children();
+        if (url_children_count($url) >= $max_children) {
+            warn "Too many pending requests for $url, dropping event\n";
+            next;
+        }
+        my $pid = fork();
+        if (!defined $pid) {
+            warn "fork() failed: $!\n";
+            next;
+        }
+        if ($pid == 0) {
+            # Child process
+            my $ua = HTTP::Tiny->new(timeout => 10);
+            my $response = $ua->post($url, {
+                headers => { 'Content-Type' => 'application/json' },
+                content => $payload,
+            });
+            if (!$response->{success}) {
+                warn sprintf("HTTP POST failed: %s %s (url: %s)\n",
+                    $response->{status}, $response->{reason}, $url);
+            }
+            exit($response->{success} ? 0 : 1);
+        }
+        # Parent: track the child
+        $children_per_url{$url}{$pid} = 1;
     }
-
-    return $response->{success};
 }
 
 sub parse_event {
@@ -139,7 +184,7 @@ sub parse_event {
 }
 
 sub run_udp {
-    my ($port, $url, $verbose) = @_;
+    my ($port, $urls, $verbose, $max_children) = @_;
 
     my $socket = IO::Socket::INET->new(
         LocalPort => $port,
@@ -147,7 +192,7 @@ sub run_udp {
     ) or die "Cannot bind UDP port $port: $!\n";
 
     print "Listening for events on UDP port $port\n";
-    print "Sending notifications to $url\n";
+    print "Sending notifications to: " . join(", ", @$urls) . "\n";
 
     while (1) {
         my $data;
@@ -158,7 +203,7 @@ sub run_udp {
         foreach my $line (split(/\n/, $data)) {
             my $event = parse_event($line);
             next unless $event;
-            send_notification($url, $event, $verbose);
+            send_notifications($urls, $event, $verbose, $max_children);
         }
     }
 
@@ -166,10 +211,10 @@ sub run_udp {
 }
 
 sub run_file {
-    my ($path, $url, $verbose) = @_;
+    my ($path, $urls, $verbose, $max_children) = @_;
 
     print "Reading events from $path\n";
-    print "Sending notifications to $url\n";
+    print "Sending notifications to: " . join(", ", @$urls) . "\n";
 
     while (1) {
         if (!open(my $fh, '<', $path)) {
@@ -187,7 +232,7 @@ sub run_file {
                 if (defined $line) {
                     my $event = parse_event($line);
                     if ($event) {
-                        send_notification($url, $event, $verbose);
+                        send_notifications($urls, $event, $verbose, $max_children);
                     }
                 }
                 else {
