@@ -9,7 +9,6 @@ use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
 use QBitcoin::Address qw(wif_to_pk);
-use Bitcoin::Address qw(is_btc_address);
 use QBitcoin::Accessors qw(mk_accessors);
 
 mk_accessors(qw(validate_message));
@@ -110,10 +109,6 @@ sub validate_address {
     $_[0] =~ ($config->{testnet} ? ADDRESS_TESTNET_RE : ADDRESS_RE);
 }
 
-sub validate_btc_address {
-    return is_btc_address($_[0]);
-}
-
 sub is_amount {
     my $amount = shift;
     looks_like_number($amount) or return 0;
@@ -204,7 +199,7 @@ sub validate_outputs {
                 }
                 $token_control = 1;
             }
-            elsif (validate_address($key) || validate_btc_address($key)) {
+            elsif (validate_address($key)) {
                 (defined($out->{$key}) && !ref($out->{$key}) && is_amount($out->{$key}))
                     or return 0;
                 $address_count++;
