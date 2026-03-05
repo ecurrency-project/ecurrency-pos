@@ -8,7 +8,7 @@ use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
 use QBitcoin::ORM qw(dbh);
-use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair);
+use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Block;
 use QBitcoin::Coinbase;
 use QBitcoin::Transaction;
@@ -24,6 +24,7 @@ use QBitcoin::MinFee;
 use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
+use Bitcoin::Address qw(is_btc_address);
 
 my %PARAMS;
 my %HELP;
@@ -233,6 +234,7 @@ Result (for verbosity = 1):
   "size" : n,                     (numeric) The block size
   "weight" : n,                   (numeric) The block weight
   "height" : n,                   (numeric) The block height or index
+  "upgraded" : n,                 (numeric) Cumulative BTC satoshis converted to QBTC (net)
   "merkleroot" : "hex",           (string) The merkle root
   "tx" : [                        (json array) The transaction ids
     "hex",                        (string) The transaction id
@@ -280,6 +282,7 @@ sub cmd_getblock {
         merkleroot        => unpack("H*", $block->merkle_root),
         weight            => $block->weight,
         confirm_weight    => $best_block->weight - $block->weight,
+        upgraded          => $block->upgraded,
     };
     if ($verbosity == 1) {
         $res->{tx} = [ map { unpack("H*", $_) } @{$block->tx_hashes} ];
@@ -505,7 +508,20 @@ sub _create_txo {
         elsif ($key eq "token_symbol") {
             $token_attr[unpack("C", TOKEN_TXO_TYPE_SYMBOL)] = pack("C", length($out->{$key})) . $out->{$key};
         }
-        elsif (my $scripthash = scripthash_by_address($key)) {
+        elsif (is_btc_address($key)) {
+            # Bitcoin address as destination: create an output to the freeze1 address
+            # (QBT_BURN_SCRIPT) with the Bitcoin address string stored verbatim in the
+            # data field (ASCII bytes).  Supports P2PKH, P2SH, P2WPKH, P2WSH, P2TR.
+            # The downgrade service reads the address string from data directly and
+            # releases the corresponding BTC to that address.
+            my $value = int($out->{$key} * DENOMINATOR + 0.5);
+            push @txo, {
+                scripthash => hash160(QBT_BURN_SCRIPT),
+                value      => $value,
+                data       => $key,
+            };
+        }
+        elsif (my $scripthash = eval { scripthash_by_address($key) }) {
             my $value = int($out->{$key} * DENOMINATOR + 0.5);
             push @txo, { scripthash => $scripthash, value => $value };
         }
