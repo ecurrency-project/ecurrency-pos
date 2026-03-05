@@ -66,7 +66,11 @@ RUN { \
   /qbitcoin/bin/qbitcoin-init --dbi=${dbi} --database=${database} /qbitcoin/db && \
   notify_args=""; \
   if [ -n "${notify_url}" ]; then \
-    /qbitcoin/bin/qbitcoin-notify --source-udp="9554" --url="${notify_url}" --verbose & \
+    url_args=""; \
+    IFS=","; for u in ${notify_url}; do \
+      url_args="${url_args} --url=${u}"; \
+    done; unset IFS; \
+    /qbitcoin/bin/qbitcoin-notify --source-udp=9554 ${url_args} --verbose & \
     notify_args="--notify-udp=127.0.0.1:9554"; \
   fi; \
   exec /qbitcoin/bin/qbitcoind \
