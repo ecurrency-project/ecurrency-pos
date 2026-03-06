@@ -316,17 +316,23 @@ sub process_request {
                     }
                     my $private_key = eval { wif_to_pk($content->{private_key}) }
                         or return $self->http_response(400, "Invalid private key");
-                    my ($pk_alg) = pk_alg($private_key)
-                        or return $self->http_response(400, "Unsupported private key algorithm");
-                    my $privkey = pk_import($private_key, $pk_alg)
-                        or return $self->http_response(400, "Invalid private key");
-                    my $pubkey = $privkey->pubkey_by_privkey
-                        or return $self->http_response(400, "Invalid private key");
-                    $content->{address} eq address_by_pubkey($pubkey, $pk_alg)
-                        or return $self->http_response(400, "Private key does not match the address");
+                    my @algos = pk_alg($private_key);
+                    @algos or return $self->http_response(400, "Unsupported private key algorithm");
+                    my ($pk_alg, $pubkey);
+                    foreach my $algo (@algos) {
+                        my $privkey = pk_import($private_key, $algo) or next;
+                        my $pub = $privkey->pubkey_by_privkey or next;
+                        if ($content->{address} eq address_by_pubkey($pub, $algo)) {
+                            $pk_alg = $algo;
+                            $pubkey = $pub;
+                            last;
+                        }
+                    }
+                    $pk_alg or return $self->http_response(400, "Private key does not match the address");
                     my $my_address = QBitcoin::MyAddress->create({
                         private_key => wallet_import_format($private_key),
                         address     => $content->{address},
+                        algo        => $pk_alg,
                     });
                     QBitcoin::Generate->load_address_utxo($my_address);
                     return $self->http_ok({ address => $my_address->address });
