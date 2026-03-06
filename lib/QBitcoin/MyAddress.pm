@@ -19,11 +19,12 @@ use constant FIELDS => {
     address     => STRING,
     private_key => STRING,
     staked      => NUMERIC,
+    algo        => NUMERIC,
 };
 
 use constant PRIMARY_KEY => 'address';
 
-mk_accessors(qw(private_key staked));
+mk_accessors(qw(private_key staked algo));
 
 my $MY_ADDRESS;
 my $MY_HASHES;
@@ -44,7 +45,7 @@ sub stake_address {
 sub pubkey {
     my $self = shift;
     return $self->{pubkey} if $self->{pubkey};
-    my ($pk_alg) = $self->algo
+    my $pk_alg = $self->_pk_alg
         or return undef;
     my $pk = $self->privkey($pk_alg);
     return $self->{pubkey} = $pk->pubkey_by_privkey;
@@ -58,11 +59,40 @@ sub privkey {
     return $self->{privkey}->[$algo] //= pk_import(wif_to_pk($private_key), $algo);
 }
 
-sub algo {
+# Primary algorithm for this address (scalar)
+sub _pk_alg {
+    my $self = shift;
+    # Use stored algo if available
+    return $self->{algo} if $self->{algo};
+    # Determine from private key: try all matching algorithms,
+    # pick the one whose pubkey matches the stored address
+    my $private_key = $self->private_key
+        or return undef;
+    my @algos = pk_alg(wif_to_pk($private_key));
+    return undef unless @algos;
+    if ($self->{address} && @algos > 1) {
+        foreach my $algo (@algos) {
+            my $pk = $self->privkey($algo) or next;
+            my $pubkey = $pk->pubkey_by_privkey;
+            if (address_by_pubkey($pubkey, $algo) eq $self->{address}) {
+                return $self->{algo} = $algo;
+            }
+            # Also check alternative addresses
+            my @addrs = addresses_by_pubkey($pubkey, $algo);
+            if (grep { $_ eq $self->{address} } @addrs) {
+                return $self->{algo} = $algo;
+            }
+        }
+    }
+    return $self->{algo} = $algos[0];
+}
+
+# All matching algorithms for this private key (list)
+sub algo_list {
     my $self = shift;
     my $private_key = $self->private_key
         or return ();
-    return @{$self->{algo} //= [ pk_alg(wif_to_pk($private_key)) ]};
+    return @{$self->{algo_list} //= [ pk_alg(wif_to_pk($private_key)) ]};
 }
 
 sub pubkeyhash {
@@ -92,9 +122,10 @@ sub address {
     my $self = shift;
     return $self->{address} if $self->is_watchonly;
     if (!$self->{addr}) {
-        $self->{addr} = address_by_pubkey($self->pubkey // (return undef), $self->algo // return undef);
+        my $algo = $self->_pk_alg // return undef;
+        $self->{addr} = address_by_pubkey($self->pubkey // (return undef), $algo);
         if ($self->{address} && $self->{address} ne $self->{addr}) {
-            my @addr = addresses_by_pubkey($self->pubkey, $self->algo);
+            my @addr = addresses_by_pubkey($self->pubkey, $algo);
             if (grep { $_ eq $self->{address} } @addr ) {
                 $self->{addr} = $self->{address};
             } else {
@@ -117,7 +148,7 @@ sub redeem_script {
 sub scripthash {
     my $self = shift;
     return map { hash160($_), hash256($_) } $self->redeem_script if wantarray;
-    return $self->algo & CRYPT_ALGO_POSTQUANTUM ? hash256(scalar $self->redeem_script) : hash160(scalar $self->redeem_script);
+    return ($self->_pk_alg // 0) & CRYPT_ALGO_POSTQUANTUM ? hash256(scalar $self->redeem_script) : hash160(scalar $self->redeem_script);
 }
 
 sub get_by_hash {

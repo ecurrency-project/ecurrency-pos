@@ -1133,14 +1133,15 @@ sub cmd_getmempoolentry {
     return $self->response_ok($tx->as_hashref);
 }
 
-$PARAMS{importprivkey} = "privkey";
+$PARAMS{importprivkey} = "privkey address_type?";
 $HELP{importprivkey} = qq(
-importprivkey "privkey"
+importprivkey "privkey" ( address_type )
 
 Adds a private key (as returned by dumpprivkey) to your wallet.
 
 Arguments:
-1. privkey    (string, required) The private key (see dumpprivkey)
+1. privkey        (string, required) The private key (see dumpprivkey)
+2. address_type   (string, optional, default="ecdsa") The address type. Options are "ecdsa", "schnorr", "falcon".
 
 Result:
 null    (json null)
@@ -1153,14 +1154,20 @@ Dump a private key
 Import the private key
 > qbitcoin-cli importprivkey "mykey"
 
+Import as schnorr key
+> qbitcoin-cli importprivkey "mykey" "schnorr"
+
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "importprivkey", "params": ["mykey"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_importprivkey {
     my $self = shift;
     my $private_key = wif_to_pk($self->args->[0]);
-    my ($pk_alg) = pk_alg($private_key)
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Incorrect private key");
+    my $pk_alg = $self->args->[1];
+    if (!$pk_alg) {
+        ($pk_alg) = pk_alg($private_key)
+            or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Incorrect private key");
+    }
     my $privkey = pk_import($private_key, $pk_alg)
         or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Incorrect private key");
     my $pubkey = $privkey->pubkey_by_privkey
@@ -1169,6 +1176,7 @@ sub cmd_importprivkey {
     my $my_address = QBitcoin::MyAddress->create({
         private_key => wallet_import_format($private_key),
         address     => $address,
+        algo        => $pk_alg,
     });
     QBitcoin::Generate->load_address_utxo($my_address);
 
@@ -1575,7 +1583,7 @@ Returns a new qbitcoin address and private key.
 Private key is not stored in the wallet and can be imported using importprivkey.
 
 Arguments:
-1. address_type    (string, optional, default="ecdsa") The address type to use. Options are "ecdsa", "falcon".
+1. address_type    (string, optional, default="ecdsa") The address type to use. Options are "ecdsa", "schnorr", "falcon".
 
 Result:
 {
