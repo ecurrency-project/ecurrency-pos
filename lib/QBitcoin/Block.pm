@@ -191,9 +191,9 @@ sub reorg_penalty {
     else {
         $coef = 1;
     }
-    Debugf("Reorg penalty for block %s height %u (%u reorg blocks, %u seconds): %.2f%%\n",
+    Debugf("Reorg penalty for block %s height %u (%u reorg blocks, %u seconds): %.2f%%, %.0f",
         $self->hash_str, $self->height, $self->height - $branch_start->height,
-        $self->time - $branch_start->time, ($coef - 1) * 100);
+        $self->time - $branch_start->time, ($coef - 1) * 100, ($coef - 1) * $stake_weight);
     return ($coef - 1) * $stake_weight;
 }
 
