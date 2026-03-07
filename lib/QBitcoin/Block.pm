@@ -160,16 +160,16 @@ sub reorg_penalty {
     # But then decrease for prevent split-brain: 32 times for 900; 16 times for 3600; 8 times for 14400 blocks (~1 day), 4 times for 57600 blocks, 2 times for 230400 blocks, and no penalty for 921600 blocks (~3 months)
 
     return 0 if $self->height - $branch_start->height < INCORE_LEVELS;
+    my $reorg_blocks = (timeslot($self->time) - timeslot($branch_start->time)) / BLOCK_INTERVAL - FORCE_BLOCKS;
+    return 0 if $reorg_blocks <= 0;
     my $upgraded_btc = $self->upgraded - $branch_start->upgraded;
     my $upgraded = sqrt(upgrade_value($upgraded_btc, level_by_total($self->upgraded)) * upgrade_value($upgraded_btc, level_by_total($branch_start->upgraded))); # not fully accurate, but good enough for penalty calculation
     my $coinbase_weight = $upgraded * COINBASE_WEIGHT_TIME / BLOCK_INTERVAL;
     my $stake_weight = $self->weight - $branch_start->weight - $coinbase_weight;
     return 0 if $stake_weight <= 0;
-    my $reorg_blocks = (timeslot($self->time) - timeslot($branch_start->time)) / BLOCK_INTERVAL - INCORE_LEVELS;
     my $coef;
-    if ($reorg_blocks < 256) {
-        $coef = $reorg_blocks / 8;
-        $coef = 1 if $coef < 1;
+    if ($reorg_blocks < 248) {
+        $coef = $reorg_blocks / 8 + 1;
     }
     elsif ($reorg_blocks < 900) {
         $coef = 32;
