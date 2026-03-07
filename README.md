@@ -49,8 +49,9 @@ This should print the list of available node commands.
 
 The node uses the following network ports:
 
-- **9666** — peer-to-peer communication between nodes  
-- **9667** — management interface for `qbitcoin-cli` (by default bound to `localhost`)
+- **9555** — peer-to-peer communication between nodes  
+- **9556** — management interface for `qbitcoin-cli` (by default bound to `localhost`)
+- **9557** — for REST API (disabled by default, can be enabled in the configuration file)
 
 Make sure these ports are open in your firewall if required.
 
