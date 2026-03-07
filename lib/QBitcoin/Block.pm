@@ -169,6 +169,7 @@ sub reorg_penalty {
     my $coef;
     if ($reorg_blocks < 256) {
         $coef = $reorg_blocks / 8;
+        $coef = 1 if $coef < 1;
     }
     elsif ($reorg_blocks < 900) {
         $coef = 32;
