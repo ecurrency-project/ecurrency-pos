@@ -31,6 +31,11 @@ use strict;
 # << pong <payload>
 # Use "ping emempool" -> "pong emempool" for set mempool_synced state, this means all mempool transactions requested and sent
 
+# >> getaddr
+# << addr <count> <ip:16 port:2> ...  (peer address exchange)
+
+# << vernak <count> <ip:16 port:2> ...  (rejection with peer list, sent instead of verack when at capacity)
+
 # If our last known block height less than height_by_time, then batch request all blocks with height from last known to max available
 
 use parent 'QBitcoin::Protocol::Common';
@@ -61,7 +66,7 @@ use constant {
     REJECT_INVALID => 1,
 };
 
-mk_accessors(qw(has_weight best_block_hash));
+mk_accessors(qw(has_weight best_block_hash reject_with_peers));
 
 sub type_id() { PROTOCOL_QBITCOIN }
 
@@ -85,6 +90,11 @@ sub peer_id {
 sub cmd_version {
     my $self = shift;
 
+    if ($self->reject_with_peers) {
+        $self->send_vernak();
+        return -1;
+    }
+
     $self->send_message("verack", "");
     $self->greeted = 1;
     $self->request_btc_blocks() if UPGRADE_POW && !upgrade_finished() && !btc_synced();
@@ -93,11 +103,21 @@ sub cmd_version {
     if (my $best_block = QBitcoin::Block->best_block) {
         $self->announce_block($best_block);
     }
+    # Request peer addresses if we don't have enough peers
+    my @known_peers = grep { $_->reputation > 0 } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
+    if (@known_peers < MIN_CONNECTIONS * 2) {
+        $self->send_message("getaddr", "");
+    }
     return 0;
 }
 
 sub cmd_verack {
     my $self = shift;
+    # Request peer addresses if we don't have enough peers
+    my @known_peers = grep { $_->reputation > 0 } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
+    if (@known_peers < MIN_CONNECTIONS * 2) {
+        $self->send_message("getaddr", "");
+    }
     return 0;
 }
 
@@ -816,6 +836,70 @@ sub cmd_reject {
     my $self = shift;
     Warningf("%s peer %s aborted connection", $self->type, $self->peer->id);
     return -1;
+}
+
+sub _pack_peer_list {
+    my $self = shift;
+    my @peers = sort { $b->reputation <=> $a->reputation }
+                grep { $_->reputation > 0 && $_->port && $_->ip ne $self->peer->ip }
+                QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
+    splice(@peers, MAX_ADDR_PEERS) if @peers > MAX_ADDR_PEERS;
+    my $payload = pack("C", scalar(@peers));
+    $payload .= pack("a16n", $_->ip, $_->port) foreach @peers;
+    return $payload;
+}
+
+sub _parse_peer_list {
+    my $self = shift;
+    my ($data) = @_;
+    if (length($data) < 1) {
+        $self->abort("incorrect_params");
+        return -1;
+    }
+    my $count = unpack("C", substr($data, 0, 1));
+    if (length($data) != 1 + $count * 18) {
+        Errf("Incorrect peer list from %s: length %u, count %u", $self->peer->id, length($data), $count);
+        $self->abort("incorrect_params");
+        return -1;
+    }
+    for (my $i = 0; $i < $count; $i++) {
+        my ($ip, $port) = unpack("a16n", substr($data, 1 + $i * 18, 18));
+        QBitcoin::Peer->get_or_create(type_id => PROTOCOL_QBITCOIN, ip => $ip, port => $port);
+    }
+    return $count;
+}
+
+sub send_vernak { $_[0]->send_message("vernak", $_[0]->_pack_peer_list) }
+sub send_addr   { $_[0]->send_message("addr",   $_[0]->_pack_peer_list) }
+
+sub cmd_vernak {
+    my $self = shift;
+    my ($data) = @_;
+    my $count = $self->_parse_peer_list($data);
+    return -1 if $count < 0;
+    Infof("Received vernak with %u peer addresses from %s", $count, $self->peer->id);
+    $self->greeted = 1; # prevent failed_connect() increment, vernak is a graceful rejection
+    return -1;
+}
+
+sub cmd_getaddr {
+    my $self = shift;
+    my ($data) = @_;
+    if (length($data) != 0) {
+        $self->abort("incorrect_params");
+        return -1;
+    }
+    $self->send_addr();
+    return 0;
+}
+
+sub cmd_addr {
+    my $self = shift;
+    my ($data) = @_;
+    my $count = $self->_parse_peer_list($data);
+    return -1 if $count < 0;
+    Debugf("Received addr with %u peer addresses from %s", $count, $self->peer->id);
+    return 0;
 }
 
 sub keepalive {

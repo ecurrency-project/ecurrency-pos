@@ -82,7 +82,7 @@ sub receive {
                 # Reset "syncing" state if we received no commands between send "ping" and receive corresponding "pong"
                 $self->last_cmd_ping = undef;
             }
-            if ($command ne "version" && !$self->greeted) {
+            if ($command ne "version" && $command ne "vernak" && !$self->greeted) {
                 Errf("command [%s] before greeting from %s peer %s", $command, $self->type, $self->peer->id);
                 $self->abort("protocol_error");
                 return -1;

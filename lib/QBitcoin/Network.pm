@@ -194,7 +194,6 @@ sub main_loop {
             }
             else {
                 Infof("Incoming connection from %s", $peer_ip);
-                # TODO: close listen socket if too many incoming connections; open again after disconnect some of them
                 my $peer = QBitcoin::Peer->get_or_create(
                     ipv4    => $peer_addr,
                     host    => $peer_ip,
@@ -203,6 +202,8 @@ sub main_loop {
                 # TODO: drop connection from peers with too low reputation (banned)
                 my ($my_port, $my_addr) = unpack_sockaddr_in(getsockname($new_socket));
                 my $my_ip = inet_ntoa($my_addr);
+                my $in_count = grep { $_->type_id == PROTOCOL_QBITCOIN && $_->direction == DIR_IN }
+                               QBitcoin::ConnectionList->list();
                 my $connection = QBitcoin::Connection->new(
                     peer       => $peer,
                     socket     => $new_socket,
@@ -214,7 +215,13 @@ sub main_loop {
                     my_addr    => IPV6_V4_PREFIX . $my_addr,
                     direction  => DIR_IN,
                 );
-                $connection->protocol->startup();
+                if ($in_count >= ($config->{max_in_connections} // MAX_IN_CONNECTIONS)) {
+                    Infof("Too many incoming connections (%u), will send vernak to %s", $in_count, $peer_ip);
+                    $connection->protocol->reject_with_peers(1);
+                }
+                else {
+                    $connection->protocol->startup();
+                }
                 push @connections, $connection;
             }
         }
@@ -222,49 +229,63 @@ sub main_loop {
             my $peerinfo = accept(my $new_socket, $listen_rpc);
             my ($remote_port, $peer_addr) = unpack_sockaddr_in($peerinfo);
             my $peer_ip = inet_ntoa($peer_addr);
-            # Debugf("Incoming RPC connection from %s:%u", $peer_ip, $remote_port);
-            my ($my_port, $my_addr) = unpack_sockaddr_in(getsockname($new_socket));
-            my $my_ip = inet_ntoa($my_addr);
-            my $connection = QBitcoin::Connection->new(
-                type_id    => PROTOCOL_RPC,
-                socket     => $new_socket,
-                state      => STATE_CONNECTED,
-                state_time => $time,
-                host       => $peer_ip,
-                ip         => $peer_ip,
-                addr       => $peer_addr,
-                port       => $remote_port,
-                my_ip      => $my_ip,
-                my_port    => $my_port,
-                my_addr    => IPV6_V4_PREFIX . $my_addr,
-                direction  => DIR_IN,
-            );
-            $connection->protocol->startup();
-            push @connections, $connection;
+            my @rpc_connections = grep { $_->type_id == PROTOCOL_RPC } QBitcoin::ConnectionList->list();
+            if (@rpc_connections >= ($config->{max_rpc_connections} // MAX_RPC_CONNECTIONS)) {
+                Warningf("Too many RPC connections (%u), reject from %s", scalar(@rpc_connections), $peer_ip);
+                close($new_socket);
+            }
+            else {
+                # Debugf("Incoming RPC connection from %s:%u", $peer_ip, $remote_port);
+                my ($my_port, $my_addr) = unpack_sockaddr_in(getsockname($new_socket));
+                my $my_ip = inet_ntoa($my_addr);
+                my $connection = QBitcoin::Connection->new(
+                    type_id    => PROTOCOL_RPC,
+                    socket     => $new_socket,
+                    state      => STATE_CONNECTED,
+                    state_time => $time,
+                    host       => $peer_ip,
+                    ip         => $peer_ip,
+                    addr       => $peer_addr,
+                    port       => $remote_port,
+                    my_ip      => $my_ip,
+                    my_port    => $my_port,
+                    my_addr    => IPV6_V4_PREFIX . $my_addr,
+                    direction  => DIR_IN,
+                );
+                $connection->protocol->startup();
+                push @connections, $connection;
+            }
         }
         if ($listen_rest && vec($rin, fileno($listen_rest), 1) == 1) {
             my $peerinfo = accept(my $new_socket, $listen_rest);
             my ($remote_port, $peer_addr) = unpack_sockaddr_in($peerinfo);
             my $peer_ip = inet_ntoa($peer_addr);
-            # Debugf("Incoming REST connection from %s:%u", $peer_ip, $remote_port);
-            my ($my_port, $my_addr) = unpack_sockaddr_in(getsockname($new_socket));
-            my $my_ip = inet_ntoa($my_addr);
-            my $connection = QBitcoin::Connection->new(
-                type_id    => PROTOCOL_REST,
-                socket     => $new_socket,
-                state      => STATE_CONNECTED,
-                state_time => $time,
-                host       => $peer_ip,
-                ip         => $peer_ip,
-                addr       => $peer_addr,
-                port       => $remote_port,
-                my_ip      => $my_ip,
-                my_port    => $my_port,
-                my_addr    => IPV6_V4_PREFIX . $my_addr,
-                direction  => DIR_IN,
-            );
-            $connection->protocol->startup();
-            push @connections, $connection;
+            my @rest_connections = grep { $_->type_id == PROTOCOL_REST } QBitcoin::ConnectionList->list();
+            if (@rest_connections >= ($config->{max_rest_connections} // MAX_REST_CONNECTIONS)) {
+                Warningf("Too many REST connections (%u), reject from %s", scalar(@rest_connections), $peer_ip);
+                close($new_socket);
+            }
+            else {
+                # Debugf("Incoming REST connection from %s:%u", $peer_ip, $remote_port);
+                my ($my_port, $my_addr) = unpack_sockaddr_in(getsockname($new_socket));
+                my $my_ip = inet_ntoa($my_addr);
+                my $connection = QBitcoin::Connection->new(
+                    type_id    => PROTOCOL_REST,
+                    socket     => $new_socket,
+                    state      => STATE_CONNECTED,
+                    state_time => $time,
+                    host       => $peer_ip,
+                    ip         => $peer_ip,
+                    addr       => $peer_addr,
+                    port       => $remote_port,
+                    my_ip      => $my_ip,
+                    my_port    => $my_port,
+                    my_addr    => IPV6_V4_PREFIX . $my_addr,
+                    direction  => DIR_IN,
+                );
+                $connection->protocol->startup();
+                push @connections, $connection;
+            }
         }
 
         foreach my $connection (@connections) {
