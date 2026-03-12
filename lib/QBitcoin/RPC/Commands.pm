@@ -1403,7 +1403,7 @@ sub cmd_listunspent {
             for (my $vout = @{$hash->{$txid}}-1; $vout >= 0; $vout--) {
                 my $utxo = $hash->{$txid}->[$vout]
                     or next;
-                $minconf && $utxo->{block_height} <= $best_height - $minconf + 1
+                !$minconf || $utxo->{block_height} <= $best_height - $minconf + 1
                     or last;
                 push @utxo, {
                     txid    => unpack("H*", $txid),
