@@ -259,6 +259,9 @@ sub process_request {
         elsif ($path[0] eq "fee-estimates") {
             return $self->http_ok({ 1 => 0 }); # TODO
         }
+        elsif ($path[0] eq "status") {
+            return $self->http_ok(node_status());
+        }
         elsif ($path[0] eq "asset") {
             return $self->http_response(500, "Unimplemented");
         }
