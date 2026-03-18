@@ -10,6 +10,7 @@ import {
 import classNames from 'classnames';
 
 import { pfmt } from '@/shared/lib/fmtbtc/fmtbtc';
+import { CHAIN_STATUS_POLL_INTERVAL } from '@/shared/const/const.ts';
 
 import { useGetChainStatusQuery } from '../../api/chainStatusApi';
 import { useSyncProgress } from '../../lib/useSyncProgress';
@@ -23,7 +24,7 @@ interface ChainStatusInfoProps {
 export const ChainStatusInfo = memo(function ChainStatusInfo(props: ChainStatusInfoProps) {
     const { className } = props;
     const { data: status, isLoading, error } = useGetChainStatusQuery(undefined, {
-        pollingInterval: 1000,
+        pollingInterval: CHAIN_STATUS_POLL_INTERVAL,
         refetchOnMountOrArgChange: true,
     });
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
-export function useIsMobile(breakpoint: number = 768): boolean {
+import { MOBILE_BREAKPOINT } from '@/shared/const/const.ts';
+
+export function useIsMobile(breakpoint: number = MOBILE_BREAKPOINT): boolean {
 
   const [isMobile, setIsMobile] = useState(() => {
     if (typeof window === 'undefined') {
@@ -28,4 +30,4 @@ export function useIsMobile(breakpoint: number = 768): boolean {
   }, [breakpoint]);
 
   return isMobile;
-} 
+}
