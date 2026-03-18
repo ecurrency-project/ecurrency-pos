@@ -9,6 +9,7 @@ import { Footer } from '@/widgets/Footer';
 import { tipHeightFetch } from '@/entities/TipHeight';
 
 import { useRecurringTimeout, useAppDispatch } from '@/shared/lib/hooks';
+import { TIP_HEIGHT_POLL_INTERVAL } from '@/shared/const/const.ts';
 
 function App() {
     const dispatch = useAppDispatch();
@@ -19,7 +20,7 @@ function App() {
 
     useRecurringTimeout(() => {
         dispatch(tipHeightFetch());
-    }, 60000);
+    }, TIP_HEIGHT_POLL_INTERVAL);
 
     return (
         <div className="app">
