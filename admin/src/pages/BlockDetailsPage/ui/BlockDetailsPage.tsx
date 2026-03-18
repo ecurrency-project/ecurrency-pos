@@ -20,6 +20,7 @@ import { Clipboard } from '@/shared/ui/Clipboard';
 import { formatNumber, formatTime } from '@/shared/utils';
 import { useAppDispatch } from '@/shared/lib/hooks';
 import { RouterPath } from '@/shared/config/router/router';
+import { BYTES_PER_KB, UNITS_PER_GW } from '@/shared/const/const.ts';
 
 import CubeIcon from '@/shared/assets/icons/cube.svg?react';
 import ArrowBackIcon from '@/shared/assets/icons/arrow_back.svg?react';
@@ -130,15 +131,15 @@ const BlockDetailsPage = (props: BlockDetailsPageProps) => {
                 </HStack>
                 <HStack justify="space-between" className={cls.statsTableItem}>
                     <span>Size</span>
-                    <span>{formatNumber(block.size / 1000)} KB</span>
+                    <span>{formatNumber(block.size / BYTES_PER_KB)} KB</span>
                 </HStack>
                 <HStack justify="space-between" className={cls.statsTableItem}>
                     <span>Block weight</span>
-                    <span>{formatNumber(block.block_weight / 1000000000)} GW</span>
+                    <span>{formatNumber(block.block_weight / UNITS_PER_GW)} GW</span>
                 </HStack>
                 <HStack justify="space-between" className={cls.statsTableItem}>
                     <span>Branch units</span>
-                    <span>{formatNumber(block.weight / 1000000000)} GW</span>
+                    <span>{formatNumber(block.weight / UNITS_PER_GW)} GW</span>
                 </HStack>
                 {expanded && (
                     <HStack justify="space-between" className={cls.statsTableItem}>

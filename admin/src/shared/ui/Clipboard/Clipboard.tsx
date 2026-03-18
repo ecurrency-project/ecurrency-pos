@@ -4,6 +4,7 @@ import classNames from 'classnames';
 
 import { Button } from '@/shared/ui/Button';
 
+import { CLIPBOARD_TOOLTIP_TIMEOUT } from '@/shared/const/const.ts';
 import CopySvg from '@/shared/assets/icons/copy.svg?react';
 
 import cls from './Clipboard.module.css';
@@ -26,7 +27,7 @@ export const Clipboard = memo(function Clipboard(props: ClipboardProps) {
             navigator.clipboard.writeText(text)
                 .then(() => {
                     setShowTooltip(true);
-                    setTimeout(() => setShowTooltip(false), 2000);
+                    setTimeout(() => setShowTooltip(false), CLIPBOARD_TOOLTIP_TIMEOUT);
                 })
                 .catch((error) => {
                     console.error('Failed to copy text:', error);
@@ -40,7 +41,7 @@ export const Clipboard = memo(function Clipboard(props: ClipboardProps) {
             try {
                 document.execCommand('copy');
                 setShowTooltip(true);
-                setTimeout(() => setShowTooltip(false), 2000);
+                setTimeout(() => setShowTooltip(false), CLIPBOARD_TOOLTIP_TIMEOUT);
             } catch (error) {
                 console.error('Failed to copy text:', error);
             } finally {

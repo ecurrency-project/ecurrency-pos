@@ -12,6 +12,7 @@ import {
 } from "@/entities/Block";
 
 import { Button } from "@/shared/ui/Button";
+import { LATEST_BLOCKS_DISPLAY_COUNT } from '@/shared/const/const.ts';
 
 import { useAppDispatch } from "@/shared/lib/hooks";
 import ArrowRightIcon from "@/shared/assets/icons/arrow_right.svg?react";
@@ -58,7 +59,7 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
                 <span className={cls.headerTitle}>Latest blocks</span>
             </div>
             <BlockItemHeader/>
-            {!isLoadMore && blocks?.slice(0, 5).map((block) => (
+            {!isLoadMore && blocks?.slice(0, LATEST_BLOCKS_DISPLAY_COUNT).map((block) => (
                 <BlockItem block={block} key={block.id} />
             ))}
             {!isLoadMore && (
