@@ -1,8 +1,7 @@
 import { memo } from 'react';
-import { useSelector } from 'react-redux';
 import classNames from 'classnames';
 
-import { getTipHeight } from '@/entities/TipHeight';
+import { useGetTipHeightQuery } from '@/entities/TipHeight';
 
 import { HStack } from '@/shared/ui/Stack';
 import { formatSat } from '@/shared/utils';
@@ -28,7 +27,7 @@ export const TxItemFooter = memo(function TxItemFooter(props: TransactionBoxProp
         vout,
     } = props;
 
-    const tipHeight = useSelector(getTipHeight);
+    const { data: tipHeight = 0 } = useGetTipHeightQuery();
 
     const confirmationText = !txStatus?.confirmed ? 'Unconfirmed' : tipHeight ? `${tipHeight - txStatus.block_height + 1} confirmations` : 'Confirmed';
 

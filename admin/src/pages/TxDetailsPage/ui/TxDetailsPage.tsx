@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { useSelector } from 'react-redux';
 import { Link, useParams } from 'react-router-dom';
 import classNames from 'classnames';
 import { Tooltip } from 'antd';
 
 import { Transactions } from '@/widgets/Transactions';
 
-import { getTipHeight } from '@/entities/TipHeight';
+import { useGetTipHeightQuery } from '@/entities/TipHeight';
 import { useGetTransactionQuery } from '@/entities/Transaction';
 
 import { Clipboard } from '@/shared/ui/Clipboard';
@@ -24,7 +23,7 @@ interface TxDetailsPageProps {
 const TxDetailsPage = (props: TxDetailsPageProps) => {
     const { className } = props;
     const { id } = useParams<{ id: string }>();
-    const tipHeight = useSelector(getTipHeight);
+    const { data: tipHeight = 0 } = useGetTipHeightQuery();
     const { data: transaction, isLoading } = useGetTransactionQuery({ id: id as string });
     const [useUTC, setUseUTC] = useState<boolean>(false);
 
