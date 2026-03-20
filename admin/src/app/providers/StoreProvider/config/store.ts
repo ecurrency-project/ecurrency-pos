@@ -4,13 +4,11 @@ import { $api } from '@/shared/api/api.ts';
 
 import type { StateSchema } from './StateSchema.ts';
 import { blocksReducer } from '@/entities/Block';
-import { tipHeightReducer } from '@/entities/TipHeight';
 import { rtkApi } from '@/shared/api/rtkApi.ts';
 
 export function createReduxStore(initialState?: StateSchema) {
     const rootReducer: ReducersMapObject<StateSchema> = {
         blocks: blocksReducer,
-        tipHeight: tipHeightReducer,
         [rtkApi.reducerPath]: rtkApi.reducer,
     };
 

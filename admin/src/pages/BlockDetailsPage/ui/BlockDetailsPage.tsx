@@ -10,7 +10,7 @@ import type { StateSchema } from '@/app/providers/StoreProvider';
 import { Transactions } from '@/widgets/Transactions';
 
 import { getBlocksAdapterData, getBlocksLoading, blockOneFetch, type BlocksStatus } from '@/entities/Block';
-import { getTipHeight } from '@/entities/TipHeight';
+import { useGetTipHeightQuery } from '@/entities/TipHeight';
 import { useGetTransactionsByBlockQuery } from '@/entities/Transaction';
 
 import { HStack, VStack } from '@/shared/ui/Stack';
@@ -44,7 +44,7 @@ const BlockDetailsPage = (props: BlockDetailsPageProps) => {
 
     const block = useSelector((state: StateSchema) => getBlocksAdapterData.selectById(state, id as string));
     const blockLoading = useSelector(getBlocksLoading);
-    const tipHeight = useSelector(getTipHeight);
+    const { data: tipHeight = 0 } = useGetTipHeightQuery();
     const { data: transactionsByBlock, isLoading } = useGetTransactionsByBlockQuery({ blockHeight: id as string });
 
     useEffect(() => {
