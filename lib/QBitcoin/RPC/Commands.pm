@@ -1527,9 +1527,7 @@ sub cmd_listmyaddresses {
     my %list;
     foreach my $my_address (QBitcoin::MyAddress->my_address) {
         $list{$my_address->address} = {
-            algo      => $my_address->private_key
-                           ? [ map { CRYPT_ALGO_NAMES->{$_} } $my_address->algo ]
-                           : [],
+            algo      => CRYPT_ALGO_NAMES->{$my_address->algo},
             staked    => $my_address->staked ? TRUE : FALSE,
             watchonly => $my_address->is_watchonly ? TRUE : FALSE,
         };
