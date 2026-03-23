@@ -16,7 +16,7 @@ interface TransactionVoutProps {
     vout: Vout;
     index?: number
     expanded?: boolean;
-    spend: ISpend;
+    spend?: ISpend;
     highlightAddress?: string;
 }
 
