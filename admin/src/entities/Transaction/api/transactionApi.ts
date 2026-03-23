@@ -1,10 +1,13 @@
 import { rtkApi } from '@/shared/api/rtkApi.ts';
-import type { ITransaction, TxShort } from '@/entities/Transaction';
+import type { ITransaction, TxShort, ISpend } from '../model/types/ITransaction';
 
 const transactionApi = rtkApi.injectEndpoints({
     endpoints: (build) => ({
         getTransaction: build.query<ITransaction, { id: string }>({
             query: ({ id }) => `/api/tx/${id}`,
+        }),
+        getOutspends: build.query<ISpend[], { txid: string }>({
+            query: ({ txid }) => `/tx/${txid}/outspends`,
         }),
         getTransactionsByBlock: build.query<ITransaction[], { blockHeight: string, offset?: number }>({
             query: ({ blockHeight, offset = 0 }) => `/block/${blockHeight}/txs/${offset}`,
@@ -42,4 +45,5 @@ export const {
     useGetTransactionsByAddressQuery,
     useGetTransactionQuery,
     useGetMempoolRecentTransactionsQuery,
+    useLazyGetOutspendsQuery,
 } = transactionApi;
