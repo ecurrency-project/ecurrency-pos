@@ -1,12 +1,12 @@
-import { memo, useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
+import { memo, useCallback, useState } from 'react';
 import classNames from "classnames";
 
 import { HStack, VStack } from "@/shared/ui/Stack";
 
 import ArrowForwardIcon from "@/shared/assets/icons/arrow_forward.svg?react";
 
-import type { ISpend, ITransaction } from '../../model/types/ITransaction.ts';
+import type { ITransaction } from '../../model/types/ITransaction.ts';
+import { useLazyGetOutspendsQuery } from '../../api/transactionApi.ts';
 
 import { TxItemFooter } from '../TxItemFooter/TxItemFooter.tsx';
 import { TxVin } from "../TxVin/TxVin.tsx";
@@ -30,23 +30,16 @@ export const TxBox = memo(function TxBox(props: TxBoxProps) {
     } = props;
 
     const [expanded, setExpanded] = useState<boolean>(false);
-    const [spends, setSpends] = useState<ISpend[]>([]);
-
-    useEffect(() => {
-        if (expanded) {
-            axios.get<ISpend[]>(`/api/tx/${tx.txid}/outspends`)
-                .then((response) => {
-                    setSpends(response.data);
-                })
-                .catch((error) => {
-                    console.error(error);
-                });
-        }
-    }, [expanded, tx.txid]);
+    const [triggerOutspends, { data: spends }] = useLazyGetOutspendsQuery();
 
     const toggleExpanded = useCallback(() => {
-        setExpanded((prevState) => !prevState);
-    }, []);
+        setExpanded((prev) => {
+            if (!prev) {
+                triggerOutspends({ txid: tx.txid });
+            }
+            return !prev;
+        });
+    }, [triggerOutspends, tx.txid]);
 
     return (
         <VStack className={classNames(cls.TxBox, className)} id="transaction-box" gap="sm">
@@ -73,7 +66,7 @@ export const TxBox = memo(function TxBox(props: TxBoxProps) {
                             key={v.scripthash}
                             index={index}
                             expanded={expanded}
-                            spend={spends[index]}
+                            spend={spends?.[index]}
                             highlightAddress={highlightAddress}
                         />
                     ))}
