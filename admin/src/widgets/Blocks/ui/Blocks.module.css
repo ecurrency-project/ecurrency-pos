@@ -1,4 +1,6 @@
 .Blocks {
+  display: flex;
+  flex-direction: column;
   border-radius: 8px;
   box-shadow: var(--stats-box-shadow);
   background-color: var(--stats-bg-color);

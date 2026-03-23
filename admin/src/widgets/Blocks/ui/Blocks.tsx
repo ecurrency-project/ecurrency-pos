@@ -1,5 +1,4 @@
-import { memo, useCallback, useEffect } from "react";
-import { useSelector } from "react-redux";
+import { memo, useCallback, useEffect, useState } from 'react';
 import { Link } from "react-router-dom";
 import { Card, Skeleton } from 'antd';
 import classNames from "classnames";
@@ -7,14 +6,14 @@ import classNames from "classnames";
 import {
     BlockItemHeader,
     BlockItem,
-    blocksFetch,
-    getBlocksAdapterData
-} from "@/entities/Block";
+    useGetBlocksQuery,
+    useLazyGetBlocksQuery,
+    type IBlock
+} from '@/entities/Block';
 
 import { Button } from "@/shared/ui/Button";
 import { LATEST_BLOCKS_DISPLAY_COUNT } from '@/shared/const/const.ts';
 
-import { useAppDispatch } from "@/shared/lib/hooks";
 import ArrowRightIcon from "@/shared/assets/icons/arrow_right.svg?react";
 import ExpandMoreIcon from "@/shared/assets/icons/expand_more.svg?react";
 
@@ -30,19 +29,32 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
         className,
         isLoadMore = false
     } = props;
-    const dispatch = useAppDispatch();
-    const blocks = useSelector(getBlocksAdapterData.selectAll);
+    const { data: initialBlocks, isLoading } = useGetBlocksQuery();
+    const [triggerLoadMore] = useLazyGetBlocksQuery();
+    const [extraBlocks, setExtraBlocks] = useState<IBlock[]>([]);
+    const [loadingMore, setLoadingMore] = useState(false);
 
     useEffect(() => {
-        dispatch(blocksFetch());
-    }, []);
+        setExtraBlocks([]);
+    }, [initialBlocks]);
+
+    const allBlocks = [...(initialBlocks ?? []), ...extraBlocks];
 
     const handleLoadMore = useCallback(() => {
-        const lastBlock = blocks[blocks.length - 1];
-        dispatch(blocksFetch(lastBlock.height - 1));
-    }, [blocks, dispatch]);
+        const lastBlock = allBlocks[allBlocks.length - 1];
+        if (!lastBlock || loadingMore) return;
+        setLoadingMore(true);
+        triggerLoadMore(lastBlock.height - 1)
+            .unwrap()
+            .then((moreBlocks) => {
+                setExtraBlocks((prev) => [...prev, ...moreBlocks]);
+            })
+            .finally(() => {
+                setLoadingMore(false);
+            });
+    }, [allBlocks, triggerLoadMore, loadingMore]);
 
-    if (blocks.length === 0) {
+    if (isLoading || allBlocks.length === 0) {
         return (
             <Card className={classNames(cls.Blocks, className)}>
                 <div className={cls.header}>
@@ -59,7 +71,7 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
                 <span className={cls.headerTitle}>Latest blocks</span>
             </div>
             <BlockItemHeader/>
-            {!isLoadMore && blocks?.slice(0, LATEST_BLOCKS_DISPLAY_COUNT).map((block) => (
+            {!isLoadMore && allBlocks.slice(0, LATEST_BLOCKS_DISPLAY_COUNT).map((block) => (
                 <BlockItem block={block} key={block.id} />
             ))}
             {!isLoadMore && (
@@ -69,7 +81,7 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
                 </Link>
             )}
 
-            {isLoadMore && blocks?.map((block) => (
+            {isLoadMore && allBlocks.map((block) => (
                 <BlockItem block={block} key={block.id} />
             ))}
 

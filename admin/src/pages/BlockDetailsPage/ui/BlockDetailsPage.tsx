@@ -1,15 +1,11 @@
-import { useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
+import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import classNames from 'classnames';
-import axios from 'axios';
 import { Tooltip } from 'antd';
-
-import type { StateSchema } from '@/app/providers/StoreProvider';
 
 import { Transactions } from '@/widgets/Transactions';
 
-import { getBlocksAdapterData, getBlocksLoading, blockOneFetch, type BlocksStatus } from '@/entities/Block';
+import { useGetBlockQuery, useGetBlockStatusQuery } from '@/entities/Block';
 import { useGetTipHeightQuery } from '@/entities/TipHeight';
 import { useGetTransactionsByBlockQuery } from '@/entities/Transaction';
 
@@ -18,7 +14,6 @@ import { Button } from '@/shared/ui/Button';
 import { Clipboard } from '@/shared/ui/Clipboard';
 
 import { formatNumber, formatTime } from '@/shared/utils';
-import { useAppDispatch } from '@/shared/lib/hooks';
 import { RouterPath } from '@/shared/config/router/router';
 import { BYTES_PER_KB, UNITS_PER_GW } from '@/shared/const/const.ts';
 
@@ -36,36 +31,18 @@ interface BlockDetailsPageProps {
 const BlockDetailsPage = (props: BlockDetailsPageProps) => {
     const { className } = props;
     const { id } = useParams<{ id: string }>();
-    const [status, setStatus] = useState<BlocksStatus | undefined>(undefined);
     const [expanded, setExpanded] = useState<boolean>(false);
     const [useUTC, setUseUTC] = useState<boolean>(false);
-    const dispatch = useAppDispatch();
     const navigate = useNavigate();
 
-    const block = useSelector((state: StateSchema) => getBlocksAdapterData.selectById(state, id as string));
-    const blockLoading = useSelector(getBlocksLoading);
+    const { data: block, isLoading: blockLoading, isFetching: blockFetching } = useGetBlockQuery({ id: id! }, { skip: !id });
+    const { data: status } = useGetBlockStatusQuery({ id: id! }, { skip: !id });
     const { data: tipHeight = 0 } = useGetTipHeightQuery();
     const { data: transactionsByBlock, isLoading } = useGetTransactionsByBlockQuery({ blockHeight: id as string });
 
-    useEffect(() => {
-        if (!id) return;
-
-        if (!block) {
-            dispatch(blockOneFetch(id));
-        }
-
-        axios.get<BlocksStatus>(`/api/block/${id}/status`)
-            .then((response) => {
-                setStatus(response.data);
-            })
-            .catch((error) => {
-                console.error(error);
-            });
-    }, [dispatch, id]);
-
-    const clickOnBlock = (id: string) => () => {
-        navigate(`${RouterPath.blocks}/${id}`);
-    }
+    const clickOnBlock = useCallback((blockId: string) => {
+        navigate(`${RouterPath.blocks}/${blockId}`, { replace: true });
+    }, [navigate]);
 
     if (blockLoading) {
         return <div className={classNames(cls.BlockDetailsPage, 'container', className)}>Loading...</div>
@@ -85,21 +62,24 @@ const BlockDetailsPage = (props: BlockDetailsPageProps) => {
                 <Clipboard text={id as string} className={cls.clipboard}/>
                 <HStack className={cls.blockLinks} justify="space-between">
                     <Button
-                        onClick={clickOnBlock(block.previousblockhash)}
+                        onClick={() => clickOnBlock(block.previousblockhash)}
                         className={cls.prevBlockLink}
                         icon={<ArrowBackIcon/>}
                         type="dashed"
+                        disabled={block.previousblockhash === null}
+                        loading={blockFetching}
                     >
                         <span>Previous</span>
                     </Button>
 
                     {status?.next_best && (
                         <Button
-                            onClick={clickOnBlock(status.next_best)}
+                            onClick={() => clickOnBlock(status.next_best!)}
                             className={cls.nextBlockLink}
                             icon={<ArrowNextIcon/>}
                             iconPlacement="end"
                             type="dashed"
+                            loading={blockFetching}
                         >
                             <span>Next</span>
                         </Button>
