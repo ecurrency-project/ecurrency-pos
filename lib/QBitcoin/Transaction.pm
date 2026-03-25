@@ -16,6 +16,7 @@ use QBitcoin::Coinbase;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::ConnectionList;
 use QBitcoin::Notify;
+use QBitcoin::ProtocolState qw(skip_scripts);
 use Bitcoin::Serialized;
 
 use Role::Tiny::With;
@@ -921,7 +922,7 @@ sub validate {
     my $self = shift;
 
     if ($self->is_coinbase) {
-        return $self->validate_coinbase;
+        return skip_scripts() ? 0 : $self->validate_coinbase;
     }
     # Transaction must contains at least one output (can't spend all inputs as fee)
     if (!@{$self->out}) {
@@ -989,8 +990,10 @@ sub validate {
         }
         # Signcheck for stake transaction depends on block it relates to,
         # so skip this check while block_sign_data is not known, check from valid_for_block()
-        $self->check_input_script == 0
-            or return -1;
+        if (!skip_scripts()) {
+            $self->check_input_script == 0
+                or return -1;
+        }
         # Is this a token transaction?
         if ($self->is_tokens) {
             $self->check_tokens_tx() == 0
@@ -1192,13 +1195,17 @@ sub valid_for_block {
     my ($block) = @_;
     if ($self->is_stake) {
         $self->block_sign_data = $block->sign_data;
-        $self->check_input_script == 0
+        if (!skip_scripts()) {
+            $self->check_input_script == 0
+                or return -1;
+        }
+    }
+    if (!skip_scripts()) {
+        ( $self->min_tx_time // "Inf" ) <= timeslot($block->time)
+            or return -1;
+        ( $self->min_tx_block_height // "Inf" ) <= $block->height
             or return -1;
     }
-    ( $self->min_tx_time // "Inf" ) <= timeslot($block->time)
-        or return -1;
-    ( $self->min_tx_block_height // "Inf" ) <= $block->height
-        or return -1;
     return 0;
 }
 
@@ -1473,8 +1480,9 @@ sub coinbase_weight {
     my $weight = 0;
     if (my $coinbase = $self->up) {
         # Early confirmation should have more weight than later
-        my $base_time = timeslot($coinbase->btc_confirm_time);
-        my $virtual_time = timeslot($coinbase->btc_confirm_time - COINBASE_WEIGHT_TIME); # MB negative, it's ok
+        my $confirm_time = $coinbase->btc_confirm_time // return 0;
+        my $base_time = timeslot($confirm_time);
+        my $virtual_time = timeslot($confirm_time - COINBASE_WEIGHT_TIME); # MB negative, it's ok
         $weight = $self->up_value * ($base_time - $virtual_time) / BLOCK_INTERVAL;
         $weight *= ($base_time - $virtual_time) / (timeslot($block_time) - $virtual_time);
     }
