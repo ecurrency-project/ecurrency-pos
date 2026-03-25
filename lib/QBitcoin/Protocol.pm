@@ -39,6 +39,7 @@ use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced);
+use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Block;
 use QBitcoin::Transaction;
 use QBitcoin::Peer;
@@ -85,9 +86,9 @@ sub cmd_version {
 
     $self->send_message("verack", "");
     $self->greeted = 1;
-    $self->request_btc_blocks() if UPGRADE_POW && !btc_synced();
+    $self->request_btc_blocks() if UPGRADE_POW && !upgrade_finished() && !btc_synced();
     $self->request_mempool if blockchain_synced() && !mempool_synced() && (!UPGRADE_POW || btc_synced());
-    $self->announce_best_btc_block() if UPGRADE_POW;
+    $self->announce_best_btc_block() if UPGRADE_POW && !upgrade_finished();
     if (my $best_block = QBitcoin::Block->best_block) {
         $self->announce_block($best_block);
     }

@@ -12,6 +12,7 @@ use QBitcoin::ORM qw(:types dbh find fetch delete_by for_log DEBUG_ORM);
 use QBitcoin::Crypto qw(hash160 hash256);
 use QBitcoin::Address qw(script_by_pubkey);
 use QBitcoin::ProtocolState qw(btc_synced);
+use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 use QBitcoin::RedeemScript;
 use QBitcoin::ValueUpgraded qw(upgrade_value);
@@ -38,6 +39,26 @@ mk_accessors(keys %{&FIELDS});
 
 my %COINBASE; # just short-live cache for recently produced entries
 
+sub ensure_btc_block {
+    my $self = shift;
+    # When upgrade_finished, btc_block table may be empty.
+    # Ensure a stub btc_block row exists for the FK constraint.
+    return unless upgrade_finished();
+    return if Bitcoin::Block->fetch(height => $self->btc_block_height);
+    Bitcoin::Block->create({
+        height      => $self->btc_block_height,
+        hash        => $self->btc_block_hash,
+        time        => 0,
+        bits        => 0,
+        nonce       => 0,
+        version     => 0,
+        chainwork   => 0,
+        scanned     => 1,
+        prev_hash   => undef,
+        merkle_root => ZERO_HASH,
+    });
+}
+
 sub store {
     my $self = shift;
     my $class = ref $self;
@@ -51,6 +72,7 @@ sub store {
         $self->{tx_out} //= $coinbase->{tx_out};
         return;
     }
+    $self->ensure_btc_block();
     my $scripthash = QBitcoin::RedeemScript->store($self->scripthash);
     my $sql = "INSERT INTO `" . TABLE . "` (btc_block_height, btc_tx_num, btc_out_num, btc_tx_hash, btc_tx_data, merkle_path, value, scripthash, tx_out, upgrade_level) VALUES (?,?,?,UNHEX(?),UNHEX(?),UNHEX(?),?,?,NULL,?)";
     DEBUG_ORM && Debugf("dbi [%s] values [%u,%u,%u,%s,%s,%s,%lu,%u,%u]", $sql, $self->btc_block_height, $self->btc_tx_num, $self->btc_out_num, for_log($self->btc_tx_hash), for_log($self->btc_tx_data), for_log($self->merkle_path), $self->value, $scripthash->id, $self->upgrade_level);
