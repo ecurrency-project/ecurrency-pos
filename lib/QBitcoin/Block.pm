@@ -6,6 +6,7 @@ use QBitcoin::Const;
 use QBitcoin::ORM qw(:types);
 use QBitcoin::Accessors qw(mk_accessors new);
 use QBitcoin::Config;
+use QBitcoin::ProtocolState qw(skip_scripts);
 use QBitcoin::Transaction;
 use QBitcoin::ValueUpgraded qw(level_by_total upgrade_value);
 
@@ -53,7 +54,11 @@ sub branch_height {
 sub self_weight {
     my $self = shift;
     if (!defined $self->{self_weight}) {
-        if (@{$self->transactions}) {
+        if (skip_scripts()) {
+            my $prev = $self->prev_block_load;
+            $self->{self_weight} = $self->weight - ($prev ? $prev->weight : 0);
+        }
+        elsif (@{$self->transactions}) {
             if (defined(my $stake_weight = $self->transactions->[0]->stake_weight($self))) {
                 $self->{self_weight} = $stake_weight + @{$self->transactions};
                 # coinbase increases block weight

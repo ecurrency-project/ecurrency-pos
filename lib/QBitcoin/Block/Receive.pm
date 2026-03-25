@@ -7,7 +7,8 @@ use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
 use QBitcoin::TXO;
-use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced);
+use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced skip_scripts);
+use QBitcoin::CheckPoints qw(max_checkpoint_height);
 use QBitcoin::ConnectionList;
 use QBitcoin::Generate::Control;
 use QBitcoin::Notify;
@@ -116,6 +117,7 @@ sub receive {
 
     return 0 if $block_pool{$self->hash};
     # $self->prev_block must be already loaded by prev_block_load in QBitcoin::Protocol
+    skip_scripts($self->height <= max_checkpoint_height() ? 1 : 0);
     if (my $err = $self->validate()) {
         Warningf("Incorrect block %s from %s: %s", $self->hash_str, $self->received_from ? $self->received_from->peer->id : "me", $err);
         # Incorrect block
@@ -160,6 +162,11 @@ sub receive {
     }
     # $new_best is first block in new branch after fork, i.e $new_nest->prev_block is in the current best branch
     if ($new_best->height < ($HEIGHT // -1)) {
+        if ($new_best->height <= max_checkpoint_height()) {
+            Debugf("Reject reorg: fork at height %u is at or below checkpoint %u",
+                $new_best->height - 1, max_checkpoint_height());
+            return 0;
+        }
         if ($best_block[$HEIGHT]->weight + $best_block[$HEIGHT]->reorg_penalty($new_best->prev_block) >= $self->weight) {
             Debugf("Alternate branch has weight %Lu more than current %Lu but prevent switching because of reorg penalty for %u levels", $self->weight, $best_block[$HEIGHT]->weight, $HEIGHT - $new_best->height + 1);
             return 0;

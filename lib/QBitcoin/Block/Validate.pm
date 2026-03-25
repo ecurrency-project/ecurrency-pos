@@ -12,6 +12,8 @@ use Time::HiRes;
 use List::Util qw(sum0);
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::ProtocolState qw(skip_scripts);
+use QBitcoin::CheckPoints qw(checkpoint_hash);
 use QBitcoin::ValueUpgraded qw(level_by_total downgrade_value);
 use QBitcoin::Log;
 use QBitcoin::Transaction;
@@ -27,6 +29,10 @@ sub validate {
     my $merkle_root = $block->calculate_merkle_root;
     $block->merkle_root eq $merkle_root
         or return "Incorrect merkle root " . unpack("H*", $block->merkle_root) . " expected " . unpack("H*", $merkle_root);
+    if (my $cp_hash = checkpoint_hash($block->height)) {
+        $block->hash eq $cp_hash
+            or return "Block hash at checkpoint height " . $block->height . " does not match checkpoint";
+    }
     if (!$block->prev_hash || $block->prev_hash eq ZERO_HASH) {
         if (!$config->{regtest}) {
             my $genesis_hash = $config->{testnet} ? GENESIS_HASH_TESTNET : GENESIS_HASH;
@@ -166,26 +172,28 @@ sub validate_chain {
             $fail_tx = $tx->hash;
             last;
         }
-        foreach my $in (@{$tx->in}) {
-            my $txo = $in->{txo};
-            # It's possible that $txo->tx_out already set for rebuild blockchain loaded from local database
-            if ($txo->tx_out && $txo->tx_out ne $tx->hash) {
-                # double-spend; drop this branch, return to old best branch and decrease reputation for peer $block->received_from
-                Warningf("Double spend for transaction output %s:%u: first in transaction %s, second in %s, block from %s",
-                    $txo->tx_in_str, $txo->num, $txo->tx_out_str, $tx->hash_str,
-                    $block->received_from ? $block->received_from->peer->id : "me");
-                $fail_tx = $tx->hash;
-                last;
-            }
-            elsif (my $tx_in = QBitcoin::Transaction->get($txo->tx_in)) {
-                # Transaction with this output must be already confirmed (in the same best branch)
-                # Stored (not cached) transactions are always confirmed, not needed to load them
-                if (!defined($tx_in->block_height)) {
-                    Warningf("Unconfirmed input %s:%u for transaction %s, block from %s",
-                        $txo->tx_in_str, $txo->num, $tx->hash_str,
+        if (!skip_scripts()) {
+            foreach my $in (@{$tx->in}) {
+                my $txo = $in->{txo};
+                # It's possible that $txo->tx_out already set for rebuild blockchain loaded from local database
+                if ($txo->tx_out && $txo->tx_out ne $tx->hash) {
+                    # double-spend; drop this branch, return to old best branch and decrease reputation for peer $block->received_from
+                    Warningf("Double spend for transaction output %s:%u: first in transaction %s, second in %s, block from %s",
+                        $txo->tx_in_str, $txo->num, $txo->tx_out_str, $tx->hash_str,
                         $block->received_from ? $block->received_from->peer->id : "me");
                     $fail_tx = $tx->hash;
                     last;
+                }
+                elsif (my $tx_in = QBitcoin::Transaction->get($txo->tx_in)) {
+                    # Transaction with this output must be already confirmed (in the same best branch)
+                    # Stored (not cached) transactions are always confirmed, not needed to load them
+                    if (!defined($tx_in->block_height)) {
+                        Warningf("Unconfirmed input %s:%u for transaction %s, block from %s",
+                            $txo->tx_in_str, $txo->num, $tx->hash_str,
+                            $block->received_from ? $block->received_from->peer->id : "me");
+                        $fail_tx = $tx->hash;
+                        last;
+                    }
                 }
             }
         }
@@ -193,7 +201,7 @@ sub validate_chain {
         $tx->confirm($block, $num) if $tx->is_cached;
     }
 
-    if (!$fail_tx) {
+    if (!$fail_tx && !skip_scripts()) {
         my $self_weight = $block->self_weight;
         if (!defined($self_weight)) {
             $fail_tx = "block"; # does not match any transaction hash
