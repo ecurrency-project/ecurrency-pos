@@ -38,11 +38,12 @@ use Time::HiRes;
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
-use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced);
+use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer);
 use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Block;
 use QBitcoin::Transaction;
 use QBitcoin::Peer;
+use QBitcoin::ConnectionList;
 use QBitcoin::Generate::Control;
 use Bitcoin::Serialized;
 
@@ -451,6 +452,9 @@ sub request_new_block {
     my $self = shift;
     my ($hash) = @_;
 
+    if (!blockchain_synced() && sync_peer() && sync_peer() != $self) {
+        return;
+    }
     if (!$self->syncing) {
         my $best_time = QBitcoin::Block->blockchain_time // 0;
         my $best_block = QBitcoin::Block->best_block;
@@ -480,6 +484,7 @@ sub request_new_block {
             if (timeslot($best_block->time) + FORCE_BLOCKS * BLOCK_INTERVAL >= timeslot(time())) {
                 Infof("Blockchain is synced");
                 blockchain_synced(1);
+                sync_peer(undef);
                 if (!mempool_synced()) {
                     $self->request_mempool();
                 }
@@ -534,6 +539,50 @@ sub request_blocks {
         Debugf("Request batch blocks before time %u", $low_time);
     }
     $self->send_message("getblks", pack("Vv", $low_time, scalar(@locators)) . join("", @locators));
+}
+
+sub check_sync_peer {
+    my $class = shift;
+    if (blockchain_synced()) {
+        sync_peer(undef);
+        return;
+    }
+    if (my $sp = sync_peer()) {
+        if (!$sp->connection || $sp->connection->state != STATE_CONNECTED) {
+            Infof("Sync peer %s disconnected, selecting new sync peer", $sp->peer->id);
+            sync_peer(undef);
+        }
+        elsif (Time::HiRes::time() - $sp->last_traffic_time > SYNC_PEER_TIMEOUT) {
+            Infof("Sync peer %s timed out (no data for %u sec), selecting new sync peer", $sp->peer->id, SYNC_PEER_TIMEOUT);
+            $sp->syncing(0);
+            sync_peer(undef);
+        }
+        else {
+            return;
+        }
+    }
+    # Select new sync peer: prefer highest has_weight, then lowest ping_avg_ms
+    my $best;
+    foreach my $connection (grep { $_->type_id == PROTOCOL_QBITCOIN && $_->state == STATE_CONNECTED } QBitcoin::ConnectionList->list()) {
+        my $proto = $connection->protocol;
+        next unless $proto->greeted;
+        next unless defined $proto->has_weight;
+        if (!$best
+            || ($proto->has_weight // -1) > ($best->has_weight // -1)
+            || ($proto->has_weight // -1) == ($best->has_weight // -1)
+                && ($proto->peer->ping_avg_ms // 9999) < ($best->peer->ping_avg_ms // 9999))
+        {
+            $best = $proto;
+        }
+    }
+    if ($best) {
+        Infof("Selected sync peer %s (weight %Lu, ping %s ms)", $best->peer->id,
+            $best->has_weight // 0, $best->peer->ping_avg_ms // "?");
+        sync_peer($best);
+        if (!$best->syncing) {
+            $best->request_new_block();
+        }
+    }
 }
 
 sub cmd_getblks {
@@ -664,7 +713,9 @@ sub cmd_ihave {
     $self->best_block_hash = $hash;
     if (!UPGRADE_POW || btc_synced()) {
         if ($weight > QBitcoin::Block->best_weight) {
-            $self->request_new_block($hash);
+            if (blockchain_synced() || !sync_peer() || sync_peer() == $self) {
+                $self->request_new_block($hash);
+            }
         }
     }
     return 0;

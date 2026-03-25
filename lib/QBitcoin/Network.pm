@@ -166,6 +166,7 @@ sub main_loop {
         vec($rin, fileno($listen_rest),   1) = 1 if $listen_rest;
 
         call_qbt_peers();
+        QBitcoin::Protocol->check_sync_peer();
         call_btc_peers();
 
         my @connections = QBitcoin::ConnectionList->list;
@@ -297,6 +298,7 @@ sub main_loop {
                 }
                 if ($n > 0) {
                     $connection->recvbuf .= $data;
+                    $connection->protocol->last_traffic_time = Time::HiRes::time() if $connection->protocol->can('last_traffic_time');
                     $was_traffic = 1;
                 }
                 elsif ($n == 0) {

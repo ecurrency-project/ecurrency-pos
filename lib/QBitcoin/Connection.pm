@@ -7,6 +7,7 @@ use POSIX qw(:errno_h);
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
+use QBitcoin::ProtocolState qw(blockchain_synced sync_peer);
 use QBitcoin::Protocol;
 use QBitcoin::RPC;
 use QBitcoin::ConnectionList;
@@ -54,6 +55,9 @@ sub disconnect {
     if ($self->state == STATE_CONNECTED) {
         if ($self->peer) {
             Infof("Disconnected from %s peer %s", $self->type, $self->ip);
+            if (!blockchain_synced() && sync_peer() && sync_peer() == $self->protocol) {
+                sync_peer(undef);
+            }
             if ($self->protocol->can('drop_pending')) {
                 $self->protocol->drop_pending();
             }
