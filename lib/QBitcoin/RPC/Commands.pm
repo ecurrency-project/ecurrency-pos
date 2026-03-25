@@ -1183,6 +1183,9 @@ Result:
 
 Examples:
 > qbitcoin-cli importaddress "bqXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+As a JSON-RPC call
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "importaddress", "params": ["address"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_importaddress {
     my $self = shift;
