@@ -6,7 +6,7 @@ use QBitcoin::Log;
 use QBitcoin::Accessors qw(new mk_accessors);
 use QBitcoin::Const;
 use QBitcoin::Config;
-use QBitcoin::ORM qw(:types find create update delete);
+use QBitcoin::ORM qw(:types fetch find create update delete);
 use QBitcoin::Crypto qw(hash256);
 use Role::Tiny::With;
 with 'QBitcoin::Block::MerkleTree';

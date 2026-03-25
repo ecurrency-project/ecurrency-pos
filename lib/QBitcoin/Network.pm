@@ -12,7 +12,8 @@ use QBitcoin::Log;
 use QBitcoin::Peer;
 use QBitcoin::Connection;
 use QBitcoin::ConnectionList;
-use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced);
+use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced);
+use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Generate;
 use QBitcoin::Produce;
 use QBitcoin::RPC;
@@ -94,6 +95,9 @@ sub main_loop {
     if ($config->{genesis}) {
         mempool_synced(1);
         blockchain_synced(1);
+    }
+    if (upgrade_finished()) {
+        btc_synced(1);
     }
     # Load last block from database
     while (my ($block) = QBitcoin::Block->find(-sortby => "height DESC", -limit => 1)) {
@@ -389,20 +393,23 @@ sub set_pinned_peers {
     }
     $_->update(pinned => 0) foreach values %pinned_qbtc;
 
-    my %pinned_btc = map { $_->ip => $_ } grep { $_->pinned } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN);
-    foreach my $peer_host ($config->get_all('btcnode')) {
-        my @peers = QBitcoin::Peer->get_or_create(
-            host    => $peer_host,
-            type_id => PROTOCOL_BITCOIN,
-            pinned  => 1,
-        )
-            or next;
-        delete @pinned_btc{ map { $_->ip } @peers };
+    if (!upgrade_finished()) {
+        my %pinned_btc = map { $_->ip => $_ } grep { $_->pinned } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN);
+        foreach my $peer_host ($config->get_all('btcnode')) {
+            my @peers = QBitcoin::Peer->get_or_create(
+                host    => $peer_host,
+                type_id => PROTOCOL_BITCOIN,
+                pinned  => 1,
+            )
+                or next;
+            delete @pinned_btc{ map { $_->ip } @peers };
+        }
+        $_->update(pinned => 0) foreach values %pinned_btc;
     }
-    $_->update(pinned => 0) foreach values %pinned_btc;
 }
 
 sub call_btc_peers {
+    return if upgrade_finished();
     my @peers = grep { $_->is_connect_allowed } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN)
         or return;
     foreach my $peer (@peers) {

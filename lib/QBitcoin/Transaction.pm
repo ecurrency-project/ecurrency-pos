@@ -17,6 +17,7 @@ use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::ConnectionList;
 use QBitcoin::Notify;
 use QBitcoin::ProtocolState qw(skip_scripts);
+use QBitcoin::CheckPoints qw(upgrade_finished);
 use Bitcoin::Serialized;
 use Bitcoin::Address qw(is_btc_address);
 
@@ -937,7 +938,12 @@ sub validate {
     my $self = shift;
 
     if ($self->is_coinbase) {
-        return skip_scripts() ? 0 : $self->validate_coinbase;
+        return 0 if skip_scripts();
+        if (upgrade_finished()) {
+            Warningf("Coinbase transaction %s rejected: upgrade finished", $self->hash_str);
+            return -1;
+        }
+        return $self->validate_coinbase;
     }
     # Transaction must contains at least one output (can't spend all inputs as fee)
     if (!@{$self->out} && !$self->is_burn) {
