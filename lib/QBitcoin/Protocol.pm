@@ -222,7 +222,7 @@ sub cmd_block {
         else {
             Debugf("Received block %s has unknown ancestor %s, request it",
                 $block->hash_str, $block->hash_str($block->prev_hash));
-            if ($block->pending_descendants || !blockchain_synced()) {
+            if (!blockchain_synced()) {
                 # deep rollback, request batch of new blocks using locators
                 $self->request_blocks(timeslot($block->time)-1);
             }
