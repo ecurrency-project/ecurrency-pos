@@ -41,6 +41,7 @@ use constant QBITCOIN_CONST => {
     REST_TIMEOUT            => 4,  # sec
     PEER_PING_PERIOD        => 60, # sec, ping period
     PEER_RECV_TIMEOUT       => 60, # sec, timeout for waiting for pong
+    SYNC_PEER_TIMEOUT       => 8,  # sec, switch sync peer if no bytes received
     PORT                    => 9555,
     PORT_TESTNET            => 19555,
     BIND_ADDR               => '*',

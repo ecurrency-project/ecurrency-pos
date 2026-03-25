@@ -5,10 +5,11 @@ use strict;
 my $mempool_synced;
 my $blockchain_synced;
 my $btc_synced;
+my $sync_peer;
 my $skip_scripts;
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(mempool_synced blockchain_synced btc_synced skip_scripts);
+our @EXPORT_OK = qw(mempool_synced blockchain_synced btc_synced sync_peer skip_scripts);
 
 sub mempool_synced {
     if (@_) {
@@ -36,6 +37,13 @@ sub skip_scripts {
         $skip_scripts = $_[0];
     }
     return $skip_scripts;
+}
+
+sub sync_peer {
+    if (@_) {
+        $sync_peer = $_[0];
+    }
+    return $sync_peer;
 }
 
 1;

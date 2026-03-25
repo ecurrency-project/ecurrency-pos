@@ -3,6 +3,7 @@ use warnings;
 use strict;
 
 use Scalar::Util qw(weaken);
+use Time::HiRes;
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
@@ -19,6 +20,7 @@ use constant ATTR => qw(
     connection
     peer
     last_recv_time
+    last_traffic_time
     id
 );
 
@@ -31,6 +33,7 @@ sub new {
     my $self = bless $args, $class;
     $self->peer //= $self->connection->peer if $self->connection;
     $self->last_recv_time = time();
+    $self->last_traffic_time = Time::HiRes::time();
     $self->id = $self->connection->addr;
     return $self;
 }
