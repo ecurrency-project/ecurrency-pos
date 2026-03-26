@@ -66,7 +66,7 @@ use constant {
     REJECT_INVALID => 1,
 };
 
-mk_accessors(qw(has_weight best_block_hash reject_with_peers));
+mk_accessors(qw(has_weight best_block_hash reject_with_peers protocol_version));
 
 sub type_id() { PROTOCOL_QBITCOIN }
 
@@ -95,8 +95,17 @@ sub cmd_version {
         return -1;
     }
 
+    my ($data) = @_;
+    if (length($data) < 20) {
+        Errf("Incorrect params from peer %s command %s: length %u", $self->peer->id, $self->command, length($data));
+        $self->abort("incorrect_params");
+        return -1;
+    }
+    my ($protocol_version, $protocol_features, $remote_time) = unpack("VQ<Q<", $data);
+
     $self->send_message("verack", "");
     $self->greeted = 1;
+    $self->protocol_version = $protocol_version;
     $self->request_btc_blocks() if UPGRADE_POW && !upgrade_finished() && !btc_synced();
     $self->request_mempool if blockchain_synced() && !mempool_synced() && (!UPGRADE_POW || btc_synced());
     $self->announce_best_btc_block() if UPGRADE_POW && !upgrade_finished();
