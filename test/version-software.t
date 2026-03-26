@@ -51,7 +51,7 @@ sub recv_version {
 my $conn_out = make_connection();
 $conn_out->protocol->startup();
 my $sent = substr($conn_out->sendbuf, 24); # skip the message header
-is(substr($sent, 0, 4), pack("V", 1), "version message sent");
+is(substr($sent, 0, 4), pack("V", 2), "version message sent");
 my ($sent_software) = unpack("C/a*", substr($sent, 20 + 26 + 8));
 is($sent_software, QBitcoin::Protocol::SOFTWARE, "version message contains our software id");
 like($sent_software, qr(^/QECurrencyCore:\Q${\VERSION}\E/$), "software id is BIP14-like name:version");
