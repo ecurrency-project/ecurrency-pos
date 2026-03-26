@@ -20,6 +20,7 @@ use Bitcoin::Serialized;
 use Bitcoin::Transaction;
 
 #$config->{debug} = 1;
+$config->{regtest} = 1;
 
 my $value = 100000; # random value
 my $open_script = hash160("\x10\x11"); # random string

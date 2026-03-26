@@ -18,6 +18,7 @@ use QBitcoin::TXO;
 use QBitcoin::Mempool;
 
 #$config->{debug} = 1;
+$config->{regtest} = 1;
 
 my $txo_module = Test::MockModule->new('QBitcoin::TXO');
 $txo_module->mock('check_script', sub { 0 });
