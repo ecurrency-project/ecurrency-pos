@@ -45,7 +45,7 @@ sub make_connection {
 my $next_nonce = 0;
 sub recv_version {
     my ($connection) = @_;
-    my $payload = pack("VQ<Q<a26", 1, 0, time(), pack("Q<a16n", 0, $connection->peer->ip, 7000));
+    my $payload = pack("VQ<Q<a26", 2, 0, time(), pack("Q<a16n", 0, $connection->peer->ip, 7000));
     $payload .= pack("Q<", ++$next_nonce);
     $connection->protocol->command("version");
     return $connection->protocol->cmd_version($payload);
