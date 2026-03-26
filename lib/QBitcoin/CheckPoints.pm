@@ -9,12 +9,14 @@ our @EXPORT_OK = qw(checkpoint_hash max_checkpoint_height prev_checkpoint_height
 
 use constant CHECKPOINTS => {
     # height => pack('H*', "block_hash_hex"),
+    1000000 => pack("H*", "17f97cf4a7bda6c31379e185a314fc6e47d6c4987b0f7bc4816c69420537c668"),
 };
 
 use constant CHECKPOINTS_TESTNET => {
+    150000 => pack("H*", "be4125eb25b4e527f3b87108245ddd6c18875c15b8b6451502b03d8f5eb54667"),
 };
 
-use constant UPGRADE_FINISHED         => 0; # Set to 1 when all upgrades are in a checkpoint
+use constant UPGRADE_FINISHED         => 1; # Set to 1 when all upgrades are in a checkpoint
 use constant UPGRADE_FINISHED_TESTNET => 0;
 
 my $checkpoints;
