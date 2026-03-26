@@ -68,7 +68,7 @@ with 'QBitcoin::Protocol::BTC' if UPGRADE_POW;
 use constant {
     MAGIC             => "QECR",
     MAGIC_TESTNET     => "QECT",
-    PROTOCOL_VERSION  => 1,
+    PROTOCOL_VERSION  => 2,
     PROTOCOL_FEATURES => 0,
 };
 
@@ -252,7 +252,7 @@ sub request_peer_addresses {
     my $self = shift;
     return if $config->{pinned_only};
     my @known_peers = grep { $_->reputation > 0 } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
-    if (@known_peers < MIN_CONNECTIONS * 2) {
+    if (@known_peers < MIN_CONNECTIONS * 2 && $self->protocol_version >= 2) {
         $self->send_message("getaddr", "");
     }
 }
