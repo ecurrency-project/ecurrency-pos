@@ -596,6 +596,7 @@ sub check_sync_peer {
         my $proto = $connection->protocol;
         next unless $proto->greeted;
         next unless defined $proto->has_weight;
+        next if ($connection->peer->reputation // 0) < QBitcoin::Peer::MIN_REPUTATION;
         if (!$best
             || ($proto->has_weight // -1) > ($best->has_weight // -1)
             || ($proto->has_weight // -1) == ($best->has_weight // -1)
