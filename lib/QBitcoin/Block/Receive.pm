@@ -136,6 +136,16 @@ sub receive {
         # re-syncing from an honest peer.
         if (checkpoint_hash($self->height)) {
             _rollback_to_checkpoint($self->height);
+            # Ban the offending peer so it is not selected as sync peer again.
+            # decrease_reputation() with -MIN_REPUTATION ensures the peer drops
+            # below the ban threshold regardless of its current score.
+            if ($self->received_from) {
+                Warningf("Banning peer %s due to checkpoint hash mismatch", $self->received_from->peer->id);
+                $self->received_from->peer->decrease_reputation(-QBitcoin::Peer::MIN_REPUTATION);
+                if ($self->received_from->connection) {
+                    $self->received_from->connection->disconnect();
+                }
+            }
         }
         return -1;
     }
@@ -374,10 +384,8 @@ sub _rollback_to_checkpoint {
             }
             $tx->unconfirm();
         }
-        # Delete blocks from DB (cascades to transactions)
-        for (my $n = $class->max_db_height; $n > $target_height; $n--) {
-            $class->new(height => $n)->delete;
-        }
+        # Delete blocks from DB in one query (cascades to transactions)
+        $class->delete_by(height => { '>' => $target_height });
         $class->max_db_height($target_height);
     }
 
