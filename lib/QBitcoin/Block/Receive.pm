@@ -8,7 +8,9 @@ use QBitcoin::Log;
 use QBitcoin::Config;
 use QBitcoin::TXO;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced skip_scripts);
-use QBitcoin::CheckPoints qw(max_checkpoint_height);
+use QBitcoin::CheckPoints qw(checkpoint_hash max_checkpoint_height prev_checkpoint_height);
+use QBitcoin::ORM;
+use QBitcoin::Transaction;
 use QBitcoin::ConnectionList;
 use QBitcoin::Generate::Control;
 use QBitcoin::Notify;
@@ -128,6 +130,12 @@ sub receive {
             if ($self->received_from->connection) {
                 $self->received_from->abort("invalid_block");
             }
+        }
+        # If this block failed checkpoint validation, the chain since the previous checkpoint
+        # is from a malicious peer (scripts were skipped during IBD). Roll back to allow
+        # re-syncing from an honest peer.
+        if (checkpoint_hash($self->height)) {
+            _rollback_to_checkpoint($self->height);
         }
         return -1;
     }
@@ -316,6 +324,64 @@ sub receive {
     }
 
     return 0;
+}
+
+sub _rollback_to_checkpoint {
+    my ($failed_height) = @_;
+
+    my $target_height = prev_checkpoint_height($failed_height);
+    Warningf("Rolling back blockchain from height %u to %d to recover from checkpoint failure",
+        $HEIGHT // -1, $target_height);
+
+    # Unconfirm and free in-memory blocks (those not yet stored to DB)
+    while (defined($HEIGHT) && $HEIGHT > $target_height) {
+        my $h = $HEIGHT;
+        if (my $bl = delete $best_block[$h]) {
+            foreach my $tx (reverse @{$bl->transactions}) {
+                $tx->unconfirm();
+            }
+            $bl->free();
+        }
+        $HEIGHT--;
+    }
+    $HEIGHT = undef if defined($HEIGHT) && $HEIGHT < 0;
+
+    # Clear next_block pointer on new best tip
+    if (defined($HEIGHT) && $best_block[$HEIGHT]) {
+        $best_block[$HEIGHT]->next_block(undef);
+    }
+
+    # Handle blocks already stored to DB
+    my $class = 'QBitcoin::Block';
+    if ($class->max_db_height > $target_height) {
+        my $tx_class = 'QBitcoin::Transaction';
+        # Load and unconfirm transactions from stored blocks to restore UTXO state
+        foreach my $tx_hashref (QBitcoin::ORM::fetch($tx_class,
+            block_height => { '>', $target_height },
+            -sortby => 'block_height DESC, block_pos DESC'))
+        {
+            my $tx = $tx_class->get($tx_hashref->{hash});
+            if (!$tx) {
+                $tx_class->pre_load($tx_hashref);
+                $tx = $tx_class->new($tx_hashref);
+                if ($tx->validate_hash) {
+                    foreach my $in (@{$tx->in}) {
+                        $in->{txo}->spent_del($tx);
+                    }
+                    next;
+                }
+                $tx->add_to_cache;
+            }
+            $tx->unconfirm();
+        }
+        # Delete blocks from DB (cascades to transactions)
+        for (my $n = $class->max_db_height; $n > $target_height; $n--) {
+            $class->new(height => $n)->delete;
+        }
+        $class->max_db_height($target_height);
+    }
+
+    $MIN_INCORE_HEIGHT = undef if defined($MIN_INCORE_HEIGHT) && $MIN_INCORE_HEIGHT > $target_height + 1;
 }
 
 sub store_blocks {

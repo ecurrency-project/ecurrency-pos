@@ -5,7 +5,7 @@ use strict;
 use QBitcoin::Config;
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(checkpoint_hash max_checkpoint_height upgrade_finished);
+our @EXPORT_OK = qw(checkpoint_hash max_checkpoint_height prev_checkpoint_height upgrade_finished);
 
 use constant CHECKPOINTS => {
     # height => pack('H*', "block_hash_hex"),
@@ -33,6 +33,17 @@ sub checkpoint_hash {
 sub max_checkpoint_height {
     _init_checkpoints() if !defined $max_checkpoint_height;
     return $max_checkpoint_height;
+}
+
+sub prev_checkpoint_height {
+    _init_checkpoints() if !defined $checkpoints;
+    my ($height) = @_;
+    my $prev = -1;
+    for my $cp_height (sort { $a <=> $b } keys %$checkpoints) {
+        last if $cp_height >= $height;
+        $prev = $cp_height;
+    }
+    return $prev;
 }
 
 sub upgrade_finished {
