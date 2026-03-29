@@ -9,7 +9,6 @@ use QBitcoin::Config;
 use QBitcoin::TXO;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced skip_scripts);
 use QBitcoin::CheckPoints qw(checkpoint_hash max_checkpoint_height prev_checkpoint_height);
-use QBitcoin::ORM;
 use QBitcoin::Transaction;
 use QBitcoin::ConnectionList;
 use QBitcoin::Generate::Control;
@@ -239,10 +238,7 @@ sub receive {
     if ($new_best->height <= QBitcoin::Block->max_db_height && !$loaded) {
         # Remove stored blocks in old best branch to keep database blockchain consistent during saving new branch
         # and do not create huge sql transactions
-        # TODO: implement ORM method delete_by(); QBitcoin::Block->delete_by(height => { '>' => $incore_height })
-        for (my $n = QBitcoin::Block->max_db_height; $n >= $new_best->height; $n--) {
-            QBitcoin::Block->new(height => $n)->delete;
-        }
+        QBitcoin::Block->delete_by(height => { '>=' => $new_best->height });
         QBitcoin::Block->max_db_height($new_best->height-1);
     }
     for (my $bl = $new_best; $bl; $bl = $bl->next_block) {
@@ -366,7 +362,7 @@ sub _rollback_to_checkpoint {
     if ($class->max_db_height > $target_height) {
         my $tx_class = 'QBitcoin::Transaction';
         # Load and unconfirm transactions from stored blocks to restore UTXO state
-        foreach my $tx_hashref (QBitcoin::ORM::fetch($tx_class,
+        foreach my $tx_hashref ($tx_class->fetch(
             block_height => { '>', $target_height },
             -sortby => 'block_height DESC, block_pos DESC'))
         {

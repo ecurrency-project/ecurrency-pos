@@ -5,7 +5,7 @@ use strict;
 use Role::Tiny;
 use QBitcoin::Log;
 use QBitcoin::Const;
-use QBitcoin::ORM qw(find replace delete);
+use QBitcoin::ORM qw(find replace delete delete_by);
 use QBitcoin::ORM::Transaction;
 
 use constant TABLE => 'block';
