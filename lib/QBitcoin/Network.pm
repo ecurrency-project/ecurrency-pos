@@ -12,7 +12,7 @@ use QBitcoin::Log;
 use QBitcoin::Peer;
 use QBitcoin::Connection;
 use QBitcoin::ConnectionList;
-use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced);
+use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer);
 use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Generate;
 use QBitcoin::Produce;
@@ -166,8 +166,8 @@ sub main_loop {
         vec($rin, fileno($listen_rest),   1) = 1 if $listen_rest;
 
         call_qbt_peers();
-        QBitcoin::Protocol->check_sync_peer();
         call_btc_peers();
+        check_sync_peer();
 
         my @connections = QBitcoin::ConnectionList->list;
         foreach my $connection (@connections) {
@@ -319,7 +319,6 @@ sub main_loop {
                 }
                 if ($n > 0) {
                     $connection->recvbuf .= $data;
-                    $connection->protocol->last_traffic_time = Time::HiRes::time() if $connection->protocol->can('last_traffic_time');
                     $was_traffic = 1;
                 }
                 elsif ($n == 0) {
@@ -428,6 +427,50 @@ sub set_pinned_peers {
             delete @pinned_btc{ map { $_->ip } @peers };
         }
         $_->update(pinned => 0) foreach values %pinned_btc;
+    }
+}
+
+sub check_sync_peer {
+    if (blockchain_synced()) {
+        sync_peer(undef);
+        return;
+    }
+    if (my $sp = sync_peer()) {
+        if (!$sp->connection || $sp->connection->state != STATE_CONNECTED) {
+            Infof("Sync peer %s disconnected, selecting new sync peer", $sp->peer->id);
+            sync_peer(undef);
+        }
+        elsif (Time::HiRes::time() - $sp->last_recv_time > SYNC_PEER_TIMEOUT) {
+            Infof("Sync peer %s timed out (no data for %u sec), selecting new sync peer", $sp->peer->id, SYNC_PEER_TIMEOUT);
+            $sp->syncing(0);
+            sync_peer(undef);
+        }
+        else {
+            return;
+        }
+    }
+    # Select new sync peer: prefer highest has_weight, then lowest ping_avg_ms
+    my $best;
+    foreach my $connection (grep { $_->type_id == PROTOCOL_QBITCOIN && $_->state == STATE_CONNECTED } QBitcoin::ConnectionList->list()) {
+        my $proto = $connection->protocol;
+        next unless $proto->greeted;
+        next unless defined $proto->has_weight;
+        next if ($connection->peer->reputation // 0) < QBitcoin::Peer::MIN_REPUTATION;
+        if (!$best
+            || ($proto->has_weight // -1) > ($best->has_weight // -1)
+            || ($proto->has_weight // -1) == ($best->has_weight // -1)
+                && ($proto->peer->ping_avg_ms // 9999) < ($best->peer->ping_avg_ms // 9999))
+        {
+            $best = $proto;
+        }
+    }
+    if ($best) {
+        Infof("Selected sync peer %s (weight %Lu, ping %s ms)", $best->peer->id,
+            $best->has_weight // 0, $best->peer->ping_avg_ms // "?");
+        sync_peer($best);
+        if (!$best->syncing) {
+            $best->request_new_block();
+        }
     }
 }
 
