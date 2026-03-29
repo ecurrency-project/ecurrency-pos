@@ -360,28 +360,7 @@ sub _rollback_to_checkpoint {
     # Handle blocks already stored to DB
     my $class = 'QBitcoin::Block';
     if ($class->max_db_height > $target_height) {
-        my $tx_class = 'QBitcoin::Transaction';
-        # Load and unconfirm transactions from stored blocks to restore UTXO state
-        foreach my $tx_hashref ($tx_class->fetch(
-            block_height => { '>', $target_height },
-            -sortby => 'block_height DESC, block_pos DESC'))
-        {
-            my $tx = $tx_class->get($tx_hashref->{hash});
-            if (!$tx) {
-                $tx_class->pre_load($tx_hashref);
-                $tx = $tx_class->new($tx_hashref);
-                if ($tx->validate_hash) {
-                    foreach my $in (@{$tx->in}) {
-                        $in->{txo}->spent_del($tx);
-                    }
-                    next;
-                }
-                $tx->add_to_cache;
-            }
-            $tx->unconfirm();
-        }
-        # Delete blocks from DB in one query (cascades to transactions)
-        $class->delete_by(height => { '>' => $target_height });
+        QBitcoin::Block->delete_since_height($target_height + 1);
         $class->max_db_height($target_height);
     }
 

@@ -92,26 +92,10 @@ sub revalidate {
     }
     Noticef("Blocks starting from height %d are invalid", $bad_height);
     # Remove all blocks starting from the bad block
-    # It's safe to remove the loop with unconfirming transactions,
-    # in this case they will not be saved in mempool (mb huge)
+    # It's safe to change this to "QBitcoin::Block->delete_by(height => { '>=' => $bad_height })"
+    # in this case transactions will not be saved in mempool (mb huge)
     # and will be requested from the neighbor nodes as on usual blockchain sync
-    foreach my $tx_hashref ($tx_class->fetch( block_height => { '>=' => $bad_height }, -sortby => 'block_height DESC, block_pos DESC' )) {
-        my $tx = $tx_class->get($tx_hashref->{hash});
-        if (!$tx) {
-            $tx_class->pre_load($tx_hashref);
-            $tx = $tx_class->new($tx_hashref);
-            if ($tx->validate_hash or $tx->validate) {
-                foreach my $in (@{$tx->in}) {
-                    $in->{txo}->spent_del($tx);
-                }
-                next;
-            }
-            $tx->add_to_cache;
-        }
-        $tx->received_time = time();
-        $tx->unconfirm;
-    }
-    QBitcoin::Block->delete_by(height => { '>=' => $bad_height });
+    QBitcoin::Block->delete_since_height($bad_height);
 }
 
 1;
