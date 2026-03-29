@@ -3,7 +3,6 @@ use warnings;
 use strict;
 
 use QBitcoin::Log;
-use QBitcoin::ORM;
 use QBitcoin::Const;
 use QBitcoin::ProtocolState qw(skip_scripts);
 use QBitcoin::CheckPoints qw(checkpoint_hash max_checkpoint_height);
@@ -46,7 +45,7 @@ sub revalidate {
             my $checkpointed = $block->height <= max_checkpoint_height();
             skip_scripts($checkpointed ? 1 : 0);
             my @txs;
-            foreach my $txhash (QBitcoin::ORM::fetch($tx_class, block_height => $block->height, -sortby => 'block_pos ASC')) {
+            foreach my $txhash ($tx_class->fetch(block_height => $block->height, -sortby => 'block_pos ASC')) {
                 $tx_class->pre_load($txhash);
                 my $tx = $tx_class->new($txhash);
                 my $hash = $tx->hash;
@@ -96,7 +95,7 @@ sub revalidate {
     # It's safe to remove the loop with unconfirming transactions,
     # in this case they will not be saved in mempool (mb huge)
     # and will be requested from the neighbor nodes as on usual blockchain sync
-    foreach my $tx_hashref (QBitcoin::ORM::fetch( $tx_class, block_height => { '>=', $bad_height }, -sortby => 'block_height DESC, block_pos DESC' )) {
+    foreach my $tx_hashref ($tx_class->fetch( block_height => { '>=' => $bad_height }, -sortby => 'block_height DESC, block_pos DESC' )) {
         my $tx = $tx_class->get($tx_hashref->{hash});
         if (!$tx) {
             $tx_class->pre_load($tx_hashref);
@@ -112,10 +111,7 @@ sub revalidate {
         $tx->received_time = time();
         $tx->unconfirm;
     }
-    my $last_block = QBitcoin::Block->find(-sortby => "height DESC", -limit => 1);
-    for (my $height = $last_block->height; $height >= $bad_height; $height--) {
-        QBitcoin::Block->new(height => $height)->delete;
-    }
+    QBitcoin::Block->delete_by(height => { '>=' => $bad_height });
 }
 
 1;
