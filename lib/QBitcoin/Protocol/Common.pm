@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 use Scalar::Util qw(weaken);
-use Time::HiRes;
+use Time::HiRes qw(time);
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
@@ -20,7 +20,6 @@ use constant ATTR => qw(
     connection
     peer
     last_recv_time
-    last_traffic_time
     id
 );
 
@@ -33,7 +32,6 @@ sub new {
     my $self = bless $args, $class;
     $self->peer //= $self->connection->peer if $self->connection;
     $self->last_recv_time = time();
-    $self->last_traffic_time = Time::HiRes::time();
     $self->id = $self->connection->addr;
     return $self;
 }
@@ -76,7 +74,6 @@ sub receive {
         }
         my $func = "cmd_" . $command;
         if ($self->can($func)) {
-            $self->last_recv_time = time();
             Debugf("Received [%s] from %s peer %s", $command, $self->type, $self->peer->id);
             if ($command ne "pong") {
                 # Reset "syncing" state if we received no commands between send "ping" and receive corresponding "pong"
@@ -89,6 +86,7 @@ sub receive {
             }
             $self->$func($data) == 0
                 or return -1;
+            $self->last_recv_time = time();
             $self->peer->recv_good_command($self->connection->direction);
         }
         else {
