@@ -76,6 +76,9 @@ sub validate {
             return "Transaction " . $transaction->hash_str . " can't be included in block " . $block->height;
         }
         if (UPGRADE_POW && $transaction->coins_created) {
+            if ($upgraded >= UPGRADE_MAX_VALUE) {
+                return "Coinbase transaction " . $transaction->hash_str . " rejected: upgrade threshold reached";
+            }
             if ($transaction->upgrade_level != level_by_total($upgraded += $transaction->up->value_btc)) {
                 return "Incorrect upgrade level for transaction " . $transaction->hash_str;
             }

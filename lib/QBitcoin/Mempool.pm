@@ -58,6 +58,10 @@ sub choose_for_block {
     my %mempool_out; # for allow spend unconfirmed in the same block
     for (my $i=0; $i<=$#mempool; $i++) {
         if (UPGRADE_POW && $mempool[$i]->is_coinbase) {
+            if ($upgraded_total >= UPGRADE_MAX_VALUE) {
+                $mempool[$i] = undef;
+                next;
+            }
             my $coinbase = $mempool[$i]->up;
             if ($coinbase->tx_out && $coinbase->tx_out ne $mempool[$i]->hash) {
                 # Already confirmed spent with another upgrade level

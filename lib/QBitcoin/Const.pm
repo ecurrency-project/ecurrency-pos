@@ -75,6 +75,7 @@ use constant QBITCOIN_CONST => {
     UPGRADE_POW             => 1,
     UPGRADE_FEE             => 0.01, # 1%
     UPGRADE_MAX_BLOCKS      => 1400000, # middle 2036
+    UPGRADE_MAX_VALUE       => 10_500_000 * 100_000_000, # 10.5M BTC - stop conversion when upgraded reaches this
     COINBASE_CONFIRM_TIME   => 2*3600,  # 2 hours
     COINBASE_CONFIRM_BLOCKS => 6,
     COINBASE_WEIGHT_TIME    => 365*24*3600, # 1 year

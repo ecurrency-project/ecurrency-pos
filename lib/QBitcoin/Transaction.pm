@@ -355,10 +355,18 @@ sub cleanup_mempool {
             next;
         }
         if (UPGRADE_POW && $tx->is_coinbase) {
+            my $drop;
             if ($tx->up->tx_out) {
+                $drop = "already spent in " . $tx->hash_str($tx->up->tx_out);
+            }
+            elsif (my $best = QBitcoin::Block->best_block) {
+                if (($best->upgraded // 0) >= UPGRADE_MAX_VALUE) {
+                    $drop = "upgrade threshold reached";
+                }
+            }
+            if ($drop) {
                 if ($tx->drop()) {
-                    Infof("Drop coinbase tx %s from mempool b/c it was already spent in %s",
-                        $tx->hash_str, $tx->hash_str($tx->up->tx_out));
+                    Infof("Drop coinbase tx %s from mempool: %s", $tx->hash_str, $drop);
                 }
             }
             next;
