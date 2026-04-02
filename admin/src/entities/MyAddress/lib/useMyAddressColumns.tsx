@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Switch } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
+import { AddressBalance } from '@/entities/Address';
+
 import { RouterPath } from '@/shared/config/router/router';
 
 import type { IMyAddress } from '../model/types/myAddress';
@@ -22,6 +24,15 @@ export function useMyAddressColumns(props: UseMyAddressColumnsProps) {
             key: 'address',
             render: (addr: string) => (
                 <Link to={RouterPath.address.replace(':id', addr)}>{addr}</Link>
+            ),
+        },
+        {
+            title: 'Balance',
+            key: 'balance',
+            width: 200,
+            align: 'right' as const,
+            render: (_: unknown, record: IMyAddress) => (
+                <AddressBalance address={record.address} />
             ),
         },
         {
