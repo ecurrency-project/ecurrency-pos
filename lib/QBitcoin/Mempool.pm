@@ -161,6 +161,11 @@ sub compare_tx {
     # coinbase first
     return
         ( $a->coins_created ? 0 : 1 ) <=> ( $b->coins_created ? 0 : 1 ) || # coinbase first
+        ( $a->up && $b->up ? (
+            ($a->up->btc_block_height // 0) <=> ($b->up->btc_block_height // 0) ||
+            ($a->up->btc_tx_num       // 0) <=> ($b->up->btc_tx_num       // 0) ||
+            ($a->up->btc_out_num      // 0) <=> ($b->up->btc_out_num      // 0)
+        ) : 0 ) ||
         $b->fee * $a->size <=> $a->fee * $b->size ||
         $a->received_time  <=> $b->received_time  ||
         $a->hash cmp $b->hash;
