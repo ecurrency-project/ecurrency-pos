@@ -8,7 +8,7 @@ use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
 use QBitcoin::ORM qw(dbh);
-use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair);
+use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Block;
 use QBitcoin::Coinbase;
 use QBitcoin::Transaction;
@@ -571,6 +571,15 @@ sub cmd_sendrawtransaction {
     }
     if (!$tx->load_txo()) {
         return $self->response_error("", ERR_DESERIALIZATION_ERROR, "Incorrect transaction data.");
+    }
+    # Reject downgrade transactions (outputs to freeze address) when upgrade threshold reached
+    if (my $best_block = QBitcoin::Block->best_block) {
+        if (($best_block->upgraded // 0) >= UPGRADE_MAX_VALUE) {
+            my $freeze_scripthash = hash160(QBT_BURN_SCRIPT);
+            if (grep { $_->scripthash eq $freeze_scripthash && $_->data } @{$tx->out}) {
+                return $self->response_error("", ERR_INVALID_REQUEST, "Conversion threshold reached, downgrade not accepted.");
+            }
+        }
     }
     if ($tx->is_pending) {
         return $self->response_error("", ERR_VERIFY_ALREADY_IN_CHAIN, "Some inputs unknown.");
