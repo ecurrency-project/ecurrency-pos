@@ -7,10 +7,10 @@ const transactionApi = rtkApi.injectEndpoints({
             query: ({ id }) => `/api/tx/${id}`,
         }),
         getOutspends: build.query<ISpend[], { txid: string }>({
-            query: ({ txid }) => `/tx/${txid}/outspends`,
+            query: ({ txid }) => `/api/tx/${txid}/outspends`,
         }),
         getTransactionsByBlock: build.query<ITransaction[], { blockHeight: string, offset?: number }>({
-            query: ({ blockHeight, offset = 0 }) => `/block/${blockHeight}/txs/${offset}`,
+            query: ({ blockHeight, offset = 0 }) => `/api/block/${blockHeight}/txs/${offset}`,
             serializeQueryArgs: (params) => {
                 return params.queryArgs.blockHeight
             },
@@ -22,7 +22,7 @@ const transactionApi = rtkApi.injectEndpoints({
             }
         }),
         getTransactionsByAddress: build.query<ITransaction[], { address: string, chainHash: string }>({
-            query: ({ address, chainHash }) => `/address/${address}/txs${chainHash ? `/chain/${chainHash}` : ''}`,
+            query: ({ address, chainHash }) => `/api/address/${address}/txs${chainHash ? `/api/chain/${chainHash}` : ''}`,
             serializeQueryArgs: (params) => {
                 return params.queryArgs.address
             },
@@ -34,7 +34,7 @@ const transactionApi = rtkApi.injectEndpoints({
             }
         }),
         getMempoolRecentTransactions: build.query<TxShort[], void>({
-            query: () => `/mempool/recent`,
+            query: () => `/api/mempool/recent`,
         }),
     }),
     overrideExisting: false,

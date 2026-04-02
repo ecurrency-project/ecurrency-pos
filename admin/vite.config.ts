@@ -28,7 +28,17 @@ export default defineConfig({
     server: {
         proxy: {
             '/api': {
-                target: 'http://127.0.0.1:9668',
+                target: 'http://127.0.0.1:9669',
+                changeOrigin: true,
+                secure: false,
+            },
+            '/admin': {
+                target: 'http://127.0.0.1:9669',
+                changeOrigin: true,
+                secure: false,
+            },
+            '/wallet': {
+                target: 'http://127.0.0.1:9669',
                 changeOrigin: true,
                 secure: false,
             },
