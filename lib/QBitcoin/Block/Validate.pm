@@ -160,6 +160,16 @@ sub validate_chain {
                 $fail_tx = $tx->hash;
                 last;
             }
+            # Strict coinbase ordering: previous coinbase in BTC order must be already included in this branch
+            if (!skip_scripts() && (my $prev = $coinbase->prev())) {
+                if (!$prev->{confirmed}) {
+                    Warningf("Coinbase %u:%u:%u has predecessor %u:%u:%u but it's not included in this branch",
+                        $coinbase->btc_block_height, $coinbase->btc_tx_num, $coinbase->btc_out_num,
+                        $prev->{btc_block_height}, $prev->{btc_tx_num}, $prev->{btc_out_num});
+                    $fail_tx = $tx->hash;
+                    last;
+                }
+            }
         }
         if (!@{$tx->in} && !$tx->coins_created) {
             if ($num > 0) {

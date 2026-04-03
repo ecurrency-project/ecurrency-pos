@@ -431,6 +431,30 @@ sub min_tx_time {
     return COINBASE_CONFIRM_TIME + ($self->btc_confirm_time // return undef);
 }
 
+sub prev {
+    my $self = shift;
+    my $h = $self->btc_block_height;
+    my $t = $self->btc_tx_num;
+    my $o = $self->btc_out_num;
+    my $sql = "SELECT btc_block_height, btc_tx_num, btc_out_num, btc_tx_hash, tx_out FROM `" . TABLE . "`"
+        . " WHERE (btc_block_height < ? OR (btc_block_height = ? AND btc_tx_num < ?)"
+        . " OR (btc_block_height = ? AND btc_tx_num = ? AND btc_out_num < ?))"
+        . " ORDER BY btc_block_height DESC, btc_tx_num DESC, btc_out_num DESC LIMIT 1";
+    my $sth = dbh->prepare($sql);
+    $sth->execute($h, $h, $t, $h, $t, $o);
+    my $prev = $sth->fetchrow_hashref()
+        or return undef;
+    # Confirmed but not stored yet?
+    my $key = $prev->{btc_tx_hash} . $prev->{btc_out_num};
+    if (defined($COINBASE{$key})) {
+        $prev->{confirmed} = $COINBASE{$key}->tx_out ? 1 : 0;
+    }
+    else {
+        $prev->{confirmed} = $prev->{tx_out} ? 1 : 0;
+    }
+    return $prev;
+}
+
 sub tx_out_str {
     my $self = shift;
     my $tx_out = $self->tx_out // return undef;
