@@ -97,6 +97,7 @@ sub process_btc_block {
     if (defined $block->height) {
         $LAST_BLOCK = $block;
         $self->announce_btc_block_to_peers($block);
+        $block->update_btc_stopped;
     }
     return $block;
 }

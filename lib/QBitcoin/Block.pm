@@ -9,6 +9,7 @@ use QBitcoin::Config;
 use QBitcoin::ProtocolState qw(skip_scripts);
 use QBitcoin::Transaction;
 use QBitcoin::ValueUpgraded qw(level_by_total upgrade_value);
+use Bitcoin::Block;
 
 use Role::Tiny::With;
 with 'QBitcoin::Block::Receive';
@@ -151,11 +152,15 @@ sub hash_str {
 
 sub reward {
     my $class = shift;
-    my ($prev_block, $fee) = @_;
+    my ($prev_block, $fee, $timeslot) = @_;
     if ($prev_block) {
         my $reward_fund = $prev_block->reward_fund + $fee
             or return 0;
-        return int($reward_fund / REWARD_DIVIDER) || 1;
+        my $reward = int($reward_fund / REWARD_DIVIDER) || 1;
+        if ($prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped($timeslot)) {
+            $reward += int(STATIC_REWARD / 2**int($prev_block->height / REWARD_HALVING));
+        }
+        return $reward;
     }
     else {
         return $config->{regtest} ? $config->{genesis_reward} // 0 : GENESIS_REWARD;

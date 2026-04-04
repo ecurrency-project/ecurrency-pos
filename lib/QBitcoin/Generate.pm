@@ -238,7 +238,7 @@ sub generate {
     }
 
     my $fee = sum0 map { $_->fee } @transactions;
-    my $reward_block = QBitcoin::Block->reward($prev_block, $fee);
+    my $reward_block = QBitcoin::Block->reward($prev_block, $fee, $timeslot);
     # Block reward if the block will be empty
     my $reward_empty = ($timeslot - genesis_time) % (BLOCK_INTERVAL * FORCE_BLOCKS) ? 0 : $reward_block;
     my $reward = $fee ? $reward_block : $reward_empty;
