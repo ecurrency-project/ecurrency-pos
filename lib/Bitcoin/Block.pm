@@ -8,6 +8,7 @@ use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::ORM qw(:types fetch find create update delete);
 use QBitcoin::Crypto qw(hash256);
+use QBitcoin::CheckPoints qw(upgrade_finished);
 use Role::Tiny::With;
 with 'QBitcoin::Block::MerkleTree';
 
@@ -116,6 +117,23 @@ sub prev_hash_hex {
 sub tx_hashes {
     my $self = shift;
     return [ map { $_->hash } @{$self->transactions} ];
+}
+
+my $upgrade_stopped_block;
+
+sub upgrade_stopped {
+    my ($timeslot) = @_;
+    return 1 if upgrade_finished();
+    $upgrade_stopped_block //= __PACKAGE__->find(height => UPGRADE_MAX_BLOCKS + COINBASE_CONFIRM_BLOCKS) // 0;
+    return 0 unless $upgrade_stopped_block;
+    return $timeslot >= $upgrade_stopped_block->time + COINBASE_CONFIRM_TIME;
+}
+
+sub update_btc_stopped {
+    my $self = shift;
+    if ($self->height == UPGRADE_MAX_BLOCKS + COINBASE_CONFIRM_BLOCKS) {
+        $upgrade_stopped_block = $self;
+    }
 }
 
 1;

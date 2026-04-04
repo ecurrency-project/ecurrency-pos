@@ -112,7 +112,9 @@ sub validate {
             return "Transaction " . $transaction->hash_str . " is not a coinbase, stake or standard transaction";
         }
     }
-    my $block_reward = (ref $block)->reward($block->prev_block, $fee);
+    # After UPGRADE_FINISHED we can have no btc blocks and do not know when the upgrade was stopped,
+    # so trust the stake reward in this case (until checkpoint)
+    my $block_reward = skip_scripts() ? $stake_reward : (ref $block)->reward($block->prev_block, $fee, $block->timeslot);
     # There are no block rewards for empty blocks
     if ($empty_tx >= @{$block->transactions} - 1 && (timeslot($block->time) - $genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS) {
         $block_reward = 0;
