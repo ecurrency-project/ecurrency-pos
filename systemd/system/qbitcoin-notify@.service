@@ -1,10 +1,10 @@
 [Unit]
-Description=QBitcoin address notification service
+Description=QBitcoin address notification service for %I
 After=qbitcoind.service
 BindsTo=qbitcoind.service
 
 [Service]
-ExecStart=/usr/local/bin/qbitcoin-notify
+ExecStart=/usr/local/bin/qbitcoin-notify --config=/etc/qbtc-notify-%i.conf
 User=qbitcoin
 Group=qbitcoin
 ProtectSystem=full
