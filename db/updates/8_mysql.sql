@@ -1,0 +1,8 @@
+CREATE TABLE `tag` (
+  id integer NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  tag varchar(64) NOT NULL UNIQUE
+);
+
+ALTER TABLE `my_address`
+  ADD COLUMN tag_id integer DEFAULT NULL,
+  ADD FOREIGN KEY (tag_id) REFERENCES `tag` (id) ON DELETE SET NULL;
