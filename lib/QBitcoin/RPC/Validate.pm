@@ -37,6 +37,7 @@ my %SPEC = (
     privatekeys    => \&validate_privkeys,
     privkey        => \&validate_privkey,
     address_type   => \&validate_address_type,
+    tag            => qr/^(?:[a-zA-Z][a-zA-Z0-9_.-]{0,63})?\z/,
 );
 
 sub validate {

@@ -53,11 +53,18 @@ CREATE TABLE `txo` (
 );
 CREATE INDEX `tx_out` ON `txo` (tx_out);
 
+CREATE TABLE `tag` (
+  id integer NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  tag varchar(64) NOT NULL UNIQUE
+);
+
 CREATE TABLE `my_address` (
   address     varchar(255) NOT NULL PRIMARY KEY,
   private_key blob(4096)   NOT NULL, -- TODO: encrypted
   algo        int unsigned NOT NULL DEFAULT 1,
-  staked      int unsigned NOT NULL DEFAULT 0
+  staked      int unsigned NOT NULL DEFAULT 0,
+  tag_id      integer DEFAULT NULL,
+  FOREIGN KEY (tag_id) REFERENCES `tag` (id) ON DELETE SET NULL
 );
 
 CREATE TABLE `btc_block` (

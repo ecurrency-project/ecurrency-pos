@@ -10,36 +10,36 @@ use QBitcoin::MyAddress;
 use QBitcoin::Address qw(address_by_hash);
 
 my $ENABLED;
-my $FH;           # file handle for file/pipe mode
-my $UDP_SOCKET;   # socket for UDP mode
-my $NOTIFY_FILE;  # file path for reopen
+my $BASE_CHANNEL;  # default (untagged) channel
+my %CHANNELS;      # tag_name => channel hashref
 
 sub init {
     my $class = shift;
+
+    # Base channel
     if ($config->{notify_file}) {
-        $NOTIFY_FILE = $config->{notify_file};
-        _open_file();
-        $ENABLED = 1;
-        Infof("Notify: file channel initialized: %s", $NOTIFY_FILE);
+        $BASE_CHANNEL = _init_file_channel($config->{notify_file});
+        $ENABLED = 1 if $BASE_CHANNEL;
     }
     elsif ($config->{notify_udp}) {
-        my ($host, $port) = split(/:/, $config->{notify_udp});
-        if (!$host || !$port) {
-            Errf("Notify: invalid notify-udp format, expected host:port, got: %s", $config->{notify_udp});
-            return;
+        $BASE_CHANNEL = _init_udp_channel($config->{notify_udp});
+        $ENABLED = 1 if $BASE_CHANNEL;
+    }
+
+    # Per-tag channels: scan config for notify_file.TAG and notify_udp.TAG
+    my %seen;
+    for my $key ($config->keys) {
+        next if $seen{$key}++;
+        if ($key =~ /^notify_file\.(.+)$/) {
+            my $tag = $1;
+            $CHANNELS{$tag} = _init_file_channel($config->{$key});
+            $ENABLED = 1 if $CHANNELS{$tag};
         }
-        require IO::Socket::INET;
-        $UDP_SOCKET = IO::Socket::INET->new(
-            Proto    => 'udp',
-            PeerAddr => $host,
-            PeerPort => $port,
-        );
-        if (!$UDP_SOCKET) {
-            Errf("Notify: failed to create UDP socket to %s:%s: %s", $host, $port, $!);
-            return;
+        elsif ($key =~ /^notify_udp\.(.+)$/) {
+            my $tag = $1;
+            $CHANNELS{$tag} = _init_udp_channel($config->{$key});
+            $ENABLED = 1 if $CHANNELS{$tag};
         }
-        $ENABLED = 1;
-        Infof("Notify: UDP channel initialized: %s:%s", $host, $port);
     }
 }
 
@@ -47,35 +47,65 @@ sub enabled {
     return $ENABLED;
 }
 
-sub _open_file {
-    if ($FH) {
-        close $FH;
-        undef $FH;
+sub _init_file_channel {
+    my ($path) = @_;
+    my $channel = { type => 'file', path => $path, fh => undef };
+    _reopen_file($channel);
+    Infof("Notify: file channel initialized: %s", $path);
+    return $channel;
+}
+
+sub _init_udp_channel {
+    my ($addr) = @_;
+    my ($host, $port) = split(/:/, $addr);
+    if (!$host || !$port) {
+        Errf("Notify: invalid notify-udp format, expected host:port, got: %s", $addr);
+        return undef;
     }
-    if (!sysopen($FH, $NOTIFY_FILE, O_WRONLY | O_NONBLOCK | O_APPEND)) {
+    require IO::Socket::INET;
+    my $socket = IO::Socket::INET->new(
+        Proto    => 'udp',
+        PeerAddr => $host,
+        PeerPort => $port,
+    );
+    if (!$socket) {
+        Errf("Notify: failed to create UDP socket to %s:%s: %s", $host, $port, $!);
+        return undef;
+    }
+    Infof("Notify: UDP channel initialized: %s:%s", $host, $port);
+    return { type => 'udp', socket => $socket };
+}
+
+sub _reopen_file {
+    my ($channel) = @_;
+    if ($channel->{fh}) {
+        close $channel->{fh};
+        undef $channel->{fh};
+    }
+    my $fh;
+    if (!sysopen($fh, $channel->{path}, O_WRONLY | O_NONBLOCK | O_APPEND)) {
         # ENXIO is expected for FIFO with no reader
         if ($! == ENXIO) {
-            Debugf("Notify: no reader for pipe %s", $NOTIFY_FILE);
+            Debugf("Notify: no reader for pipe %s", $channel->{path});
         }
         else {
-            Warningf("Notify: failed to open %s: %s", $NOTIFY_FILE, $!);
+            Warningf("Notify: failed to open %s: %s", $channel->{path}, $!);
         }
-        undef $FH;
         return 0;
     }
+    $channel->{fh} = $fh;
     return 1;
 }
 
-sub notify {
-    my $class = shift;
-    my ($message) = @_;
-    return unless $ENABLED;
+sub _notify_channel {
+    my ($channel, $message) = @_;
+    return unless $channel;
 
-    if ($NOTIFY_FILE) {
-        if (!$FH) {
-            _open_file() or return;
+    if ($channel->{type} eq 'file') {
+        if (!$channel->{fh}) {
+            _reopen_file($channel) or return;
         }
-        my $written = syswrite($FH, $message);
+        my $written = syswrite($channel->{fh}, $message);
         if (!defined $written) {
             if ($! == EAGAIN) {
                 # pipe buffer full, drop silently
@@ -84,19 +114,26 @@ sub notify {
             elsif ($! == EPIPE) {
                 # reader disconnected, close and reopen later
                 Debugf("Notify: reader disconnected, will reopen");
-                close $FH;
-                undef $FH;
+                close $channel->{fh};
+                undef $channel->{fh};
             }
             else {
                 Warningf("Notify: write error: %s", $!);
-                close $FH;
-                undef $FH;
+                close $channel->{fh};
+                undef $channel->{fh};
             }
         }
     }
-    elsif ($UDP_SOCKET) {
-        $UDP_SOCKET->send($message);
+    elsif ($channel->{type} eq 'udp') {
+        $channel->{socket}->send($message);
     }
+}
+
+sub notify {
+    my $class = shift;
+    my ($message) = @_;
+    return unless $ENABLED;
+    _notify_channel($BASE_CHANNEL, $message);
 }
 
 sub check_output {
@@ -114,10 +151,15 @@ sub check_output {
     my $block_height = $block ? $block->height : -1;
 
     my $message = join("\t", $timestamp, $address, $value, $txid, $block_height) . "\n";
-    $class->notify($message);
 
-    Debugf("Notify: %s event for address %s, value %lu, tx %s, height %d",
-        $block ? "confirmed" : "mempool", $address, $value, substr($txid, 0, 8), $block_height);
+    # Route to the appropriate channel based on address tag
+    my $tag = $my_address->tag;
+    my $channel = ($tag && $CHANNELS{$tag}) ? $CHANNELS{$tag} : $BASE_CHANNEL;
+    _notify_channel($channel, $message);
+
+    Debugf("Notify: %s event for address %s, value %lu, tx %s, height %d%s",
+        $block ? "confirmed" : "mempool", $address, $value, substr($txid, 0, 8), $block_height,
+        $tag ? ", tag $tag" : "");
 }
 
 sub check_block {

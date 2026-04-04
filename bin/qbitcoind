@@ -84,7 +84,8 @@ sub main {
 
     QBitcoin::Log->init();
 
-    if ($config->{notify_file} || $config->{notify_udp}) {
+    if ($config->{notify_file} || $config->{notify_udp} ||
+        grep { /^notify_(?:file|udp)\./ } $config->keys) {
         QBitcoin::Notify->init();
     }
 

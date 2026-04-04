@@ -17,6 +17,7 @@ use QBitcoin::Transaction;
 use QBitcoin::TXO;
 use QBitcoin::Address qw(wif_to_pk scripthash_by_address address_by_pubkey wallet_import_format address_by_hash);
 use QBitcoin::MyAddress;
+use QBitcoin::Tag;
 use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
@@ -1192,9 +1193,9 @@ sub cmd_importprivkey {
     return $self->response_ok("Private key for address $address imported");
 }
 
-$PARAMS{importaddress} = "address";
+$PARAMS{importaddress} = "address tag?";
 $HELP{importaddress} = qq(
-importaddress "address"
+importaddress "address" [ "tag" ]
 
 Adds a watch-only address to the wallet.
 Transactions to this address will be tracked and generate notifications
@@ -1202,12 +1203,14 @@ if a notification channel is configured.
 
 Arguments:
 1. address    (string, required) The qbitcoin address to watch
+2. tag        (string, optional) A tag for grouping notifications
 
 Result:
 "str"    (string) Result message
 
 Examples:
 > qbitcoin-cli importaddress "bqXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+> qbitcoin-cli importaddress "bqXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" "exchange"
 
 As a JSON-RPC call
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "importaddress", "params": ["address"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -1215,6 +1218,7 @@ As a JSON-RPC call
 sub cmd_importaddress {
     my $self = shift;
     my $address_str = $self->args->[0];
+    my $tag_name    = $self->args->[1];
     my $scripthash = scripthash_by_address($address_str);
 
     # Check if already exists
@@ -1222,12 +1226,54 @@ sub cmd_importaddress {
         return $self->response_ok("Address $address_str is already in the wallet");
     }
 
+    my %attrs = (address => $address_str);
+    if (defined $tag_name && length $tag_name) {
+        my $tag = QBitcoin::Tag->get_or_create($tag_name);
+        $attrs{tag_id} = $tag->id;
+    }
+
     # Create watch-only address (no private_key)
-    QBitcoin::MyAddress->create({
-        address => $address_str,
-    });
+    QBitcoin::MyAddress->create(\%attrs);
 
     return $self->response_ok("Watch-only address $address_str imported");
+}
+
+$PARAMS{setaddresstag} = "address tag?";
+$HELP{setaddresstag} = qq(
+setaddresstag "address" [ "tag" ]
+
+Sets or clears the tag for an address in the wallet.
+If tag is empty or omitted, the tag is cleared.
+
+Arguments:
+1. address    (string, required) The qbitcoin address
+2. tag        (string, optional) The tag to set (omit or "" to clear)
+
+Result:
+"str"    (string) Result message
+
+Examples:
+> qbitcoin-cli setaddresstag "bqXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" "exchange"
+> qbitcoin-cli setaddresstag "bqXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+);
+sub cmd_setaddresstag {
+    my $self = shift;
+    my $address_str = $self->args->[0];
+    my $tag_name    = $self->args->[1];
+    my $scripthash  = scripthash_by_address($address_str);
+
+    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
+        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Address not found in wallet");
+
+    if (defined $tag_name && length $tag_name) {
+        my $tag = QBitcoin::Tag->get_or_create($tag_name);
+        $my_address->update({ tag_id => $tag->id });
+        return $self->response_ok("Tag '$tag_name' set for address $address_str");
+    }
+    else {
+        $my_address->update({ tag_id => undef });
+        return $self->response_ok("Tag cleared for address $address_str");
+    }
 }
 
 $PARAMS{dumpprivkey} = "address";
@@ -1526,6 +1572,7 @@ Result:
     "algo" : [ "str" ],        (json array) list of crypto algorithms supported by the address
     "staked" : true|false      (boolean) whether the address is used for staking (block validation)
     "watchonly" : true|false   (boolean) whether the address is watch-only (no private key)
+    "tag" : "str"|null         (string or null) notification tag for this address
   },
   ...
 }
@@ -1542,6 +1589,7 @@ sub cmd_listmyaddresses {
             algo      => CRYPT_ALGO_NAMES->{$my_address->algo},
             staked    => $my_address->staked ? TRUE : FALSE,
             watchonly => $my_address->is_watchonly ? TRUE : FALSE,
+            tag       => $my_address->tag,
         };
     }
     $self->response_ok(\%list);
