@@ -1,9 +1,9 @@
-import axios from 'axios';
 import { isAddress, isHash256, isNumber } from '@/shared/utils';
 
 const tryResource = async (path: string) => {
-    const request = await axios.get(`/api/${path}`);
-    return request.data;
+    const response = await fetch(`/api/${path}`);
+    if (!response.ok) throw new Error(response.statusText);
+    return response.json();
 }
 
 export const searchRequest = async (query: string): Promise<string | null> => {
