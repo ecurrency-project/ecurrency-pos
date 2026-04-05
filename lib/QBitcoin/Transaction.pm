@@ -963,7 +963,6 @@ sub validate {
         }
     }
     my $class = ref $self;
-    my $input_value = 0;
     my %inputs;
     foreach my $in (@{$self->in}) {
         my $txo = $in->{txo};
@@ -982,7 +981,6 @@ sub validate {
                 $self->hash_str, $txo->tx_in_str, $txo->num);
             return -1;
         }
-        $input_value += $txo->value;
     }
     if ($self->is_stake) {
         if ($self->fee >= 0) {
