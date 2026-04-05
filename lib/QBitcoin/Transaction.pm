@@ -1,6 +1,7 @@
 package QBitcoin::Transaction;
 use warnings;
 use strict;
+use feature 'state';
 
 use Tie::IxHash;
 use List::Util qw(sum0);
@@ -1541,7 +1542,9 @@ sub up_value {
 
 sub coinbase_value {
     my ($value) = @_;
-    return int($value * (1 - UPGRADE_FEE));
+    state $permil = 1000 - int(UPGRADE_FEE * 1000);
+    use integer;
+    return $value * $permil / 1000;
 }
 
 # Create a transaction with already exising coinbase output
