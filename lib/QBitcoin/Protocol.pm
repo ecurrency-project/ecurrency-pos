@@ -268,12 +268,12 @@ sub cmd_block {
     }
 
     $block->load_transactions();
-    $self->syncing(0);
     if ($block->pending_tx) {
         $block->add_as_descendant();
         $self->request_tx($block->pending_tx);
     }
     else {
+        $self->syncing(0);
         $block->compact_tx();
         if ($block->receive() == 0) {
             $block = $block->process_pending();
