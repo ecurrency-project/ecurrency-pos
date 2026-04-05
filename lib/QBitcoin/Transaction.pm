@@ -1479,9 +1479,10 @@ sub stake_weight {
                     $self->hash_str, $in->tx_in_str, $in->num);
                 return undef;
             }
-            # TODO: Use Math::BigInt to prevent int64 overflow
             $weight += $in->value * (timeslot($block->time) - timeslot($in_block_time)) / BLOCK_INTERVAL;
         }
+        # Prevent int64 overflow, too large weight will not give more advantage, so just set it to maximum value
+        $weight = MAX_INT64 if $weight > MAX_INT64;
     }
     return int($weight / 0x10000); # prevent int64 overflow for total blockchain weight
 }
@@ -1497,6 +1498,7 @@ sub coinbase_weight {
         my $virtual_time = timeslot($confirm_time - COINBASE_WEIGHT_TIME); # MB negative, it's ok
         $weight = $self->up_value * ($base_time - $virtual_time) / BLOCK_INTERVAL;
         $weight *= ($base_time - $virtual_time) / (timeslot($block_time) - $virtual_time);
+        $weight = MAX_INT64 if $weight > MAX_INT64;
     }
     return int($weight / 0x10000); # prevent int64 overflow for total blockchain weight
 }
