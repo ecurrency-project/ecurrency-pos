@@ -44,7 +44,7 @@ sub checkmultisig($) {
     @$stack >= $nsig or return undef;
     my @sig = splice(@$stack, -$nsig-1);
     $nkeys >= $nsig or return 0;
-    $state->sigops -= $nsig >= 0 or return undef;
+    ($state->sigops -= $nsig) >= 0 or return undef;
     foreach my $sig (@sig) {
         while (1) {
             @pubkeys or return 0;
