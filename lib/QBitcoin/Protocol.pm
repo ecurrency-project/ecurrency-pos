@@ -43,7 +43,7 @@ use Time::HiRes;
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
-use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer);
+use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer last_qbt_data_time);
 use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Block;
 use QBitcoin::Transaction;
@@ -230,6 +230,7 @@ sub cmd_block {
         }
     }
 
+    last_qbt_data_time(time());
     $block->received_from = $self;
     if (($self->has_weight // -1) < $block->weight) {
         $self->has_weight = $block->weight;
@@ -325,6 +326,7 @@ sub cmd_blocks {
             }
         }
 
+        last_qbt_data_time(time());
         $block->received_from = $self;
         if (($self->has_weight // -1) < $block->weight) {
             $self->has_weight = $block->weight;
@@ -421,6 +423,7 @@ sub cmd_tx {
         Debugf("Transaction %s already known", $tx->hash_str);
         return 0;
     }
+    last_qbt_data_time(time());
     $tx->rcvd = $data->get(16);
     $tx->received_from = $self;
     if (!$tx->load_txo()) {
@@ -517,6 +520,7 @@ sub request_new_block {
             if (timeslot($best_block->time) + FORCE_BLOCKS * BLOCK_INTERVAL >= timeslot(time())) {
                 Infof("Blockchain is synced");
                 blockchain_synced(1);
+                last_qbt_data_time(time());
                 sync_peer(undef);
                 if (!mempool_synced()) {
                     $self->request_mempool();
