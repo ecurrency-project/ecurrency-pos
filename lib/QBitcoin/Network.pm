@@ -12,7 +12,7 @@ use QBitcoin::Log;
 use QBitcoin::Peer;
 use QBitcoin::Connection;
 use QBitcoin::ConnectionList;
-use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer);
+use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer last_qbt_data_time);
 use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Generate;
 use QBitcoin::Produce;
@@ -95,6 +95,7 @@ sub main_loop {
     if ($config->{genesis}) {
         mempool_synced(1);
         blockchain_synced(1);
+        last_qbt_data_time(time());
     }
     if (upgrade_finished()) {
         btc_synced(1);
@@ -174,6 +175,7 @@ sub main_loop {
 
         call_qbt_peers();
         call_btc_peers();
+        check_blockchain_alive();
         check_sync_peer();
 
         my @connections = QBitcoin::ConnectionList->list;
@@ -436,6 +438,18 @@ sub set_pinned_peers {
             delete @pinned_btc{ map { $_->ip } @peers };
         }
         $_->update(pinned => 0) foreach values %pinned_btc;
+    }
+}
+
+sub check_blockchain_alive {
+    return unless blockchain_synced();
+    return unless last_qbt_data_time();
+    return if $config->{genesis};
+    if (time() - last_qbt_data_time() > (2 * FORCE_BLOCKS + 1) * BLOCK_INTERVAL) {
+        Warningf("No new blocks or transactions received from peers for %u seconds, resetting sync state",
+            time() - last_qbt_data_time());
+        blockchain_synced(0);
+        mempool_synced(0);
     }
 }
 
