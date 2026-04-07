@@ -11,6 +11,7 @@ import { useGetTransactionQuery } from '@/entities/Transaction';
 import { Clipboard } from '@/shared/ui/Clipboard';
 import { HStack, VStack } from '@/shared/ui/Stack';
 import { formatNumber, formatSat, formatTime } from '@/shared/utils';
+import { TX_POLL_INTERVAL, TX_MIN_CONFIRMATIONS } from '@/shared/const/const';
 
 import CubeIcon from "@/shared/assets/icons/cube.svg?react";
 
@@ -27,7 +28,21 @@ const TxDetailsPage = (props: TxDetailsPageProps) => {
     const { data: transaction, isLoading } = useGetTransactionQuery({ id: id as string });
     const [useUTC, setUseUTC] = useState<boolean>(false);
 
-    const confirmationText = !transaction?.status?.confirmed ? 'Unconfirmed' : tipHeight ? `${tipHeight - transaction?.status.block_height + 1} Confirmations` : 'Confirmed';
+    const confirmations = transaction?.status?.confirmed && tipHeight
+        ? tipHeight - transaction.status.block_height + 1
+        : 0;
+
+    const pollingInterval = !transaction?.status?.confirmed || confirmations < TX_MIN_CONFIRMATIONS
+        ? TX_POLL_INTERVAL
+        : 0;
+
+    useGetTransactionQuery({ id: id as string }, { pollingInterval });
+
+    const confirmationText = !transaction?.status?.confirmed
+        ? 'Unconfirmed'
+        : confirmations > 0
+            ? `${confirmations} Confirmations`
+            : 'Confirmed';
     const feerate = transaction && transaction.fee ? transaction.fee / transaction.size : null;
 
     if (isLoading) {
