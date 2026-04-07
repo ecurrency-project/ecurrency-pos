@@ -17,7 +17,7 @@ my %children_per_url; # $url => count of active child processes
 sub reap_children {
     while ((my $pid = waitpid(-1, WNOHANG)) > 0) {
         # Find which URL this child belonged to and decrement
-        for my $url (keys %children_per_url) {
+        foreach my $url (keys %children_per_url) {
             if (delete $children_per_url{$url}{$pid}) {
                 last;
             }
@@ -134,7 +134,7 @@ sub send_notifications {
 
     my $payload = $JSON->encode($event);
 
-    for my $url (@$urls) {
+    foreach my $url (@$urls) {
         reap_children();
         if (url_children_count($url) >= $max_children) {
             warn "Too many pending requests for $url, dropping event\n";

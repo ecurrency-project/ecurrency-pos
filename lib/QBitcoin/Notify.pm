@@ -28,7 +28,7 @@ sub init {
 
     # Per-tag channels: scan config for notify_file.TAG and notify_udp.TAG
     my %seen;
-    for my $key ($config->keys) {
+    foreach my $key ($config->keys) {
         next if $seen{$key}++;
         if ($key =~ /^notify_file\.(.+)$/) {
             my $tag = $1;

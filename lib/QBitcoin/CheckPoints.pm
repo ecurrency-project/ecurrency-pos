@@ -41,7 +41,7 @@ sub prev_checkpoint_height {
     _init_checkpoints() if !defined $checkpoints;
     my ($height) = @_;
     my $prev = -1;
-    for my $cp_height (@sorted_checkpoint_heights) {
+    foreach my $cp_height (@sorted_checkpoint_heights) {
         last if $cp_height >= $height;
         $prev = $cp_height;
     }
