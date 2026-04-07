@@ -355,6 +355,8 @@ sub process_request {
                 my ($my_address) = grep { $_->address eq $path[1] } QBitcoin::MyAddress->my_address()
                     or return $self->http_response(404, "Address not found");
                 if (($my_address->staked && !$content->{staked}) || (!$my_address->staked && $content->{staked})) {
+                    $my_address->private_key || !$content->{staked}
+                        or return $self->http_response(400, "Cannot set watch-only address as staked");
                     $my_address->update(staked => $content->{staked} ? 1 : 0);
                 }
                 return $self->http_ok({});
