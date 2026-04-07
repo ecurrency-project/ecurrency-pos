@@ -89,6 +89,7 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
                 <Button
                     className={cls.loadMore}
                     onClick={handleLoadMore}
+                    loading={loadingMore}
                     icon={<ExpandMoreIcon style={{ width: 24, height: 24 }} />}
                     iconPlacement='end'
                     size='large'
