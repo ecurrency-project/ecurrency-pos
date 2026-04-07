@@ -22,7 +22,7 @@ use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
 use QBitcoin::MinFee;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info update_my_utxo create_txo);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info update_my_utxo create_txo estimate_fees);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
@@ -1622,34 +1622,11 @@ sub cmd_estimatesmartfee {
     my ($target, $mode) = @{$self->args};
     $mode //= "CONSERVATIVE";
     $target /= 2 if uc($mode) eq "CONSERVATIVE";
-    blockchain_synced() && mempool_synced()
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
-    my $height;
-    if (!defined(my $height = QBitcoin::Block->blockchain_height)) {
-        return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not initialized");
+    my ($result, $error) = estimate_fees($target);
+    if ($error) {
+        return $self->response_error("", ERR_INTERNAL_ERROR, $error);
     }
-    my $best_block = QBitcoin::Block->best_block($height)
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Best block not found");
-    my @mempool = QBitcoin::Transaction->mempool_list();
-    if (@mempool < $target) {
-        return $self->response_ok({ feerate => 0 });
-    }
-    if ($best_block->min_fee <= QBitcoin::MinFee->MIN_FEE) {
-        return $self->response_ok({ feerate => QBitcoin::MinFee->MIN_FEE / DENOMINATOR });
-    }
-    my $size = sum0 map { $_->size } grep { ($_->is_standard || $_->is_tokens) && $_->fee * 1024 / $_->size > $best_block->min_fee } @mempool;
-    if ($size < $target * $best_block->size) {
-        return $self->response_ok({ feerate => $best_block->min_fee / DENOMINATOR });
-    }
-    $size = 0;
-    my $prev_tx;
-    foreach my $tx (sort { $b->fee / $b->size <=> $a->fee / $a->size } @mempool) {
-        if ($size += $tx->size > $best_block->size) {
-            return $self->response_ok({ feerate => ($prev_tx ? $prev_tx->fee / $prev_tx->size : $tx->fee / $tx->size) * 1024 / DENOMINATOR });
-        }
-        $prev_tx = $tx;
-    }
-    return $self->response_ok({ feerate => $prev_tx->fee * 1024 / $prev_tx->size / DENOMINATOR });
+    return $self->response_ok({ feerate => $result->{$target} * 1024 / DENOMINATOR });
 }
 
 $PARAMS{stakeaddress} = "address";

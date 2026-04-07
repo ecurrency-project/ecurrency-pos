@@ -19,6 +19,7 @@ our @EXPORT_OK = qw(
     get_tokens_info
     update_my_utxo
     create_txo
+    estimate_fees
 );
 
 use List::Util qw(sum0);
@@ -30,6 +31,8 @@ use QBitcoin::RedeemScript;
 use QBitcoin::TXO;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
+use QBitcoin::MinFee;
+use QBitcoin::ProtocolState qw(blockchain_synced mempool_synced);
 
 use constant MAX_TXO_PER_ADDRESS => 10_000;
 
@@ -950,6 +953,54 @@ sub create_txo {
         $txo[0]->{data} = $token_data;
     }
     return ([ map { QBitcoin::TXO->new_txo($_) } @txo ], $token_id);
+}
+
+# estimate_fees(@targets) - estimate fee rates for given confirmation targets
+# Returns ($result, $error) where $result is { target => feerate_sat_per_byte } or undef on error
+sub estimate_fees {
+    my (@targets) = @_;
+    blockchain_synced() && mempool_synced()
+        or return (undef, "Blockchain is not synced");
+    my $height = QBitcoin::Block->blockchain_height;
+    defined $height
+        or return (undef, "Blockchain is not initialized");
+    my $best_block = QBitcoin::Block->best_block($height)
+        or return (undef, "Best block not found");
+    my @mempool = QBitcoin::Transaction->mempool_list();
+    my $min_fee_rate = $best_block->min_fee / 1024;
+    my %result;
+    if ($best_block->min_fee <= QBitcoin::MinFee->MIN_FEE) {
+        %result = map { $_ => QBitcoin::MinFee->MIN_FEE / 1024 } @targets;
+        return (\%result, undef);
+    }
+    my @sorted = sort { $b->fee / $b->size <=> $a->fee / $a->size }
+        grep { ($_->is_standard || $_->is_tokens) && $_->fee / $_->size > $min_fee_rate } @mempool;
+    my $total_size = sum0 map { $_->size } @sorted;
+    my $block_size = $best_block->size;
+    my $acc_size = 0;
+    my $tx_idx = 0;
+    foreach my $target (sort { $a <=> $b } @targets) {
+        if (@mempool < $target) {
+            $result{$target} = 0;
+            next;
+        }
+        if ($total_size < $target * $block_size) {
+            $result{$target} = $min_fee_rate;
+            next;
+        }
+        my $target_size = $target * $block_size;
+        while ($tx_idx < @sorted && $acc_size < $target_size) {
+            $acc_size += $sorted[$tx_idx]->size;
+            $tx_idx++;
+        }
+        if ($tx_idx > 0) {
+            $result{$target} = $sorted[$tx_idx - 1]->fee / $sorted[$tx_idx - 1]->size;
+        }
+        else {
+            $result{$target} = $min_fee_rate;
+        }
+    }
+    return (\%result, undef);
 }
 
 1;

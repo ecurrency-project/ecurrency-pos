@@ -19,7 +19,7 @@ use QBitcoin::MyAddress;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::TXO;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info update_my_utxo create_txo);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info update_my_utxo create_txo estimate_fees);
 use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Generate;
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
@@ -259,7 +259,10 @@ sub process_request {
             return $self->http_ok($token_info);
         }
         elsif ($path[0] eq "fee-estimates") {
-            return $self->http_ok({ 1 => 0 }); # TODO
+            my @targets = (1 .. 25, 144, 504, 1008);
+            my ($result, $error) = estimate_fees(@targets);
+            return $self->http_response(503, $error) if $error;
+            return $self->http_ok($result);
         }
         elsif ($path[0] eq "status") {
             return $self->http_ok(node_status());
