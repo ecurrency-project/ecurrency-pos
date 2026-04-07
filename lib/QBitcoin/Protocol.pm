@@ -441,7 +441,12 @@ sub process_tx {
     my $self = shift;
     my ($tx) = @_;
 
-    if ($tx->receive() != 0) {
+    my $rc = $tx->receive();
+    if (!defined($rc)) {
+        # Transaction rejected by mempool admission control, not invalid
+        return 0;
+    }
+    if ($rc != 0) {
         $self->abort("bad_tx_data");
         return -1;
     }

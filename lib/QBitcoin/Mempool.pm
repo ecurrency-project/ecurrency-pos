@@ -7,20 +7,10 @@ use strict;
 # This allow to avoid drop old transactions from the tail of mempool queue
 # but transactions with high fee will be confirmed immediately
 
-# TODO: optimize these methods; keep mempool sorted and do not sort it each time
-
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::MinFee qw(min_fee);
-
-sub want_tx {
-    my $class = shift;
-    my ($size, $fee) = @_;
-    # TODO
-    # Consider mempool size and fee/size percentille
-    return 1;
-}
 
 sub coinbase_list {
     my $class = shift;

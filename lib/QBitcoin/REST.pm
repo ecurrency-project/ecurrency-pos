@@ -516,7 +516,11 @@ sub wallet_tx_send {
     if ($tx->is_pending) {
         return $self->http_response(400, "Some inputs unknown");
     }
-    if ($self->process_tx($tx) != 0) {
+    my $rc = $self->process_tx($tx);
+    if (!defined($rc)) {
+        return $self->http_response(400, "Transaction fee is too low");
+    }
+    if ($rc != 0) {
         return $self->http_response(400, "Transaction failed");
     }
     return $self->http_ok({ txid => unpack("H*", $tx->hash) });

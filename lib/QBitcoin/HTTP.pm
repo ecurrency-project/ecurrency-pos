@@ -91,8 +91,8 @@ sub process_tx {
     my $self = shift;
     my ($tx) = @_;
 
-    $tx->receive() == 0
-        or return -1;
+    my $rc = $tx->receive();
+    return $rc if !defined($rc) || $rc != 0; # propagate undef (mempool full) or error
     if (defined(my $height = QBitcoin::Block->recv_pending_tx($tx))) {
         return -1 if $height == -1;
         # $self->request_new_block($height+1);

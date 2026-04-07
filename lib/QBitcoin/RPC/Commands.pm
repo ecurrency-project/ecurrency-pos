@@ -526,7 +526,11 @@ sub cmd_sendrawtransaction {
     if ($tx->is_pending) {
         return $self->response_error("", ERR_VERIFY_ALREADY_IN_CHAIN, "Some inputs unknown.");
     }
-    if ($self->process_tx($tx) != 0) {
+    my $rc = $self->process_tx($tx);
+    if (!defined($rc)) {
+        return $self->response_error("", ERR_INVALID_REQUEST, "Transaction fee is too low.");
+    }
+    if ($rc != 0) {
         return $self->response_error("", ERR_VERIFY_ALREADY_IN_CHAIN, "Transaction failed.");
     }
     return $self->response_ok(unpack("H*", $tx->hash));
