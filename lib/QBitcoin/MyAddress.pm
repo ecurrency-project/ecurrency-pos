@@ -120,7 +120,18 @@ sub create {
     if ($self) {
         Infof("Created my address %s", $self->address);
         push @$MY_ADDRESS, $self if $MY_ADDRESS;
-        undef $MY_HASHES; # Clear cache
+        if ($MY_HASHES) {
+            if ($self->private_key) {
+                foreach my $scripthash ($self->scripthash) {
+                    $MY_HASHES->{$scripthash} = $self;
+                }
+            }
+            else {
+                # Watch-only: derive scripthash from address string
+                my $scripthash = scripthash_by_address($self->address);
+                $MY_HASHES->{$scripthash} = $self;
+            }
+        }
         # Do not forget to load utxo for this address by QBitcoin::Generate->load_address_utxo()
     }
     return $self;
@@ -177,7 +188,7 @@ sub get_by_hash {
             }
             else {
                 # Watch-only: derive scripthash from address string
-                my $scripthash = scripthash_by_address($address->{address});
+                my $scripthash = scripthash_by_address($address->address);
                 $MY_HASHES->{$scripthash} = $address;
             }
         }
