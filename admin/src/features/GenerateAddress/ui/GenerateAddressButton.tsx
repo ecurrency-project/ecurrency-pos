@@ -70,6 +70,7 @@ export const GenerateAddressButton = memo(function GenerateAddressButton() {
                 title='Generated Address'
                 open={isModalOpen}
                 onCancel={handleClose}
+                width={600}
                 footer={[
                     <Button key="cancel" onClick={handleClose}>
                         Cancel

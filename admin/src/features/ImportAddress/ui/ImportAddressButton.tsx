@@ -1,8 +1,10 @@
 import { memo, useCallback, useState } from 'react';
 import { Button, Form, Input, Modal, message } from 'antd';
-import { KeyOutlined } from '@ant-design/icons';
+import Icon from '@ant-design/icons';
 
 import { useAddAddressMutation } from '@/entities/MyAddress';
+
+import KeyIcon from '@/shared/assets/icons/key.svg?react';
 
 export const ImportAddressButton = memo(function ImportAddressButton() {
     const [addAddress, { isLoading: isAdding }] = useAddAddressMutation();
@@ -30,7 +32,7 @@ export const ImportAddressButton = memo(function ImportAddressButton() {
     return (
         <>
             <Button
-                icon={<KeyOutlined/>}
+                icon={<Icon component={KeyIcon}/>}
                 onClick={() => setIsModalOpen(true)}
             >
                 Import

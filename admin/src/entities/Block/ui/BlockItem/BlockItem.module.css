@@ -1,7 +1,7 @@
 .blockRow {
     border-top: 1px solid var(--stats-border-color);
     height: 52px;
-    padding: 20px 30px;
+    padding: 20px 0;
     display: table;
     table-layout: fixed;
     width: 100%;
