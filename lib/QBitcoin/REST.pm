@@ -18,7 +18,7 @@ use QBitcoin::Address qw(address_by_hash address_by_pubkey wallet_import_format 
 use QBitcoin::MyAddress;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info update_my_utxo);
 use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair);
 use QBitcoin::Generate;
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
@@ -358,6 +358,7 @@ sub process_request {
                     $my_address->private_key || !$content->{staked}
                         or return $self->http_response(400, "Cannot set watch-only address as staked");
                     $my_address->update(staked => $content->{staked} ? 1 : 0);
+                    update_my_utxo($my_address);
                 }
                 return $self->http_ok({});
             }

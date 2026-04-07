@@ -9,6 +9,7 @@ use QBitcoin::Log;
 use QBitcoin::MyAddress;
 
 my %MY_UTXO;
+my %STAKED_UTXO;
 
 sub _in_key {
     my $self = shift;
@@ -17,18 +18,28 @@ sub _in_key {
 
 sub add_my_utxo {
     my $self = shift;
-    $MY_UTXO{$self->_in_key} = $self;
-    Infof("Add my UTXO %s:%u %lu coins", $self->tx_in_str, $self->num, $self->value);
+    if ($self->is_staked) {
+        $STAKED_UTXO{$self->_in_key} = $self if $self->is_staked;
+        Infof("Add staked UTXO %s:%u %lu coins", $self->tx_in_str, $self->num, $self->value);
+    }
+    else {
+        $MY_UTXO{$self->_in_key} = $self;
+        Infof("Add my UTXO %s:%u %lu coins", $self->tx_in_str, $self->num, $self->value);
+    }
 }
 
 sub del_my_utxo {
     my $self = shift;
-    delete $MY_UTXO{$self->_in_key} &&
+    if (delete $MY_UTXO{$self->_in_key}) {
         Infof("Delete my UTXO %s:%u %lu coins", $self->tx_in_str, $self->num, $self->value);
+    }
+    elsif (delete $STAKED_UTXO{$self->_in_key}) {
+        Infof("Delete staked UTXO %s:%u %lu coins", $self->tx_in_str, $self->num, $self->value);
+    }
 }
 
 sub my_utxo {
-    return values %MY_UTXO;
+    return (values(%MY_UTXO), values(%STAKED_UTXO));
 }
 
 sub is_staked {
@@ -38,7 +49,7 @@ sub is_staked {
 }
 
 sub staked_utxo {
-    return grep { $_->is_staked } values %MY_UTXO;
+    return values %STAKED_UTXO;
 }
 
 sub is_my {

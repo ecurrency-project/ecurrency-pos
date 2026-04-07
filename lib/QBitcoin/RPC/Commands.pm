@@ -22,7 +22,7 @@ use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
 use QBitcoin::MinFee;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info update_my_utxo);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
@@ -1743,6 +1743,7 @@ sub cmd_stakeaddress {
         return $self->response_ok("Address $address is already using for staking");
     }
     $my_address->update( staked => 1 );
+    update_my_utxo($my_address);
     return $self->response_ok("Address $address set for staking");
 }
 
@@ -1775,6 +1776,7 @@ sub cmd_unstakeaddress {
         return $self->response_ok("Address $address is not using for staking");
     }
     $my_address->update( staked => 0 );
+    update_my_utxo($my_address);
     return $self->response_ok("Address $address will not be used for staking");
 }
 

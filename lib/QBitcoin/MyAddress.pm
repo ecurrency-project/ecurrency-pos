@@ -171,6 +171,7 @@ sub redeem_script {
 
 sub scripthash {
     my $self = shift;
+    return scripthash_by_address($self->address) if $self->is_watchonly;
     return map { hash160($_), hash256($_) } $self->redeem_script if wantarray;
     return ($self->_pk_alg // 0) & CRYPT_ALGO_POSTQUANTUM ? hash256(scalar $self->redeem_script) : hash160(scalar $self->redeem_script);
 }
