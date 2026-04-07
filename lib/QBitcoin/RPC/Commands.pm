@@ -1736,6 +1736,8 @@ sub cmd_stakeaddress {
     my $scripthash = scripthash_by_address($self->args->[0])
         or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not correct");
     my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
+        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not in the wallet");
+    $my_address->private_key
         or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Private key is unknown for this address");
     if ($my_address->staked) {
         return $self->response_ok("Address $address is already using for staking");
