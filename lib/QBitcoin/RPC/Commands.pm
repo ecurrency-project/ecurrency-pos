@@ -22,7 +22,7 @@ use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
 use QBitcoin::MinFee;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info update_my_utxo);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info update_my_utxo create_txo);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
@@ -447,7 +447,7 @@ sub cmd_createrawtransaction {
     my @out;
     my $token_hash;
     foreach my $out (@$outputs) {
-        my ($txo, $out_token_hash) = _create_txo($out);
+        my ($txo, $out_token_hash) = create_txo($out);
         $txo or return $self->response_error("", ERR_INVALID_REQUEST, "Invalid output");
         push @out, @$txo;
         if (defined($out_token_hash)) {
@@ -468,65 +468,6 @@ sub cmd_createrawtransaction {
         return $self->response_error("", ERR_INVALID_REQUEST, "Transaction size too large: " . length($tx_data) . " > " . MAX_TX_SIZE);
     }
     return $self->response_ok(unpack("H*", $tx_data));
-}
-
-sub _create_txo {
-    my $out = shift;
-    my @txo;
-    my $token_id;
-    my $token_data;
-    my @token_attr;
-    foreach my $key (keys %$out) {
-        if ($key eq "token_id") {
-            $token_id = pack("H*", $out->{$key});
-        }
-        elsif ($key eq "token_amount") {
-            $token_data = TOKEN_TXO_TYPE_TRANSFER . pack("Q<", $out->{$key} );
-        }
-        elsif ($key eq "token_permissions") {
-            my $permissions = 0;
-            if (!ref($out->{$key})) {
-                $permissions = hex($1) if $out->{$key} =~ /^0x([0-9a-fA-F]{2})$/;
-            }
-            else {
-                foreach my $attr (@{$out->{$key}}) {
-                    if ($attr eq "mint") {
-                        $permissions |= TOKEN_PERMISSION_MINT;
-                    }
-                }
-            }
-            $token_attr[unpack("C", TOKEN_TXO_TYPE_PERMISSIONS)] = pack("C", $permissions);
-        }
-        elsif ($key eq "token_decimals") {
-            $token_attr[unpack("C", TOKEN_TXO_TYPE_DECIMALS)] = pack("C", $out->{$key});
-        }
-        elsif ($key eq "token_name") {
-            $token_attr[unpack("C", TOKEN_TXO_TYPE_NAME)] = pack("C", length($out->{$key})) . $out->{$key};
-        }
-        elsif ($key eq "token_symbol") {
-            $token_attr[unpack("C", TOKEN_TXO_TYPE_SYMBOL)] = pack("C", length($out->{$key})) . $out->{$key};
-        }
-        elsif (my $scripthash = scripthash_by_address($key)) {
-            my $value = int($out->{$key} * DENOMINATOR + 0.5);
-            push @txo, { scripthash => $scripthash, value => $value };
-        }
-        else {
-            return undef;
-        }
-    }
-    if (defined($token_id)) {
-        @txo == 1 or return undef;
-        if (@token_attr) {
-            return undef if defined($token_data);
-            $token_data = "";
-            foreach my $attr (0 .. $#token_attr) {
-                next unless defined $token_attr[$attr];
-                $token_data .= pack("C", $attr) . $token_attr[$attr];
-            }
-        }
-        $txo[0]->{data} = $token_data;
-    }
-    return ([ map { QBitcoin::TXO->new_txo($_) } @txo ], $token_id);
 }
 
 $PARAMS{sendrawtransaction} = "hexstring";
@@ -690,7 +631,7 @@ sub cmd_signrawtransactionwithkey {
 
     my $output_amount;
     foreach my $out (@{$tx->out}) {
-        $output_amount += $out->{value};
+        $output_amount += $out->value;
     }
     if ($input_amount < $output_amount) {
         return $self->response_error("", ERR_INVALID_REQUEST, "Insufficient funds: $input_amount < $output_amount");

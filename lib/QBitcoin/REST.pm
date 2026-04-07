@@ -18,13 +18,15 @@ use QBitcoin::Address qw(address_by_hash address_by_pubkey wallet_import_format 
 use QBitcoin::MyAddress;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info update_my_utxo);
-use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair);
+use QBitcoin::TXO;
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info update_my_utxo create_txo);
+use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Generate;
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
 use QBitcoin::Coinbase;
 use QBitcoin::ConnectionList;
 use Bitcoin::Block;
+use Bitcoin::Serialized;
 use parent qw(QBitcoin::HTTP);
 
 use constant {
@@ -364,9 +366,157 @@ sub process_request {
             }
             return $self->http_response(404, "Unknown request");
         }
+        elsif ($path[0] eq "transaction") {
+            $http_request->method eq "POST"
+                or return $self->http_response(404, "Unknown request");
+            @path >= 2 or return $self->http_response(404, "Unknown request");
+            if ($path[1] eq "create") {
+                return $self->wallet_tx_create($http_request);
+            }
+            elsif ($path[1] eq "send") {
+                return $self->wallet_tx_send($http_request);
+            }
+            return $self->http_response(404, "Unknown request");
+        }
         return $self->http_response(404, "Unknown request");
     }
     return $self->http_response(404, "Unknown request");
+}
+
+sub wallet_tx_create {
+    my $self = shift;
+    my ($http_request) = @_;
+
+    my $content = eval { $JSON->decode($http_request->decoded_content) };
+    ref($content) eq "HASH" && ref($content->{inputs}) eq "ARRAY" && ref($content->{outputs}) eq "ARRAY"
+        or return $self->http_response(400, "Invalid request body");
+    @{$content->{inputs}}  or return $self->http_response(400, "No inputs specified");
+    @{$content->{outputs}} or return $self->http_response(400, "No outputs specified");
+
+    # Construct inputs
+    my @in;
+    foreach my $input (@{$content->{inputs}}) {
+        ref($input) eq "HASH" && validate_txid($input->{txid}) && defined($input->{vout})
+            or return $self->http_response(400, "Invalid input format");
+        push @in, { tx_out => pack("H*", $input->{txid}), num => $input->{vout} + 0 };
+    }
+
+    # Construct outputs
+    my @out;
+    my $token_hash;
+    foreach my $out (@{$content->{outputs}}) {
+        ref($out) eq "HASH" or return $self->http_response(400, "Invalid output format");
+        my ($txo, $out_token_hash) = create_txo($out);
+        $txo or return $self->http_response(400, "Invalid output");
+        push @out, @$txo;
+        if (defined($out_token_hash)) {
+            if (defined($token_hash) && $token_hash ne $out_token_hash) {
+                return $self->http_response(400, "Different token_id in outputs");
+            }
+            $token_hash //= $out_token_hash;
+        }
+    }
+    @out or return $self->http_response(400, "No valid outputs");
+
+    my $tx = QBitcoin::Transaction->new(
+        in_raw  => \@in,
+        out     => \@out,
+        tx_type => defined($token_hash) ? TX_TYPE_TOKENS : TX_TYPE_STANDARD,
+        defined($token_hash) ? (token_hash => $token_hash) : (),
+    );
+
+    # Load inputs from DB
+    if (!$tx->load_inputs(1)) {
+        return $self->http_response(400, "Failed to load transaction inputs");
+    }
+
+    if ($tx->input_pending || $tx->input_detached) {
+        return $self->http_response(400, "Some inputs unknown");
+    }
+
+    # Verify all inputs are ours and sign
+    my $input_amount = 0;
+    foreach my $num (0 .. $#{$tx->in}) {
+        my $in = $tx->in->[$num];
+        my $txo = $in->{txo};
+        if ($txo->tx_out) {
+            return $self->http_response(400, "Input " . $txo->tx_in_str . ":" . $txo->num . " already confirmed spent");
+        }
+        if (!$txo->unspent) {
+            return $self->http_response(400, "Input " . $txo->tx_in_str . ":" . $txo->num . " already spent");
+        }
+        $input_amount += $txo->value;
+        my $address = QBitcoin::MyAddress->get_by_hash($txo->scripthash)
+            or return $self->http_response(400, "Input " . $txo->tx_in_str . ":" . $txo->num . " does not belong to a known address");
+        $address->private_key
+            or return $self->http_response(400, "No private key for address " . $address->address);
+        $tx->make_sign($in, $address, $num);
+    }
+
+    $tx->calculate_hash;
+
+    my $tx_data = $tx->serialize;
+    if (length($tx_data) > MAX_TX_SIZE) {
+        return $self->http_response(400, "Transaction size too large: " . length($tx_data) . " > " . MAX_TX_SIZE);
+    }
+
+    my $output_amount = 0;
+    $output_amount += $_->{value} foreach @{$tx->out};
+    if ($input_amount < $output_amount) {
+        return $self->http_response(400, "Insufficient funds: inputs $input_amount < outputs $output_amount");
+    }
+
+    return $self->http_ok({
+        hex  => unpack("H*", $tx_data),
+        hash => unpack("H*", $tx->hash),
+        fee  => $input_amount - $output_amount,
+    });
+}
+
+sub wallet_tx_send {
+    my $self = shift;
+    my ($http_request) = @_;
+
+    my $content = eval { $JSON->decode($http_request->decoded_content) };
+    ref($content) eq "HASH" && $content->{hex}
+        or return $self->http_response(400, "Invalid request body");
+    $content->{hex} =~ /^[0-9a-f]+\z/
+        or return $self->http_response(400, "Invalid hex string");
+
+    my $data = Bitcoin::Serialized->new(pack("H*", $content->{hex}));
+    my $tx = QBitcoin::Transaction->deserialize($data);
+    if (!$tx || $data->length) {
+        return $self->http_response(400, "Transaction decode failed");
+    }
+    $tx->received_from = $self;
+
+    if (QBitcoin::Transaction->has_pending($tx->hash)) {
+        return $self->http_response(400, "Transaction already published");
+    }
+    if (QBitcoin::Transaction->check_by_hash($tx->hash)) {
+        return $self->http_response(400, "Transaction already published");
+    }
+    if (!$tx->load_txo()) {
+        return $self->http_response(400, "Incorrect transaction data");
+    }
+
+    # Reject downgrade transactions when upgrade threshold reached
+    if (my $best_block = QBitcoin::Block->best_block) {
+        if (($best_block->upgraded // 0) >= UPGRADE_MAX_VALUE) {
+            my $freeze_scripthash = hash160(QBT_BURN_SCRIPT);
+            if (grep { $_->scripthash eq $freeze_scripthash && $_->data } @{$tx->out}) {
+                return $self->http_response(400, "Conversion threshold reached, downgrade not accepted");
+            }
+        }
+    }
+
+    if ($tx->is_pending) {
+        return $self->http_response(400, "Some inputs unknown");
+    }
+    if ($self->process_tx($tx) != 0) {
+        return $self->http_response(400, "Transaction failed");
+    }
+    return $self->http_ok({ txid => unpack("H*", $tx->hash) });
 }
 
 sub http_ok {

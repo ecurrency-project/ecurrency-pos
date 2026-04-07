@@ -18,6 +18,7 @@ our @EXPORT_OK = qw(
     get_tokens_txs
     get_tokens_info
     update_my_utxo
+    create_txo
 );
 
 use List::Util qw(sum0);
@@ -890,6 +891,65 @@ sub update_my_utxo {
         $utxo->del_my_utxo;
         $utxo->add_my_utxo;
     }
+}
+
+sub create_txo {
+    my $out = shift;
+    my @txo;
+    my $token_id;
+    my $token_data;
+    my @token_attr;
+    foreach my $key (keys %$out) {
+        if ($key eq "token_id") {
+            $token_id = pack("H*", $out->{$key});
+        }
+        elsif ($key eq "token_amount") {
+            $token_data = TOKEN_TXO_TYPE_TRANSFER . pack("Q<", $out->{$key} );
+        }
+        elsif ($key eq "token_permissions") {
+            my $permissions = 0;
+            if (!ref($out->{$key})) {
+                $permissions = hex($1) if $out->{$key} =~ /^0x([0-9a-fA-F]{2})$/;
+            }
+            else {
+                foreach my $attr (@{$out->{$key}}) {
+                    if ($attr eq "mint") {
+                        $permissions |= TOKEN_PERMISSION_MINT;
+                    }
+                }
+            }
+            $token_attr[unpack("C", TOKEN_TXO_TYPE_PERMISSIONS)] = pack("C", $permissions);
+        }
+        elsif ($key eq "token_decimals") {
+            $token_attr[unpack("C", TOKEN_TXO_TYPE_DECIMALS)] = pack("C", $out->{$key});
+        }
+        elsif ($key eq "token_name") {
+            $token_attr[unpack("C", TOKEN_TXO_TYPE_NAME)] = pack("C", length($out->{$key})) . $out->{$key};
+        }
+        elsif ($key eq "token_symbol") {
+            $token_attr[unpack("C", TOKEN_TXO_TYPE_SYMBOL)] = pack("C", length($out->{$key})) . $out->{$key};
+        }
+        elsif (my $scripthash = eval { scripthash_by_address($key) }) {
+            my $value = int($out->{$key} * DENOMINATOR + 0.5);
+            push @txo, { scripthash => $scripthash, value => $value };
+        }
+        else {
+            return undef;
+        }
+    }
+    if (defined($token_id)) {
+        @txo == 1 or return undef;
+        if (@token_attr) {
+            return undef if defined($token_data);
+            $token_data = "";
+            foreach my $attr (0 .. $#token_attr) {
+                next unless defined $token_attr[$attr];
+                $token_data .= pack("C", $attr) . $token_attr[$attr];
+            }
+        }
+        $txo[0]->{data} = $token_data;
+    }
+    return ([ map { QBitcoin::TXO->new_txo($_) } @txo ], $token_id);
 }
 
 1;
