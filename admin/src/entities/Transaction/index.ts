@@ -6,5 +6,6 @@ export {
     useGetTransactionsByBlockQuery,
     useGetTransactionsByAddressQuery,
     useGetTransactionQuery,
-    useGetMempoolRecentTransactionsQuery
+    useGetMempoolRecentTransactionsQuery,
+    useGetFeeEstimateQuery,
 } from './api/transactionApi.ts';

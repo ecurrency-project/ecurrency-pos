@@ -1,4 +1,3 @@
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 
@@ -12,15 +11,13 @@ import { ThemeProvider } from '@/app/providers/ThemeProvider'
 import { StoreProvider } from '@/app/providers/StoreProvider';
 
 createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-        <BrowserRouter>
-            <StoreProvider>
-                <ErrorBoundaryProvider>
-                    <ThemeProvider>
-                        <App/>
-                    </ThemeProvider>
-                </ErrorBoundaryProvider>
-            </StoreProvider>
-        </BrowserRouter>
-    </StrictMode>,
+    <BrowserRouter>
+        <StoreProvider>
+            <ErrorBoundaryProvider>
+                <ThemeProvider>
+                    <App/>
+                </ThemeProvider>
+            </ErrorBoundaryProvider>
+        </StoreProvider>
+    </BrowserRouter>
 )

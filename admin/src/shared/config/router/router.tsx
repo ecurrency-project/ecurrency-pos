@@ -8,7 +8,7 @@ import { TxDetailsPage } from '@/pages/TxDetailsPage';
 import { AddressPage } from '@/pages/AddressPage';
 import { QrScannerPage } from '@/pages/QrScannerPage';
 import { MyAddressesPage } from '@/pages/MyAddressesPage';
-
+import { SendTransactionPage } from '@/pages/SendTransactionPage';
 
 export const RoutersApp = {
     MAIN: 'main',
@@ -19,6 +19,7 @@ export const RoutersApp = {
     ADDRESS: 'address',
     QR_SCANNER: 'qr_scanner',
     MY_ADDRESSES: 'my_addresses',
+    SEND_TRANSACTION: 'send_transaction',
 
     NOT_FOUND: 'not_found'
 } as const
@@ -34,6 +35,7 @@ export const RouterPath: Record<RoutersApp, string> = {
     [RoutersApp.ADDRESS]: '/address/:id',
     [RoutersApp.QR_SCANNER]: '/qr-scanner',
     [RoutersApp.MY_ADDRESSES]: '/my-addresses',
+    [RoutersApp.SEND_TRANSACTION]: '/send-transaction',
 
     [RoutersApp.NOT_FOUND]: '/*'
 }
@@ -71,6 +73,10 @@ export const routerConfig: Record<RoutersApp, RouteProps> = {
     [RoutersApp.MY_ADDRESSES]: {
         path: RouterPath[RoutersApp.MY_ADDRESSES],
         element: <MyAddressesPage/>
+    },
+    [RoutersApp.SEND_TRANSACTION]: {
+        path: RouterPath[RoutersApp.SEND_TRANSACTION],
+        element: <SendTransactionPage/>
     },
     [RoutersApp.NOT_FOUND]: {
         path: RouterPath[RoutersApp.NOT_FOUND],

@@ -36,6 +36,9 @@ const transactionApi = rtkApi.injectEndpoints({
         getMempoolRecentTransactions: build.query<TxShort[], void>({
             query: () => `/api/mempool/recent`,
         }),
+        getFeeEstimate: build.query<Record<string, number>, void>({
+            query: () => `/api/fee-estimates`,
+        }),
     }),
     overrideExisting: false,
 });
@@ -46,4 +49,5 @@ export const {
     useGetTransactionQuery,
     useGetMempoolRecentTransactionsQuery,
     useLazyGetOutspendsQuery,
+    useGetFeeEstimateQuery,
 } = transactionApi;

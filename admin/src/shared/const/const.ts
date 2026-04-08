@@ -26,6 +26,7 @@ export const CLIPBOARD_TOOLTIP_TIMEOUT = 2000;
 
 // UI
 export const MOBILE_BREAKPOINT = 768;
+export const FORM_MAX_WIDTH = 600;
 
 // Unit conversion
 export const BYTES_PER_KB = 1000;

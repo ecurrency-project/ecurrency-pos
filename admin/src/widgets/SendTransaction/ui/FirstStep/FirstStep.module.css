@@ -1,0 +1,33 @@
+.first {
+    width: 100%;
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.firstItem {
+    width: 100%;
+}
+
+.label {
+    min-width: 120px;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--text-color-primary);
+}
+
+.firstInput {
+    width: 100%;
+    max-width: 500px;
+}
+
+@media (max-width: 768px) {
+    .firstItem {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .label {
+        text-align: left;
+        margin-bottom: 4px;
+    }
+}

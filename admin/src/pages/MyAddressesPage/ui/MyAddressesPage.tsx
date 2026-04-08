@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, Skeleton, Table, message } from 'antd';
-import { WalletOutlined } from '@ant-design/icons';
+import { WalletOutlined, SendOutlined } from '@ant-design/icons';
 import classNames from 'classnames';
 
 import {
@@ -11,6 +12,8 @@ import {
 } from '@/entities/MyAddress';
 import { GenerateAddressButton } from '@/features/GenerateAddress';
 import { ImportAddressButton } from '@/features/ImportAddress';
+import { Button } from '@/shared/ui/Button';
+import { RouterPath, RoutersApp } from '@/shared/config/router/router';
 
 import cls from './MyAddressesPage.module.css';
 
@@ -50,6 +53,9 @@ const MyAddressesPage = () => {
                 )}
             </div>
             <div className={cls.headerActions}>
+                <Link to={RouterPath[RoutersApp.SEND_TRANSACTION]}>
+                    <Button type="primary" icon={<SendOutlined />}>Send</Button>
+                </Link>
                 <GenerateAddressButton/>
                 <ImportAddressButton/>
             </div>
