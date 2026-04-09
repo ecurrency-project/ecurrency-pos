@@ -17,6 +17,7 @@ export const MEMPOOL_RECENT_PULL_INTERVAL = 5000;
 export const TIP_HEIGHT_POLL_INTERVAL = 5000;
 export const CHAIN_STATUS_POLL_INTERVAL = 10000;
 export const TX_POLL_INTERVAL = 15000;
+export const BALANCE_POLL_INTERVAL = 10000;
 
 // Confirmations
 export const TX_MIN_CONFIRMATIONS = 20;

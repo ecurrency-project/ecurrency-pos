@@ -1,6 +1,7 @@
 import { Skeleton } from 'antd';
 
 import { formatSat } from '@/shared/utils';
+import { BALANCE_POLL_INTERVAL } from '@/shared/const/const.ts';
 
 import { useGetAddressQuery } from '../../api/addressApi';
 
@@ -9,7 +10,9 @@ interface AddressBalanceProps {
 }
 
 export const AddressBalance = ({ address }: AddressBalanceProps) => {
-    const { data, isLoading } = useGetAddressQuery({ id: address });
+    const { data, isLoading } = useGetAddressQuery({ id: address }, {
+        pollingInterval: BALANCE_POLL_INTERVAL,
+    });
 
     if (isLoading) {
         return <Skeleton.Input active size="small" style={{ width: 120, minWidth: 120 }} />;
