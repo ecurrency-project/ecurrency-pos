@@ -75,8 +75,18 @@ sub parse_condition {
         or die "Unknown search key [$key] for " . $class->TABLE . "\n";
     if (ref $value eq 'ARRAY') {
         # "IN()" is sql syntax error, "IN(NULL)" matches nothing
-        $condition .= " `$key` IN (" . (@$value ? join(',', ('?')x@$value) : "NULL") . ")";
-        push @$values, @$value;
+        if ($type == TIMESTAMP) {
+            $condition .= " `$key` IN (" . (@$value ? join(',', ('FROM_UNIXTIME(?)')x@$value) : "NULL") . ")";
+            push @$values, @$value;
+        }
+        elsif ($type == BINARY) {
+            $condition .= " `$key` IN (" . (@$value ? join(',', ('UNHEX(?)')x@$value) : "NULL") . ")";
+            push @$values, map { unpack("H*", $_) } @$value;
+        }
+        else {
+            $condition .= " `$key` IN (" . (@$value ? join(',', ('?')x@$value) : "NULL") . ")";
+            push @$values, @$value;
+        }
     }
     elsif (ref $value eq 'HASH') {
         my $first = 1;
@@ -87,8 +97,18 @@ sub parse_condition {
                 $condition .= "`$key` $op $$v ";
             }
             elsif (ref $v eq 'ARRAY') { # key => { NOT => [ 'value1', 'value2' ] }
-                $condition .= " `$key` $op IN (" . (@$v ? join(',', ('?')x@$v) : "NULL") . ")";
-                push @$values, @$v;
+                if ($type == TIMESTAMP) {
+                    $condition .= " `$key` $op IN (" . (@$v ? join(',', ('FROM_UNIXTIME(?)')x@$v) : "NULL") . ")";
+                    push @$values, @$v;
+                }
+                elsif ($type == BINARY) {
+                    $condition .= " `$key` $op IN (" . (@$v ? join(',', ('UNHEX(?)')x@$v) : "NULL") . ")";
+                    push @$values, map { unpack("H*", $_) } @$v;
+                }
+                else {
+                    $condition .= " `$key` $op IN (" . (@$v ? join(',', ('?')x@$v) : "NULL") . ")";
+                    push @$values, @$v;
+                }
             }
             elsif (ref $v) {
                 die "Incorrect search value type " . ref($v) . " key $key\n";
