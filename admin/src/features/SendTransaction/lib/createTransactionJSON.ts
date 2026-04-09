@@ -35,16 +35,19 @@ export const createTransactionJSON = (params: CreateTransactionParams): CreateTr
         return { success: false, error: 'Insufficient balance' };
     }
 
-    // Outputs — массив объектов {address: value_in_satoshis}
-    const outputs: Record<string, number>[] = [
-        { [targetAddress.trim()]: amountSat },
-    ];
+    // Outputs — an array of objects {address: value_in_satoshis}
+    const outputs: Record<string, number>[] = [];
 
-    if (changeSat > 0 && changeAddress !== targetAddress) {
-        outputs.push({ [changeAddress]: changeSat });
+    if (changeSat > 0 && changeAddress === targetAddress.trim()) {
+        outputs.push({ [targetAddress.trim()]: amountSat + changeSat });
+    } else {
+        outputs.push({ [targetAddress.trim()]: amountSat });
+        if (changeSat > 0) {
+            outputs.push({ [changeAddress]: changeSat });
+        }
     }
 
-    // Inputs — массив {txid, vout} из UTXO строк "txid:vout"
+    // Inputs — an array {txid, vout} of UTXO strings in the format "txid:vout"
     const inputs: TransactionInput[] = [];
 
     for (const address of selectedAddresses) {
