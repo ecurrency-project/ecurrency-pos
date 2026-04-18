@@ -12,7 +12,6 @@ use QBitcoin::Block;
 use QBitcoin::RedeemScript;
 use QBitcoin::TXO;
 use QBitcoin::Coinbase;
-use QBitcoin::Address qw(scripthash_by_address);
 use QBitcoin::MyAddress qw(my_address stake_address);
 use QBitcoin::Transaction;
 use QBitcoin::ValueUpgraded qw(level_by_total);
@@ -31,7 +30,7 @@ sub load_address_utxo {
     my ($my_address) = @_;
     my $count = 0;
     my $value = 0;
-    my $scripthash = scripthash_by_address($my_address->address);
+    my $scripthash = $my_address->scripthash;
     my $chain_utxo = get_address_utxo($my_address->address, 1000);
     foreach my $txid (keys %$chain_utxo) {
         for (my $vout = @{$chain_utxo->{$txid}}-1; $vout >= 0; $vout--) {
@@ -82,7 +81,7 @@ sub make_out_join {
     my $my_amount = sum0 map { $_->value } @$my_txo;
     my $out = QBitcoin::TXO->new_txo(
         value      => $my_amount + $reward,
-        scripthash => scalar(scripthash_by_address($my_address->address)),
+        scripthash => scalar($my_address->scripthash),
     );
     return $out;
 }
@@ -110,6 +109,7 @@ sub my_txo_by_address {
 
 sub make_out_separate {
     my ($reward, $my_txo) = @_;
+    @$my_txo or return make_out_join($reward, $my_txo);
     my ($my_best) = my_txo_by_address($my_txo);
     @$my_txo = grep { $_->scripthash eq $my_best->[0] } @$my_txo;
     return QBitcoin::TXO->new_txo(
@@ -120,7 +120,14 @@ sub make_out_separate {
 
 sub make_out_union {
     my ($reward, $my_txo) = @_;
-    my @my = my_txo_by_address($my_txo);
+    my @my;
+    if (!@$my_txo) {
+        # Reward to all stake addresses in equal parts
+        @my = map { [ scalar($_->scripthash), 0, 1 ] } stake_address();
+    }
+    else {
+        @my = my_txo_by_address($my_txo);
+    }
     my $total_weight = sum0 map { $_->[2] } @my;
     my @out;
     my $reward_remain = $reward;
@@ -150,7 +157,7 @@ sub make_stake_tx {
     my @my_txo = grep { txo_confirmed($_) } QBitcoin::TXO->staked_utxo();
     my $reward_to = $config->{reward_to} // "union";
     my @out;
-    if ($reward_to eq "join" || !@my_txo) {
+    if ($reward_to eq "join") {
         @out = make_out_join($reward, \@my_txo);
     }
     elsif ($reward_to eq "separate") {
