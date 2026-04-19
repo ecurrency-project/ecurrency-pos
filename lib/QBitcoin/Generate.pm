@@ -260,8 +260,15 @@ sub generate {
             }
         }
         if (UPGRADE_POW && $height == 0 && !$config->{regtest}) {
-            # Genesis block should not have coinbase transactions
-            @transactions = grep { !$_->is_coinbase } @transactions;
+            my $genesis_coinbase = $config->{testnet} ? GENESIS_COINBASE_TESTNET : GENESIS_COINBASE;
+            if ($genesis_coinbase) {
+                return unless btc_synced();
+                my $coinbase_value = sum0 map { $_->up->value } grep { $_->is_coinbase } @transactions;
+                next unless $coinbase_value >= $genesis_coinbase;
+            }
+            else {
+                @transactions = grep { !$_->is_coinbase } @transactions;
+            }
         }
         # Generate new stake_tx with correct output value
         my $block_sign_data = $prev_block ? $prev_block->hash : ZERO_HASH;

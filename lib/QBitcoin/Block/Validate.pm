@@ -35,14 +35,15 @@ sub validate {
     }
     if (!$block->prev_hash || $block->prev_hash eq ZERO_HASH) {
         if (!$config->{regtest}) {
-            my $genesis_hash = $config->{testnet} ? GENESIS_HASH_TESTNET : GENESIS_HASH;
-            $block->hash eq $genesis_hash
-                or return "Incorrect genesis block hash " . unpack("H*", $block->hash) . ", must be " . unpack("H*", $genesis_hash);
             $block->upgraded = 0; # Genesis block has no upgrades
             $block->reward_fund = 0;
             $block->size = sum0(map { $_->size } @{$block->transactions});
             $block->min_fee = 0;
-            return ""; # Not needed to validate genesis block with correct hash
+            if (my $genesis_hash = $config->{testnet} ? GENESIS_HASH_TESTNET : GENESIS_HASH) {
+                $block->hash eq $genesis_hash
+                    or return "Incorrect genesis block hash " . unpack("H*", $block->hash) . ", must be " . unpack("H*", $genesis_hash);
+                return ""; # Not needed to validate genesis block with correct hash
+            }
         }
     }
     state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;

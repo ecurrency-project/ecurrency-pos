@@ -4,8 +4,8 @@ use strict;
 
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 
-use constant GENESIS_BLOCK_HASH => "1234";
-use constant GENESIS_BLOCK_HASH_TESTNET => "1234";
+use constant GENESIS_BLOCK_HASH => "";
+use constant GENESIS_BLOCK_HASH_TESTNET => "";
 use constant QBT_BURN_HASH      => pack("H*", "fe5205472fb87124923f4be64292ef289478b06d"); # 1QBitcoin1QBitcoin1QBitcoin1pSAg3e
 use constant QBT_BURN_SCRIPT    => OP_DUP . OP_HASH160 . pack("C", length(QBT_BURN_HASH)) . QBT_BURN_HASH . OP_EQUALVERIFY . OP_CHECKSIG;
 
@@ -55,6 +55,8 @@ use constant QBITCOIN_CONST => {
     GENESIS_HASH            => pack('H*', GENESIS_BLOCK_HASH),
     GENESIS_HASH_TESTNET    => pack('H*', GENESIS_BLOCK_HASH_TESTNET),
     GENESIS_REWARD          => 50 * 100000000, # 50 QBTC
+    GENESIS_COINBASE        => 0,
+    GENESIS_COINBASE_TESTNET=> 0,
     REWARD_DIVIDER          => 500, # reward for block is 1/500 of the reward fund
     MAX_BLOCK_SIZE          => 8*1024*1024,
     MAX_TX_IN_BLOCK         => 65535,
