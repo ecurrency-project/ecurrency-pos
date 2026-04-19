@@ -151,7 +151,7 @@ sub reward {
         my $reward_fund = $prev_block->reward_fund + $fee
             or return 0;
         my $reward = int($reward_fund / REWARD_DIVIDER) || 1;
-        if ($prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped($timeslot)) {
+        if (!UPGRADE_POW || $prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped($timeslot)) {
             $reward += int(STATIC_REWARD / 2**int($prev_block->height / REWARD_HALVING));
         }
         return $reward;
