@@ -887,7 +887,6 @@ sub get_tokens_info {
 
 # Change staked to unstaked or unstaked to staked for the given address
 sub update_my_utxo {
-    my $class = shift;
     my $address = shift;
     my %scripthash = map { $_ => 1 } $address->scripthash;
     foreach my $utxo (grep { exists $scripthash{$_->scripthash} } QBitcoin::TXO->my_utxo()) {
