@@ -377,7 +377,7 @@ sub get_address_utxo {
             Infof("Too many UTXO for address %s", $address);
         }
     }
-    for (my $height = QBitcoin::Block->max_db_height + 1; $height <= QBitcoin::Block->blockchain_height // -1; $height++) {
+    for (my $height = QBitcoin::Block->max_db_height + 1; $height <= (QBitcoin::Block->blockchain_height // -1); $height++) {
         my $block = QBitcoin::Block->best_block($height)
             or next;
         foreach my $tx (@{$block->transactions}) {
