@@ -10,7 +10,11 @@ use Test::More;
 use Test::MockModule;
 use List::Util qw(sum0);
 use QBitcoin::Const;
-BEGIN { no warnings 'redefine'; *QBitcoin::Const::MAX_EMPTY_TX_IN_BLOCK = sub () { 100 } };
+BEGIN {
+    no warnings 'redefine';
+    *GENESIS_TIME = sub () { 1767220000 };
+    *QBitcoin::Const::MAX_EMPTY_TX_IN_BLOCK = sub () { 100 };
+};
 use QBitcoin::Test::ORM;
 use QBitcoin::Test::BlockSerialize;
 use QBitcoin::Test::Send qw(send_block send_tx $last_tx);
