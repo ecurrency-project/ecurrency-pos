@@ -464,7 +464,7 @@ sub wallet_tx_create {
     }
 
     my $output_amount = 0;
-    $output_amount += $_->{value} foreach @{$tx->out};
+    $output_amount += $_->value foreach @{$tx->out};
     if ($input_amount < $output_amount) {
         return $self->http_response(400, "Insufficient funds: inputs $input_amount < outputs $output_amount");
     }
