@@ -148,17 +148,28 @@ sub reward {
     my $class = shift;
     my ($prev_block, $fee, $timeslot) = @_;
     if ($prev_block) {
-        my $reward_fund = $prev_block->reward_fund + $fee
-            or return 0;
-        my $reward = int($reward_fund / REWARD_DIVIDER) || 1;
-        if (!UPGRADE_POW || $prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped($timeslot)) {
-            $reward += int(STATIC_REWARD / 2**int($prev_block->height / REWARD_HALVING));
+        my $reward = 0;
+        if (my $reward_fund = $prev_block->reward_fund + $fee) {
+            $reward = int($reward_fund / REWARD_DIVIDER) || 1;
         }
+        $reward += $class->static_reward($prev_block, $timeslot);
         return $reward;
     }
     else {
         return $config->{regtest} ? $config->{genesis_reward} // 0 : GENESIS_REWARD;
     }
+}
+
+sub static_reward {
+    my $class = shift;
+    my ($prev_block, $timeslot) = @_;
+    my $static_reward = 0;
+    if ($prev_block) {
+        if (!UPGRADE_POW || $prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped($timeslot)) {
+            $static_reward = int(STATIC_REWARD / 2**int($prev_block->height / REWARD_HALVING));
+        }
+    }
+    return $static_reward;
 }
 
 sub reorg_penalty {

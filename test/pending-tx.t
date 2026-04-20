@@ -19,10 +19,12 @@ use QBitcoin::Transaction;
 use QBitcoin::TXO;
 
 #$config->{debug} = 1;
+$config->{regtest} = 1;
 
 my $protocol_module = Test::MockModule->new('QBitcoin::Protocol');
 $protocol_module->mock('send_message', sub { 1 });
-$config->{regtest} = 1;
+my $block_module = Test::MockModule->new('QBitcoin::Block');
+$block_module->mock('static_reward', sub { 0 });
 
 sub pending_one {
     my $coinbase_tx = make_tx(undef, 0);

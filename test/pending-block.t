@@ -24,16 +24,19 @@ use QBitcoin::Test::ORM;
 use Bitcoin::Serialized;
 
 #$config->{debug} = 1;
+$config->{regtest} = 1;
 
 my $protocol_module = Test::MockModule->new('QBitcoin::Protocol');
 $protocol_module->mock('send_message', sub { 1 });
-$config->{regtest} = 1;
 
 my $transaction_module = Test::MockModule->new('QBitcoin::Transaction');
 $transaction_module->mock('validate_coinbase', sub { 0 });
 $transaction_module->mock('coins_created', sub { $_[0]->{coins_created} //= @{$_[0]->in} ? 0 : sum0(map { $_->value } @{$_[0]->out}) });
 $transaction_module->mock('serialize_coinbase', sub { "\x00" });
 $transaction_module->mock('deserialize_coinbase', sub { unpack("C", shift->get(1)) });
+
+my $block_module = Test::MockModule->new('QBitcoin::Block');
+$block_module->mock('static_reward', sub { 0 });
 
 my $peer = QBitcoin::Peer->new(type_id => PROTOCOL_QBITCOIN, ip => '127.0.0.1');
 my $connection = QBitcoin::Connection->new(peer => $peer, state => STATE_CONNECTED);

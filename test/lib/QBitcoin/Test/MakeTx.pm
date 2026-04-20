@@ -3,7 +3,7 @@ use warnings;
 use strict;
 use feature 'state';
 
-use List::Util qw(sum);
+use List::Util qw(sum0);
 use QBitcoin::Const;
 use QBitcoin::TXO;
 use QBitcoin::Transaction;
@@ -23,7 +23,7 @@ sub make_tx {
     $fee //= 0;
     $prev_tx = [ $prev_tx ] if $prev_tx && ref($prev_tx) ne 'ARRAY';
     my @in = $prev_tx ? map { $_->out->[0] } @$prev_tx : ();
-    my $out_value = @in ? sum(map { $_->value } @in) : $value;
+    my $out_value = @in || $fee < 0 ? sum0(map { $_->value } @in) : $value;
     $script //= op_pushdata(pack("v", $value)) . OP_DROP . OP_1;
     my $scripthash = hash160($script);
     $SCRIPT{$scripthash} = $script;

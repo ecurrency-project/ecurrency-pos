@@ -26,6 +26,9 @@ $protocol_module->mock('send_message', sub { 1 });
 my $transaction_module = Test::MockModule->new('QBitcoin::Transaction');
 $transaction_module->mock('validate_coinbase', sub { 0 });
 
+my $block_module = Test::MockModule->new('QBitcoin::Block');
+$block_module->mock('static_reward', sub { 0 });
+
 send_block(0, "a0", undef, 1, send_tx());
 my $stake = send_tx(-1);
 my $tx = send_tx(1, undef);

@@ -32,6 +32,9 @@ $transaction_module->mock('serialize_coinbase', sub { "\x00" });
 $transaction_module->mock('deserialize_coinbase', sub { unpack("C", shift->get(1)) });
 $transaction_module->mock('size', sub : lvalue { $_[0]->{size} = 1000; $_[0]->{size} });
 
+my $block_module = Test::MockModule->new('QBitcoin::Block');
+$block_module->mock('static_reward', sub { 0 });
+
 blockchain_synced(1);
 
 my $block;

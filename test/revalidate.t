@@ -24,6 +24,9 @@ $protocol_module->mock('send_message', sub { 1 });
 my $transaction_module = Test::MockModule->new('QBitcoin::Transaction');
 $transaction_module->mock('validate_coinbase', sub { 0 });
 
+my $block_module = Test::MockModule->new('QBitcoin::Block');
+$block_module->mock('static_reward', sub { 0 });
+
 my @blocks; # save for resend
 
 send_block(0, "a0", undef, 1, send_tx());
@@ -44,7 +47,6 @@ QBitcoin::Block->cleanup_old_blocks();
 
 pass("Blocks stored successfully");
 
-my $block_module = Test::MockModule->new('QBitcoin::Block');
 $block_module->mock('validate', sub {
     my ($self) = @_;
     return $self->height == 0 ? "" : "Incorrect block";

@@ -23,6 +23,8 @@ use QBitcoin::TXO;
 
 my $protocol_module = Test::MockModule->new('QBitcoin::Protocol');
 $protocol_module->mock('send_message', sub { 1 });
+my $block_module = Test::MockModule->new('QBitcoin::Block');
+$block_module->mock('static_reward', sub { 0 });
 $config->{regtest} = 1;
 
 blockchain_synced(1);

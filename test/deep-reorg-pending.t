@@ -39,6 +39,9 @@ $transaction_module->mock('coins_created', sub { $_[0]->{coins_created} //= @{$_
 $transaction_module->mock('serialize_coinbase', sub { "\x00" });
 $transaction_module->mock('deserialize_coinbase', sub { unpack("C", shift->get(1)) });
 
+my $block_module = Test::MockModule->new('QBitcoin::Block');
+$block_module->mock('static_reward', sub { 0 });
+
 my $peer = QBitcoin::Peer->new(type_id => PROTOCOL_QBITCOIN, ip => '127.0.0.1');
 my $connection = QBitcoin::Connection->new(peer => $peer, state => STATE_CONNECTED);
 

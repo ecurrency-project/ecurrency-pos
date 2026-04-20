@@ -32,6 +32,7 @@ sub block_hashes {
 
 my $block_module = Test::MockModule->new('QBitcoin::Block');
 $block_module->mock('calculate_hash', sub { shift @block_hash });
+$block_module->mock('static_reward', sub { 0 });
 
 my $transaction_module = Test::MockModule->new('QBitcoin::Transaction');
 $transaction_module->mock('validate_coinbase', sub { 0 });

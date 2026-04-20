@@ -35,6 +35,9 @@ $transaction_module->mock('coins_created', sub { $_[0]->{coins_created} //= @{$_
 $transaction_module->mock('serialize_coinbase', sub { "\x00" });
 $transaction_module->mock('deserialize_coinbase', sub { unpack("C", shift->get(1)) });
 
+my $block_module = Test::MockModule->new('QBitcoin::Block');
+$block_module->mock('static_reward', sub { 0 });
+
 blockchain_synced(1);
 
 # 1. Send tx1 with limited output (min block 6) and tx2 with limit seq output (min seq blocks 4) in block 2
