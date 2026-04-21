@@ -141,6 +141,13 @@ sub main_loop {
     while () {
         QBitcoin::Block->store_blocks();
         my $timeout = SELECT_TIMEOUT;
+        if (!$config->{genesis} && !QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN)) {
+            blockchain_synced(0);
+            mempool_synced(0);
+            if (UPGRADE_POW && !upgrade_finished() && !QBitcoin::ConnectionList->connected(PROTOCOL_BITCOIN)) {
+                btc_synced(0);
+            }
+        }
         if (mempool_synced() && blockchain_synced()) {
             QBitcoin::Produce->produce() if $config->{produce};
             if ($generate) {
