@@ -382,6 +382,8 @@ sub cmd_getrawtransaction {
     if (defined $tx->block_height) {
         my $best_height = QBitcoin::Block->blockchain_height;
         $res->{confirmations} = $best_height - $tx->block_height;
+        $res->{block_height} = $tx->block_height;
+        $res->{block_pos} = $tx->block_pos;
         my $block = QBitcoin::Block->best_block($tx->block_height) // QBitcoin::Block->find(height => $tx->block_height);
         if ($block) {
             my $best_block = QBitcoin::Block->best_block($best_height);
