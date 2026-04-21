@@ -74,7 +74,7 @@ RUN { \
     notify_args="--notify-udp=127.0.0.1:9554"; \
   fi; \
   exec /qbitcoin/bin/qbitcoind \
-      --peer=node.qbitcoin.net \
+      --fallback-peer=node.qbitcoin.net \
       --dbi=${dbi} \
       --database=${database} \
       --rpc="*:9556" \
