@@ -300,7 +300,9 @@ sub main_loop {
             defined $connection->socket_fileno
                 or next;
             if (vec($ein, $connection->socket_fileno, 1) == 1) {
-                Warningf("%s peer %s disconnected", $connection->type, $connection->ip) unless $connection->type_id == PROTOCOL_RPC;
+                if ($connection->type_id != PROTOCOL_RPC && $connection->type_id != PROTOCOL_REST) {
+                    Warningf("%s peer %s disconnected", $connection->type, $connection->ip);
+                }
                 $connection->failed();
                 next;
             }
