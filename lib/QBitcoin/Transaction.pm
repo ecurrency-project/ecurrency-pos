@@ -1586,7 +1586,7 @@ sub stake_weight {
                     $self->hash_str, $in->tx_in_str, $in->num);
                 return undef;
             }
-            $weight += $in->value * (timeslot($block->time) - timeslot($in_block_time)) / BLOCK_INTERVAL;
+            $weight += $in->value * ((timeslot($block->time) - timeslot($in_block_time)) / BLOCK_INTERVAL);
         }
         # Prevent int64 overflow, too large weight will not give more advantage, so just set it to maximum value
         $weight = MAX_INT64 if $weight > MAX_INT64;
