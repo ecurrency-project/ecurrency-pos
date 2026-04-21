@@ -21,7 +21,6 @@ use QBitcoin::Tag;
 use QBitcoin::Generate;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
-use QBitcoin::MinFee;
 use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info update_my_utxo create_txo estimate_fees);
 use Bitcoin::Serialized;
 use Bitcoin::Block;

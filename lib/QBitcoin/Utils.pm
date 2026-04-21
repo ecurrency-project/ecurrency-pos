@@ -31,7 +31,7 @@ use QBitcoin::RedeemScript;
 use QBitcoin::TXO;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
-use QBitcoin::MinFee;
+use QBitcoin::MinFee qw(MIN_FEE);
 use QBitcoin::ProtocolState qw(blockchain_synced mempool_synced);
 
 use constant MAX_TXO_PER_ADDRESS => 10_000;
@@ -966,12 +966,8 @@ sub estimate_fees {
     my $best_block = QBitcoin::Block->best_block($height)
         or return (undef, "Best block not found");
     my @mempool = QBitcoin::Transaction->mempool_list();
-    my $min_fee_rate = $best_block->min_fee / 1024;
+    my $min_fee_rate = ( $best_block->min_fee > MIN_FEE ? $best_block->min_fee : MIN_FEE ) / 1024;
     my %result;
-    if ($best_block->min_fee <= QBitcoin::MinFee->MIN_FEE) {
-        %result = map { $_ => QBitcoin::MinFee->MIN_FEE / 1024 } @targets;
-        return (\%result, undef);
-    }
     my @sorted = sort { $b->fee / $b->size <=> $a->fee / $a->size }
         grep { ($_->is_standard || $_->is_tokens) && $_->fee / $_->size > $min_fee_rate } @mempool;
     my $total_size = sum0 map { $_->size } @sorted;
@@ -980,7 +976,7 @@ sub estimate_fees {
     my $tx_idx = 0;
     foreach my $target (sort { $a <=> $b } @targets) {
         if (@mempool < $target) {
-            $result{$target} = 0;
+            $result{$target} = MIN_FEE / 1024;
             next;
         }
         if ($total_size < $target * $block_size) {

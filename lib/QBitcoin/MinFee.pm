@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(min_fee);
+our @EXPORT_OK = qw(min_fee MIN_FEE);
 
 use constant {
     FEE_LINEAR_SIZE => 32768,   # 32K
