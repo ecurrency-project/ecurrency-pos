@@ -1509,7 +1509,7 @@ Result:
 
 Examples:
 > qbitcoin-cli listmyaddresses
-> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "listmyaddresses", "params": []}' -H 'content-type: text/plain;' http://127.0.0.1:${\RPC_PORT}/
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "listmyaddresses", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_listmyaddresses {
     my $self = shift;
@@ -1537,7 +1537,7 @@ n    (numeric) The total amount in BTC in the wallet.
 Examples:
 > qbitcoin-cli getbalance
 > qbitcoin-cli getbalance 6
-> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getbalance", "params": []}' -H 'content-type: text/plain;' http://127.0.0.1:${\RPC_PORT}/
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getbalance", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getbalance {
     my $self = shift;
@@ -1581,7 +1581,7 @@ Result:
 
 Examples:
 > qbitcoin-cli getnewaddress
-> curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getnewaddress", "params": []}' -H 'content-type: text/plain;' http://127.0.0.1:${\RPC_PORT}/
+> curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getnewaddress", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_getnewaddress {
     my $self = shift;
@@ -1620,7 +1620,7 @@ Result:
 
 Examples:
 > qbitcoin-cli estimatesmartfee 6
-> curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "estimatesmartfee", "params": [6]}' -H 'content-type: text/plain;' http://127.0.0.1:${\RPC_PORT}/
+> curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "estimatesmartfee", "params": [6]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_estimatesmartfee {
     my $self = shift;
