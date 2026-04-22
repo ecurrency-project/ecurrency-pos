@@ -63,13 +63,12 @@ my %PENDING_INPUT_TX; # 2-level hash $pending_hash => $hash; value - transaction
 my %PENDING_TX_INPUT; # hash of pending transaction objects by tx_hash
 tie(%PENDING_TX_INPUT, 'Tie::IxHash'); # Ordered by age, to remove oldest
 
-my @MEMPOOL;                   # sorted by priority (highest fee/size first), standard+tokens only
-my $MEMPOOL_SIZE = 0;          # total size of standard+tokens txs in mempool
-my $MEMPOOL_ZERO_FEE_COUNT = 0; # count of zero-fee standard+tokens txs in mempool
+my $MEMPOOL_SIZE = 0;           # total size of txs in mempool
+my $MEMPOOL_ZERO_FEE_COUNT = 0; # count of zero-fee txs in mempool
+my $MEMPOOL_WORST;
 
 END {
     # Free all references to txo for graceful free %TXO hash
-    undef @MEMPOOL;
     undef %TRANSACTION;
 };
 
@@ -111,62 +110,33 @@ sub is_mempool_limited {
 
 sub _mempool_insert {
     my ($tx) = @_;
-    my ($lo, $hi) = (0, scalar @MEMPOOL);
-    while ($lo < $hi) {
-        my $mid = int(($lo + $hi) / 2);
-        # compare_eviction($x, $y): < 0 if $x has higher priority
-        if (compare_eviction($MEMPOOL[$mid], $tx) <= 0) {
-            $lo = $mid + 1;
-        }
-        else {
-            $hi = $mid;
-        }
+    return unless $tx->is_mempool_limited;
+    if ($MEMPOOL_SIZE == 0 || (defined($MEMPOOL_WORST) && compare_tx($tx, $MEMPOOL_WORST) > 0)) {
+        $MEMPOOL_WORST = $tx;
     }
-    splice(@MEMPOOL, $lo, 0, $tx);
+    $MEMPOOL_SIZE += $tx->size;
+    $MEMPOOL_ZERO_FEE_COUNT++ if $tx->fee == 0;
 }
 
 sub _mempool_remove {
     my ($tx) = @_;
-    foreach my $i (0 .. $#MEMPOOL) {
-        if ($MEMPOOL[$i] == $tx) {
-            splice(@MEMPOOL, $i, 1);
-            return 1;
+    return unless $tx->is_mempool_limited;
+    $MEMPOOL_SIZE -= $tx->size;
+    $MEMPOOL_ZERO_FEE_COUNT-- if $tx->fee == 0;
+    if (defined($MEMPOOL_WORST) && $tx->hash eq $MEMPOOL_WORST->hash) {
+        undef $MEMPOOL_WORST;
+    }
+}
+
+sub mempool_worst_tx {
+    if (!defined($MEMPOOL_WORST) && $MEMPOOL_SIZE) {
+        foreach my $tx (grep { !defined($_->block_height) && $_->is_mempool_limited } values %TRANSACTION) {
+            if (!defined($MEMPOOL_WORST) || compare_tx($tx, $MEMPOOL_WORST) > 0) {
+                $MEMPOOL_WORST = $tx;
+            }
         }
     }
-    return 0;
-}
-
-sub mempool_total_size {
-    return $MEMPOOL_SIZE;
-}
-
-sub mempool_zero_fee_count {
-    return $MEMPOOL_ZERO_FEE_COUNT;
-}
-
-sub mempool_worst_evictable {
-    my ($skip) = @_;
-    foreach my $i (reverse 0 .. $#MEMPOOL) {
-        my $tx = $MEMPOOL[$i];
-        next if $tx->in_blocks;
-        next if $tx->drop_immune;
-        next if $skip && $skip->{$tx->hash};
-        return $tx;
-    }
-    return undef;
-}
-
-sub mempool_worst_evictable_zero_fee {
-    my ($skip) = @_;
-    foreach my $i (reverse 0 .. $#MEMPOOL) {
-        my $tx = $MEMPOOL[$i];
-        next unless $tx->fee == 0;
-        next if $tx->in_blocks;
-        next if $tx->drop_immune;
-        next if $skip && $skip->{$tx->hash};
-        return $tx;
-    }
-    return undef;
+    return $MEMPOOL_WORST;
 }
 
 sub add_to_cache {
@@ -181,11 +151,8 @@ sub add_to_cache {
         $in->{txo}->spent_add($self);
     }
 
-    # Track in sorted mempool for limited types (standard+tokens)
-    if (!defined($self->block_height) && $self->is_mempool_limited) {
+    if (!defined($self->block_height)) {
         _mempool_insert($self);
-        $MEMPOOL_SIZE += $self->size;
-        $MEMPOOL_ZERO_FEE_COUNT++ if $self->fee == 0;
     }
 }
 
@@ -199,12 +166,7 @@ sub delete_from_cache {
         }
     }
 
-    # Update mempool tracking — _mempool_remove returns true only if tx was in @MEMPOOL
-    if ($self->is_mempool_limited && _mempool_remove($self)) {
-        $MEMPOOL_SIZE -= $self->size;
-        $MEMPOOL_ZERO_FEE_COUNT-- if $self->fee == 0;
-    }
-
+    _mempool_remove($self);
     delete $TRANSACTION{$self->hash};
 }
 
@@ -257,7 +219,9 @@ sub receive {
     }
 
     # Evict lowest-priority transactions if over limits
-    evict_mempool();
+    if ($MEMPOOL_SIZE > MAX_MEMPOOL_SIZE * 2) {
+        evict_mempool();
+    }
 
     if ($self->up) {
         $self->up->store; # and update $self->up->tx_out here if already stored
@@ -486,9 +450,6 @@ sub cleanup_mempool {
             next;
         }
     }
-
-    # Evict lowest-priority transactions if mempool exceeds limits
-    evict_mempool();
 }
 
 sub store {
@@ -1494,6 +1455,7 @@ sub confirm {
             delete $tx->{min_tx_rel_block_height};
         }
     }
+    _mempool_remove($self);
 }
 
 sub unconfirm {
@@ -1527,6 +1489,7 @@ sub unconfirm {
             $tx->{min_tx_rel_block_height} = undef if exists $tx->{min_tx_rel_block_height};
         }
     }
+    _mempool_insert($self);
 }
 
 sub is_cached {
@@ -1762,14 +1725,13 @@ sub drop_all_pending {
     }
 }
 
-sub compare_eviction {
-    my ($x, $y) = @_;
-    # Sort by priority: higher fee/size first; for same fee/size, newer first (evict older)
-    # Used for sorted @MEMPOOL in Transaction.pm and for admission control decisions
+sub compare_tx {
+    # coinbase first
+    my ($a, $b) = @_;
     return
-        $y->fee * $x->size <=> $x->fee * $y->size ||   # higher fee/size first
-        $y->received_time  <=> $x->received_time  ||   # newer first (opposite of compare_tx)
-        $x->hash cmp $y->hash;                          # deterministic tiebreaker
+        $b->fee * $a->size <=> $a->fee * $b->size ||
+        ($a->received_time // 0) <=> ($b->received_time // 0) ||
+        $a->hash cmp $b->hash;
 }
 
 sub want_tx {
@@ -1779,45 +1741,44 @@ sub want_tx {
     return 1 unless $tx->is_mempool_limited;
 
     # Reject zero-fee tx if limit reached
-    if ($tx->fee == 0 && mempool_zero_fee_count() >= MAX_MEMPOOL_ZERO_FEE_TX) {
+    if ($tx->fee == 0 && $MEMPOOL_ZERO_FEE_COUNT >= MAX_MEMPOOL_ZERO_FEE_TX) {
         return 0;
     }
 
     # Reject if mempool over size limit and this tx is not better than worst evictable
-    if (mempool_total_size() + $tx->size > MAX_MEMPOOL_SIZE) {
-        my $worst = mempool_worst_evictable();
-        return 0 unless $worst;
+    if ($MEMPOOL_SIZE + $tx->size > MAX_MEMPOOL_SIZE) {
+        return 0 if $tx->fee == 0;
+        my $worst = mempool_worst_tx();
+        if (!$worst) {
+            Errf("Mempool over size limit but no evictable transaction found, rejecting transaction %s fee %li size %u",
+                $tx->hash_str, $tx->fee, $tx->size);
+            return 0;
+        }
         # Accept only if strictly better than worst
-        return compare_eviction($tx, $worst) < 0 ? 1 : 0;
+        return compare_tx($tx, $worst) < 0 ? 1 : 0;
     }
 
     return 1;
 }
 
 sub evict_mempool {
-    my %skip;
-
-    while (mempool_total_size() > MAX_MEMPOOL_SIZE) {
-        my $victim = mempool_worst_evictable(\%skip);
-        last unless $victim;
-        Infof("Evict tx %s fee %li size %u from mempool (total size %u > %u)",
-            $victim->hash_str, $victim->fee, $victim->size,
-            mempool_total_size(), MAX_MEMPOOL_SIZE);
-        if (!$victim->drop()) {
-            $skip{$victim->hash} = 1;
-            next;
+    my @mempool =
+        sort { compare_tx($b, $a) }
+        grep { !defined($_->block_height)
+               && $_->is_mempool_limited
+               && !$_->in_blocks
+               && !$_->drop_immune
+               && !($_->received_from_peer && $_->received_from->syncing)
+        } values %TRANSACTION;
+    foreach my $tx (@mempool) {
+        Infof("Evict tx %s fee %li size %u from mempool", $tx->hash_str, $tx->fee, $tx->size);
+        if ($MEMPOOL_SIZE > MAX_MEMPOOL_SIZE || ($MEMPOOL_ZERO_FEE_COUNT > MAX_MEMPOOL_ZERO_FEE_TX && $tx->fee == 0)) {
+            if ($tx->drop()) {
+                last if $MEMPOOL_SIZE <= MAX_MEMPOOL_SIZE && $MEMPOOL_ZERO_FEE_COUNT <= MAX_MEMPOOL_ZERO_FEE_TX;
+            }
         }
-    }
-
-    while (mempool_zero_fee_count() > MAX_MEMPOOL_ZERO_FEE_TX) {
-        my $victim = mempool_worst_evictable_zero_fee(\%skip);
-        last unless $victim;
-        Infof("Evict zero-fee tx %s size %u from mempool (count %u > %u)",
-            $victim->hash_str, $victim->size,
-            mempool_zero_fee_count(), MAX_MEMPOOL_ZERO_FEE_TX);
-        if (!$victim->drop()) {
-            $skip{$victim->hash} = 1;
-            next;
+        else {
+            last;
         }
     }
 }

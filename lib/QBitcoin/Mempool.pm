@@ -11,14 +11,7 @@ use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::MinFee qw(min_fee);
-
-sub coinbase_list {
-    my $class = shift;
-    my ($block_time) = @_;
-    # coinbase transactions are not limited by block height
-    return grep { $_->is_coinbase && defined($_->min_tx_time) && $_->min_tx_time <= $block_time }
-        QBitcoin::Transaction->mempool_list();
-}
+use QBitcoin::Transaction;
 
 sub choose_for_block {
     my $class = shift;
@@ -36,10 +29,10 @@ sub choose_for_block {
         }
     }
     return () unless @mempool;
-    @mempool = sort { compare_tx() } @mempool;
     if (!$can_consume) {
         @mempool = grep { $_->fee == 0 || $_->coins_created } @mempool;
     }
+    @mempool = sort { compare_tx() } @mempool;
     my $low_fee_tx = 0;
     my $tx_in_block = $size ? 1 : 0;
     # It's not possible that input was spent in stake transaction
@@ -157,7 +150,7 @@ sub compare_tx {
             ($a->up->btc_out_num      // 0) <=> ($b->up->btc_out_num      // 0)
         ) : 0 ) ||
         $b->fee * $a->size <=> $a->fee * $b->size ||
-        $a->received_time  <=> $b->received_time  ||
+        ($a->received_time // 0) <=> ($b->received_time // 0) ||
         $a->hash cmp $b->hash;
 }
 
