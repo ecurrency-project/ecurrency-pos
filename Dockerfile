@@ -77,7 +77,6 @@ RUN { \
       --fallback-peer=node.qbitcoin.net \
       --dbi=${dbi} \
       --database=${database} \
-      --rpc="*:9556" \
       --log=/dev/null \
       --verbose ${debug:+$( [ "$debug" = "0" ] || echo --debug )} \
       ${notify_args:+${notify_args}} \
@@ -96,4 +95,4 @@ ENV MARIADB_TLS_DISABLE_PEER_VERIFICATION=1
 
 ENTRYPOINT ["/qbitcoin/bin/run-qbitcoin.sh"]
 
-EXPOSE 9555 9556
+EXPOSE 9555
