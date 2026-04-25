@@ -1,0 +1,89 @@
+.TransactionVin {
+    background-color: var(--tx-bg-color-secondary);
+    border: 1px solid var(--tx-border-color);
+    border-radius: 5px;
+    min-height: 46px;
+    line-height: 20px;
+    font-size: 13px;
+    word-break: break-all;
+}
+
+.header {
+    padding: 12px 24px 12px 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 46px;
+}
+
+.header a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+.wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+
+    @media only screen and (max-width: 550px) {
+        flex-direction: column;
+    }
+}
+
+.wrapper .amount {
+    @media only screen and (max-width: 550px) {
+        margin-left: 0;
+    }
+}
+
+.index {
+    color: #c3cbd3;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.amount {
+    white-space: nowrap;
+    font-size: 13px;
+    margin-left: 10px;
+}
+
+.vinBody {
+    padding: 30px 24px
+}
+
+.vinOpen {
+    display: none;
+}
+
+.vinBodyRow {
+    display: flex;
+    width: 100%;
+
+    @media only screen and (max-width: 850px) {
+        flex-direction: column;
+    }
+}
+
+.vinBodyRow div:first-child {
+    min-width: 50%;
+    text-transform: uppercase;
+    color: var(--text-color-secondary);
+    font-weight: 600;
+}
+
+.vinBodyRow div:not(:first-child) {
+    font-family: var(--font-family-secondary);
+    font-size: 13px;
+    color: var(--text-color-primary);
+}
+
+.vinBodyRow a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+.highlighted {
+    border-left: 3px solid #e05a2b;
+}

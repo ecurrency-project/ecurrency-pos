@@ -1,0 +1,135 @@
+.ChainStatusInfo {
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.mainCard {
+    border-radius: 12px;
+    background-color: var(--stats-bg-color);
+    box-shadow: var(--stats-box-shadow);
+}
+
+.mainCard :global(.ant-card-body) {
+    padding: 24px;
+}
+
+@media screen and (max-width: 768px) {
+    .mainCard :global(.ant-card-body) {
+        padding: 16px;
+    }
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    margin: -8px;
+    justify-content: space-between;
+}
+
+.col {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    padding: 8px;
+    flex: 1 0 20%;
+}
+
+@media screen and (max-width: 1200px) {
+    .col {
+        flex: 1 0 33.33%;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    .col {
+        flex: 1 0 50%;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .col {
+        flex: 1 0 100%;
+    }
+}
+
+.ChainStatusInfo :global(.ant-statistic) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.ChainStatusInfo :global(.ant-statistic-title) {
+    margin-bottom: 12px;
+    width: 100%;
+}
+
+.ChainStatusInfo :global(.ant-statistic-content) {
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: 4px;
+    width: 100%;
+    overflow: hidden;
+}
+
+@media screen and (max-width: 480px) {
+    .ChainStatusInfo :global(.ant-statistic-content) {
+        font-size: 16px;
+    }
+}
+
+.ChainStatusInfo :global(.ant-statistic-content-value) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-color-secondary);
+    font-weight: 500;
+}
+
+.icon {
+    font-size: 14px;
+}
+
+.suffix {
+    font-size: 12px;
+    color: var(--text-color-secondary);
+    margin-left: 2px;
+    font-weight: 400;
+}
+
+.syncRow {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.syncIcon {
+    font-size: 24px;
+    color: #1677ff;
+}
+
+.syncContent {
+    flex: 1;
+}
+
+.syncLabel {
+    font-weight: 600;
+}
+

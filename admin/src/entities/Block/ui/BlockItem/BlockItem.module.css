@@ -1,0 +1,50 @@
+.blockRow {
+    border-top: 1px solid var(--stats-border-color);
+    height: 52px;
+    padding: 20px 0;
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+    color: var(--text-color-primary);
+    text-decoration: none;
+
+
+}
+
+.blockRow div:first-child {
+    width: 150px;
+    padding-left: 12px;
+    color: var(--link-color);
+}
+
+.blockRow div:nth-child(2) {
+    width: 250px;
+}
+
+.blockSell {
+    display: table-cell;
+    vertical-align: middle;
+    font-size: 16px;
+
+    @media only screen and (max-width: 850px) {
+        border: none;
+        position: relative;
+        padding: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100% !important;
+        text-align: right;
+
+
+        &:before {
+            padding-right: 10px;
+            font-weight: 600;
+            color: var(--text-color-secondary);
+
+            content: attr(data-label);
+            text-align: left;
+            width: auto;
+        }
+    }
+}

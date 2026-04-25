@@ -1,0 +1,42 @@
+.Blocks {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  box-shadow: var(--stats-box-shadow);
+  background-color: var(--stats-bg-color);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.headerTitle {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.viewMore {
+  width: 100%;
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+  color: #1187C1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.svg {
+  fill: #1187C1;
+  width: 24px;
+}
+
+.loadMore {
+  display: flex;
+  margin: 0 auto;
+}

@@ -1,0 +1,47 @@
+.TxDetailsPage {
+  margin-top: 40px;
+}
+
+.title {
+  font-weight: 500;
+}
+
+.statsTable {
+  margin-top: 50px;
+  box-shadow: var(--stats-box-shadow);
+  padding: 30px;
+  border-radius: 8px;
+  color: var(--text-color-primary);
+  background-color: var(--stats-bg-color);
+}
+
+.statsTableItem {
+  width: 100%;
+  border-top: 1px solid var(--stats-border-color);
+  min-height: 52px;
+  font-size: 16px;
+}
+
+.statsTableItem:first-child {
+  border-top: none;
+}
+
+.statsTableItem span:last-child {
+  word-break: break-word;
+  text-align: right;
+}
+
+.statsTableItem span:first-child {
+  text-transform: uppercase;
+  color: var(--text-color-secondary);
+  width: auto;
+}
+
+.link {
+  color: var(--link-color);
+  text-decoration: none;
+  word-break: break-word;
+  width: 50%;
+  text-align: right;
+  padding: 10px 0;
+}

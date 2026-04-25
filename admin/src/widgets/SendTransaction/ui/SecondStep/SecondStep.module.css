@@ -1,0 +1,71 @@
+.second {
+    width: 100%;
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.secondItem {
+    width: 100%;
+}
+
+.label {
+    min-width: 120px;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--text-color-primary);
+}
+
+.secondInput {
+    width: 100%;
+    max-width: 500px;
+}
+
+@media (max-width: 768px) {
+    .secondItem {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .label {
+        text-align: left;
+        margin-bottom: 4px;
+    }
+}
+
+.summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.summaryRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.summaryLabel {
+    color: var(--text-color-secondary);
+    flex-shrink: 0;
+    min-width: 70px;
+}
+
+.summaryValue {
+    text-align: right;
+    word-break: break-all;
+    font-family: var(--font-family-secondary);
+}
+
+.feeInfo {
+    margin-bottom: 16px;
+    color: var(--text-color-secondary);
+}
+
+.buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.sendButton {
+    margin-left: 10px;
+}
