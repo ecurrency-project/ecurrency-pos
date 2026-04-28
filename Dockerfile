@@ -11,7 +11,13 @@ LABEL stage=builder
 WORKDIR /build
 
 RUN apk add --no-cache \
-    perl perl-dev make clang gmp-dev \
+    perl openssl sqlite-libs gmp \
+    perl-json-xs perl-dbi perl-dbd-sqlite \
+    perl-http-message perl-hash-multivalue perl-params-validate \
+    perl-role-tiny perl-tie-ixhash perl-cryptx
+
+RUN apk add --no-cache \
+    perl-dev make clang gmp-dev \
     openssl-dev curl wget git
 
 # pqclean does not build with alpine gcc due to musl; clang is ok
@@ -20,11 +26,6 @@ RUN ln -s -f /usr/bin/clang /usr/bin/cc
 RUN cpan -i Encode::Base58::GMP Math::GMPz Crypt::PK::ECC::Schnorr Crypt::PQClean::Sign
 
 # Run tests
-RUN apk add --no-cache \
-    perl openssl sqlite-libs gmp \
-    perl-json-xs perl-dbi perl-dbd-sqlite \
-    perl-http-message perl-hash-multivalue perl-params-validate \
-    perl-role-tiny perl-tie-ixhash perl-cryptx
 RUN apk add --no-cache perl-test-mockmodule
 COPY . /qbitcoin
 RUN cd /qbitcoin; make test || exit 1
