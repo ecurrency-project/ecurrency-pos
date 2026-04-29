@@ -10,6 +10,7 @@ import {
     useLazyGetBlocksQuery,
     type IBlock
 } from '@/entities/Block';
+import { useGetTipHeightQuery } from '@/entities/TipHeight';
 
 import { Button } from "@/shared/ui/Button";
 import { LATEST_BLOCKS_DISPLAY_COUNT } from '@/shared/const/const.ts';
@@ -29,10 +30,19 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
         className,
         isLoadMore = false
     } = props;
-    const { data: initialBlocks, isLoading } = useGetBlocksQuery();
+    const { data: initialBlocks, isLoading, refetch } = useGetBlocksQuery();
+    const { data: tipHeight } = useGetTipHeightQuery();
     const [triggerLoadMore] = useLazyGetBlocksQuery();
     const [extraBlocks, setExtraBlocks] = useState<IBlock[]>([]);
     const [loadingMore, setLoadingMore] = useState(false);
+
+    const title = isLoadMore ? 'Blocks' : 'Latest blocks';
+
+    useEffect(() => {
+        if (!isLoadMore && tipHeight !== undefined) {
+            refetch();
+        }
+    }, [tipHeight, refetch, isLoadMore]);
 
     useEffect(() => {
         setExtraBlocks([]);
@@ -58,7 +68,7 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
         return (
             <Card className={classNames(cls.Blocks, className)}>
                 <div className={cls.header}>
-                    <span className={cls.headerTitle}>Latest blocks</span>
+                    <span className={cls.headerTitle}>{title}</span>
                 </div>
                 <Skeleton active paragraph={{ rows: 5 }} />
             </Card>
@@ -68,7 +78,7 @@ export const Blocks = memo(function Blocks(props: BlocksProps) {
     return (
         <Card className={classNames(cls.Blocks, className)}>
             <div className={cls.header}>
-                <span className={cls.headerTitle}>Latest blocks</span>
+                <span className={cls.headerTitle}>{title}</span>
             </div>
             <BlockItemHeader/>
             {!isLoadMore && allBlocks.slice(0, LATEST_BLOCKS_DISPLAY_COUNT).map((block) => (
