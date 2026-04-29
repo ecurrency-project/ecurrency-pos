@@ -64,7 +64,7 @@ sub validate {
         $arg_name =~ s@[:?/].*@@;
         if (my $rule = $SPEC{$spec_arg}) {
             if (ref($rule) eq 'Regexp') {
-                $arg =~ $rule
+                defined($arg) && !ref($arg) && $arg =~ $rule
                     or return $self->incorrect_params("Incorrect parameter '$arg_name'", \@spec);
             }
             elsif (ref($rule) eq 'CODE') {
