@@ -1,9 +1,9 @@
 import { isAddress, isHash256, isNumber } from '@/shared/utils';
 
-const tryResource = async (path: string) => {
+const tryResource = async (path: string, parseAs: 'json' | 'text' = 'json') => {
     const response = await fetch(`/api/${path}`);
     if (!response.ok) throw new Error(response.statusText);
-    return response.json();
+    return parseAs === 'text' ? response.text() : response.json();
 }
 
 export const searchRequest = async (query: string): Promise<string | null> => {
@@ -11,8 +11,8 @@ export const searchRequest = async (query: string): Promise<string | null> => {
 
     if (isNumber(query)) {
         try {
-            const idBlock = await tryResource(`block-height/${query}`);
-            return idBlock ? `/blocks/${idBlock}` : null;
+            const idBlock: string = await tryResource(`block-height/${query}`, 'text');
+            return idBlock ? `/blocks/${idBlock.trim()}` : null;
         } catch {
             return null;
         }
