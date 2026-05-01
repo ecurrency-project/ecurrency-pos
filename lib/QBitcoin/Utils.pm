@@ -357,6 +357,7 @@ sub get_address_utxo {
                 block_pos    => $txo->[4],
                 tx_type      => TX_TYPES_NAMES->[$txo->[5]],
             };
+            $utxo->{data} = $txo->[8] if defined $txo->[8];
             if ($txo->[5] == TX_TYPE_TOKENS) {
                 if ($txo->[7]) {
                     if (!exists $token_hash{$txo->[7]}) {
@@ -391,6 +392,7 @@ sub get_address_utxo {
                     block_pos    => $tx->block_pos,
                     tx_type      => $tx->type_as_text,
                 };
+                $utxo->{data} = $out->data if defined $out->data;
                 if ($tx->is_tokens) {
                     $utxo->{token_id} = $tx->token_hash || $tx->hash;
                     _add_token_data($utxo, $out->data);
@@ -413,6 +415,7 @@ sub get_address_utxo {
             next if $out->scripthash ne $scripthash;
             next unless $out->unspent;
             my $utxo = { value => $out->value, tx_type => $tx->type_as_text };
+            $utxo->{data} = $out->data if defined $out->data;
             if ($tx->is_tokens) {
                 $utxo->{token_id} = $tx->token_hash || $tx->hash;
                 _add_token_data($utxo, $out->data);

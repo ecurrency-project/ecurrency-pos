@@ -40,6 +40,7 @@ sub load_address_utxo {
                 num        => $vout,
                 value      => $chain_utxo->{$txid}->[$vout]->{value},
                 scripthash => $scripthash,
+                data       => $chain_utxo->{$txid}->[$vout]->{data} // "",
             });
             $utxo->add_my_utxo();
             $count++;
