@@ -993,6 +993,7 @@ sub estimate_fees {
         }
         if ($tx_idx > 0) {
             $result{$target} = $sorted[$tx_idx - 1]->fee / $sorted[$tx_idx - 1]->size;
+            $result{$target} = $min_fee_rate if $result{$target} < $min_fee_rate;
         }
         else {
             $result{$target} = $min_fee_rate;
