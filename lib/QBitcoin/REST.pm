@@ -163,7 +163,7 @@ sub process_request {
             if ($path[2] eq "txids") {
                 @path == 3
                     or return $self->http_response(404, "Unknown request");
-                return $self->http_ok([ map { unpack("H*", $_->hash) } @{$block->tx_hashes} ]);
+                return $self->http_ok([ map { unpack("H*", $_) } @{$block->tx_hashes} ]);
             }
             if ($path[2] eq "txs") {
                 my $start_ndx = $path[3] || 0;
