@@ -67,8 +67,7 @@ sub process_request {
         if ($path[0] eq "tx") {
             if ($http_request->method eq "POST") {
                 @path == 1 or return $self->http_response(404, "Unknown request");
-                $self->is_local or return $self->http_response(403, "Forbidden");
-                return $self->tx_send($http_request->decoded_content); # Unimplemented
+                return $self->tx_send($http_request);
             }
             ($path[1] && $path[1] =~ qr/^[0-9a-f]{64}\z/)
                 or return $self->http_response(404, "Unknown request");
@@ -377,7 +376,7 @@ sub process_request {
                 return $self->wallet_tx_create($http_request);
             }
             elsif ($path[1] eq "send") {
-                return $self->wallet_tx_send($http_request);
+                return $self->tx_send($http_request);
             }
             return $self->http_response(404, "Unknown request");
         }
@@ -476,7 +475,7 @@ sub wallet_tx_create {
     });
 }
 
-sub wallet_tx_send {
+sub tx_send {
     my $self = shift;
     my ($http_request) = @_;
 
