@@ -170,6 +170,7 @@ sub cmd_sendtx {
     my $tx = QBitcoin::Transaction->get_by_hash($hash);
     if ($tx) {
         $self->send_message("tx", $tx->serialize . ($tx->received_from_peer ? $tx->received_from->peer->ip : "\x00"x16));
+        $self->connection->obj_sent++;
     }
     else {
         # Own stake tx which was already dropped?
@@ -207,6 +208,7 @@ sub cmd_block {
         $self->abort("bad_block_data");
         return -1;
     }
+    $self->connection->obj_recv++;
     if (QBitcoin::Block->block_pool($block->hash)) {
         Debugf("Received block %s already in block_pool", $block->hash_str);
         $self->syncing(0);
@@ -310,6 +312,7 @@ sub cmd_blocks {
             $self->abort("bad_block_data");
             return -1;
         }
+        $self->connection->obj_recv++;
         Infof("Receive %u blocks started from %s time %u", $num_blocks, $block->hash_str, $block->time) if $num == 1;
         if (my $loaded_block = QBitcoin::Block->block_pool($block->hash)) {
             Debugf("Received block %s height %u already in block_pool, skip", $block->hash_str, $loaded_block->height);
@@ -415,6 +418,7 @@ sub cmd_tx {
         $self->abort("bad_tx_data");
         return -1;
     }
+    $self->connection->obj_recv++;
     if (QBitcoin::Transaction->has_pending($tx->hash)) {
         Debugf("Transaction %s already pending", $tx->hash_str);
         return 0;
@@ -681,6 +685,7 @@ sub cmd_getblks {
     if ($sent) {
         Infof("Send blocks height %u .. %u to %s", $height-$sent, $height-1, $self->peer->id);
         $self->send_message("blocks", pack("C", $sent) . $response);
+        $self->connection->obj_sent += $sent;
     }
     return 0;
 }
@@ -736,6 +741,7 @@ sub cmd_sendblock {
     }
     if ($block) {
         $self->send_message("block", $block->serialize);
+        $self->connection->obj_sent++;
     }
     else {
         Infof("I have no best block, ignore sendblock request");

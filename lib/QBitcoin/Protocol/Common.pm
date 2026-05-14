@@ -65,6 +65,7 @@ sub receive {
         length($self->connection->recvbuf) >= $length + 24
             or return 0;
         my $message = substr($self->connection->recvbuf, 0, 24+$length, "");
+        $self->connection->bytes_recv += $length + 24;
         my $data = substr($message, 24);
         my $checksum32 = checksum32($data);
         if ($checksum ne $checksum32) {
@@ -106,7 +107,9 @@ sub send_message {
     }
     else {
         Debugf("Send [%s] to %s peer %s", $cmd, $self->type, $self->peer->id);
-        return $self->connection->send(pack("a4a12Va4", $self->magic, $cmd, length($data), checksum32($data)) . $data);
+        my $length = length($data);
+        $self->connection->bytes_sent += $length + 24;
+        return $self->connection->send(pack("a4a12Va4", $self->magic, $cmd, $length, checksum32($data)) . $data);
     }
 }
 

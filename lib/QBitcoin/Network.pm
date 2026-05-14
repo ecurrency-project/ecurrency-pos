@@ -73,12 +73,16 @@ sub connect_to {
     fcntl($socket, F_SETFL, $flags | O_NONBLOCK)
         or die "socket set fcntl error: $!\n";
     my $connection = QBitcoin::Connection->new(
-        peer      => $peer,
-        addr      => $peer->ip,
-        port      => $peer->port,
-        socket    => $socket,
-        state     => STATE_CONNECTING,
-        direction => DIR_OUT,
+        peer       => $peer,
+        addr       => $peer->ip,
+        port       => $peer->port,
+        socket     => $socket,
+        state      => STATE_CONNECTING,
+        direction  => DIR_OUT,
+        bytes_sent => 0,
+        bytes_recv => 0,
+        obj_sent   => 0,
+        obj_recv   => 0,
     );
     connect($socket, $paddr);
     Debugf("Connecting to %s peer %s:%u", $peer->type, $peer->id, $peer->port);
@@ -223,6 +227,10 @@ sub main_loop {
                     my_port    => $my_port,
                     my_addr    => IPV6_V4_PREFIX . $my_addr,
                     direction  => DIR_IN,
+                    bytes_sent => 0,
+                    bytes_recv => 0,
+                    obj_sent   => 0,
+                    obj_recv   => 0,
                 );
                 if ($in_count >= ($config->{max_in_connections} // MAX_IN_CONNECTIONS)) {
                     Infof("Too many incoming connections (%u), will send vernak to %s", $in_count, $peer_ip);

@@ -909,11 +909,11 @@ sub peer_info {
             inbound     => $connection->direction == DIR_IN ? TRUE : FALSE,
             protocol    => $connection->type,
             network     => "ipv4",
-            createtime  => $peer->create_time,
-            bytessent   => $peer->bytes_sent,
-            bytesrecv   => $peer->bytes_recv,
-            objsent     => $peer->obj_sent,
-            objrecv     => $peer->obj_recv,
+            createtime  => $connection->state_time,
+            bytessent   => $connection->bytes_sent,
+            bytesrecv   => $connection->bytes_recv,
+            objsent     => $connection->obj_sent,
+            objrecv     => $connection->obj_recv,
             reputation  => $peer->reputation,
         };
     }
