@@ -17,7 +17,6 @@ use constant ATTR => qw(
     host
     port
     addr
-    command
     state
     update_time
     connection
