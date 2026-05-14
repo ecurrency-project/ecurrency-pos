@@ -14,7 +14,7 @@ use QBitcoin::ConnectionList;
 use Bitcoin::Protocol;
 
 mk_accessors(qw(peer ip socket id state_time state port my_ip my_port my_addr direction));
-mk_accessors(qw(protocol type_id sendbuf recvbuf socket_fileno));
+mk_accessors(qw(protocol type_id sendbuf recvbuf socket_fileno bytes_sent bytes_recv obj_sent obj_recv));
 
 use constant MODULE_BY_TYPE => {
     &PROTOCOL_QBITCOIN => "QBitcoin::Protocol",

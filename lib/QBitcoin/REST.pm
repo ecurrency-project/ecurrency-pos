@@ -909,7 +909,7 @@ sub peer_info {
             inbound     => $connection->direction == DIR_IN ? TRUE : FALSE,
             protocol    => $connection->type,
             network     => "ipv4",
-            createtime  => $peer->create_time,
+            createtime  => $connection->state_time,
             bytessent   => $peer->bytes_sent,
             bytesrecv   => $peer->bytes_recv,
             objsent     => $peer->obj_sent,
