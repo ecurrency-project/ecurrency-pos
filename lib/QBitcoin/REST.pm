@@ -13,6 +13,7 @@ use HTTP::Response;
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::Log;
+use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(address_by_hash address_by_pubkey wallet_import_format wif_to_pk);
 use QBitcoin::MyAddress;
@@ -35,6 +36,8 @@ use constant {
 };
 
 use constant DEBUG_REST => 0;
+
+mk_accessors(qw(cors));
 
 my $JSON = JSON::XS->new;
 
@@ -62,6 +65,7 @@ sub process_request {
     return $self->http_response(404, "Unknown request") unless @path;
     DEBUG_REST && Debugf("REST request: /%s", join("/", @path));
     if ($path[0] eq "api") {
+        $self->cors(1);
         shift @path; # remove "api"
         return $self->http_response(404, "Unknown request") unless @path;
         if ($path[0] eq "tx") {
@@ -542,6 +546,7 @@ sub http_ok {
         Content_Type   => $cont_type,
         Content_Length => length($body),
     );
+    $headers->header(Access_Control_Allow_Origin => "*") if $self->cors;
     my $http_response = HTTP::Response->new(200, "OK", $headers, $body);
     $http_response->protocol("HTTP/1.1");
     DEBUG_REST && Debugf("REST response: %s", $cont_type eq "application/octet-stream" ? "X'" . unpack("H*", $body) : $body);
@@ -556,6 +561,7 @@ sub http_response {
         Content_Type   => "text/plain",
         Content_Length => length($body),
     );
+    $headers->header(Access_Control_Allow_Origin => "*") if $self->cors;
     my $response = HTTP::Response->new($code, $message, $headers, $body);
     $response->protocol("HTTP/1.1");
     return $self->send($response->as_string("\r\n"));
