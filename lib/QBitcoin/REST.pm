@@ -874,6 +874,7 @@ sub node_status {
         initialblockdownload => blockchain_synced() ? FALSE : TRUE,
         mempool_size         => @mempool + 0,
         mempool_bytes        => sum0(map { $_->size } @mempool) + 0,
+        total_coins          => QBitcoin::Coins->total,
     };
     if ($config->{regtest}) {
         if (my $genesis_block = QBitcoin::Block->best_block(0)) {
@@ -897,7 +898,6 @@ sub node_status {
         $response->{btc_synced}  = btc_synced() ? TRUE : FALSE,
         $response->{btc_headers} = $btc_block   ? $btc_block->height+0   : 0,
         $response->{btc_scanned} = $btc_scanned ? $btc_scanned->height+0 : 0,
-        $response->{total_coins} = QBitcoin::Coins->total();
     }
     return $response;
 }

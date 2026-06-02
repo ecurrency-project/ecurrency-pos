@@ -75,6 +75,7 @@ sub cmd_getblockchaininfo {
     if (defined(my $height = QBitcoin::Block->blockchain_height)) {
         $best_block = QBitcoin::Block->best_block($height);
     }
+    my $total_coins = QBitcoin::Coins->total();
     my $response = {
         chain                => $config->{regtest} ? "regtest" : $config->{testnet} ? "testnet" : "main",
         blocks               => $best_block ? $best_block->height+0   : -1,
@@ -82,6 +83,7 @@ sub cmd_getblockchaininfo {
         weight               => $best_block ? $best_block->weight+0   : -1,
         bestblocktime        => $best_block ? $best_block->time       : -1,
         initialblockdownload => blockchain_synced() ? FALSE : TRUE,
+        total_coins          => $total_coins ? $total_coins / DENOMINATOR : 0,
         # size_on_disk         => # TODO
     };
     $response->{headers} = $response->{blocks}; # satisfy explorers
@@ -99,8 +101,6 @@ sub cmd_getblockchaininfo {
         $response->{btc_synced}  = btc_synced() ? TRUE : FALSE,
         $response->{btc_headers} = $btc_block   ? $btc_block->height+0   : 0,
         $response->{btc_scanned} = $btc_scanned ? $btc_scanned->height+0 : 0,
-        my $total_coins = QBitcoin::Coins->total();
-        $response->{total_coins} = $total_coins ? $total_coins / DENOMINATOR : 0;
     }
     return $self->response_ok($response);
 }
