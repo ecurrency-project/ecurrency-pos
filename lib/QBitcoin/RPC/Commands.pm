@@ -10,7 +10,7 @@ use QBitcoin::Config;
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Block;
-use QBitcoin::Coinbase;
+use QBitcoin::Coins;
 use QBitcoin::Transaction;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced);
 use QBitcoin::Transaction;
@@ -99,10 +99,8 @@ sub cmd_getblockchaininfo {
         $response->{btc_synced}  = btc_synced() ? TRUE : FALSE,
         $response->{btc_headers} = $btc_block   ? $btc_block->height+0   : 0,
         $response->{btc_scanned} = $btc_scanned ? $btc_scanned->height+0 : 0,
-        my ($coinbase) = dbh->selectrow_array("SELECT SUM(value) FROM `" . QBitcoin::Coinbase->TABLE . "` WHERE tx_out IS NOT NULL");
-        $coinbase //= 0;
-        $coinbase += GENESIS_REWARD if defined($best_block);
-        $response->{total_coins} = $coinbase ? $coinbase / DENOMINATOR : 0;
+        my $total_coins = QBitcoin::Coins->total();
+        $response->{total_coins} = $total_coins ? $total_coins / DENOMINATOR : 0;
     }
     return $self->response_ok($response);
 }

@@ -24,7 +24,7 @@ use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens
 use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Generate;
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
-use QBitcoin::Coinbase;
+use QBitcoin::Coins;
 use QBitcoin::ConnectionList;
 use Bitcoin::Block;
 use Bitcoin::Serialized;
@@ -897,10 +897,7 @@ sub node_status {
         $response->{btc_synced}  = btc_synced() ? TRUE : FALSE,
         $response->{btc_headers} = $btc_block   ? $btc_block->height+0   : 0,
         $response->{btc_scanned} = $btc_scanned ? $btc_scanned->height+0 : 0,
-        my ($coinbase) = dbh->selectrow_array("SELECT SUM(value) FROM `" . QBitcoin::Coinbase->TABLE . "` WHERE tx_out IS NOT NULL");
-        $coinbase //= 0;
-        $coinbase += GENESIS_REWARD if defined($best_block);
-        $response->{total_coins} = $coinbase;
+        $response->{total_coins} = QBitcoin::Coins->total();
     }
     return $response;
 }

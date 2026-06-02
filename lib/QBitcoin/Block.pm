@@ -146,13 +146,13 @@ sub hash_str {
 
 sub reward {
     my $class = shift;
-    my ($prev_block, $fee, $timeslot) = @_;
+    my ($prev_block, $fee, $time) = @_;
     if ($prev_block) {
         my $reward = 0;
         if (my $reward_fund = $prev_block->reward_fund + $fee) {
             $reward = int($reward_fund / REWARD_DIVIDER) || 1;
         }
-        $reward += $class->static_reward($prev_block, $timeslot);
+        $reward += $class->static_reward($prev_block, $time);
         return $reward;
     }
     else {
@@ -162,10 +162,10 @@ sub reward {
 
 sub static_reward {
     my $class = shift;
-    my ($prev_block, $timeslot) = @_;
+    my ($prev_block, $time) = @_;
     my $static_reward = 0;
     if ($prev_block) {
-        if (!UPGRADE_POW || $prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped($timeslot)) {
+        if (!UPGRADE_POW || $prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped(timeslot($time))) {
             $static_reward = int(STATIC_REWARD / 2**int($prev_block->height / REWARD_HALVING));
         }
     }

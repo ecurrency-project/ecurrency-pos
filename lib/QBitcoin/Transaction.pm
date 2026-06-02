@@ -19,6 +19,7 @@ use QBitcoin::ConnectionList;
 use QBitcoin::Notify;
 use QBitcoin::ProtocolState qw(skip_scripts);
 use QBitcoin::CheckPoints qw(upgrade_finished);
+use QBitcoin::Coins;
 use Bitcoin::Serialized;
 
 use Role::Tiny::With;
@@ -1233,6 +1234,14 @@ sub confirm {
         $coinbase->tx_out = $self->hash;
         $coinbase->upgrade_level = $self->upgrade_level;
         $coinbase->value = $self->up_value;
+        QBitcoin::Coins->add_coinbase($self->up_value);
+    }
+    elsif ($self->is_stake) {
+        # block reward is the negated fee of the stake transaction; the static part of it
+        # is freshly emitted coins (the dynamic part recirculates the reward fund)
+        if (-$self->fee) {
+            QBitcoin::Coins->add_static(QBitcoin::Block->static_reward($block->prev_block, $block->time));
+        }
     }
     foreach my $in (@{$self->in}) {
         my $txo = $in->{txo};
@@ -1255,6 +1264,7 @@ sub confirm {
 
 sub unconfirm {
     my $self = shift;
+    my ($block) = @_;
     Debugf("unconfirm transaction %s (confirmed in block height %u)", $self->hash_str, $self->block_height);
     $self->is_cached or die "unconfirm not cached transaction " . $self->hash_str;
     $self->block_height = undef;
@@ -1276,6 +1286,12 @@ sub unconfirm {
     }
     if (my $coinbase = $self->up) {
         $coinbase->tx_out = undef;
+        QBitcoin::Coins->del_coinbase($self->up_value);
+    }
+    elsif ($self->is_stake && $block) {
+        if (-$self->fee) {
+            QBitcoin::Coins->del_static(QBitcoin::Block->static_reward($block->prev_block, $block->time));
+        }
     }
     # dependent transactions with seq limits should not be confirmed
     if (exists $TX_SEQ_DEPENDS{$self->hash}) {

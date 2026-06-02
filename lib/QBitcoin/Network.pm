@@ -15,6 +15,7 @@ use QBitcoin::ConnectionList;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer last_qbt_data_time);
 use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Generate;
+use QBitcoin::Coins;
 use QBitcoin::Produce;
 use QBitcoin::RPC;
 use QBitcoin::REST;
@@ -123,6 +124,9 @@ sub main_loop {
     }
     # Load my UTXO for generate or rpc getbalance
     QBitcoin::Generate->load_utxo();
+    # Compute the base of the emitted coins counter; afterwards it is maintained
+    # incrementally on confirm/unconfirm of coinbase and stake transactions
+    QBitcoin::Coins->init();
 
     my $generate = $config->{generate};
     $generate //= 1 if $config->{genesis};

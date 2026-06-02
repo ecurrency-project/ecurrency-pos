@@ -198,7 +198,7 @@ sub receive {
         $bl->prev_block_load->next_block = $bl;
         Debugf("Remove block %s height %u from the best branch", $bl->hash_str, $bl->height);
         foreach my $tx (reverse @{$bl->transactions}) {
-            $tx->unconfirm();
+            $tx->unconfirm($bl);
         }
     }
     my $old_best = $class->best_block($new_best->height);
@@ -211,7 +211,7 @@ sub receive {
             for (my $bl1 = $bl->prev_block; $bl1 && $bl1->height >= $new_best->height; $bl1 = $bl1->prev_block) {
                 Debugf("Revert block %s height %u from the best branch", $bl1->hash_str, $bl1->height);
                 foreach my $tx (reverse @{$bl1->transactions}) {
-                    $tx->unconfirm();
+                    $tx->unconfirm($bl1);
                 }
             }
 
@@ -344,7 +344,7 @@ sub _rollback_to_checkpoint {
         my $h = $HEIGHT;
         if (my $bl = delete $best_block[$h]) {
             foreach my $tx (reverse @{$bl->transactions}) {
-                $tx->unconfirm();
+                $tx->unconfirm($bl);
             }
             $bl->free();
         }
@@ -538,7 +538,7 @@ sub unconfirm {
     $self->hash eq $best_block[$HEIGHT]->hash
         or die "Can unconfirm only best block";
     foreach my $tx (reverse @{$self->transactions}) {
-        $tx->unconfirm();
+        $tx->unconfirm($self);
     }
     $self->free();
     $HEIGHT--;

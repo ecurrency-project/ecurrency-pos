@@ -115,7 +115,7 @@ sub validate {
     }
     # After UPGRADE_FINISHED we can have no btc blocks and do not know when the upgrade was stopped,
     # so trust the stake reward in this case (until checkpoint)
-    my $block_reward = skip_scripts() ? $stake_reward : (ref $block)->reward($block->prev_block, $fee, $block->timeslot);
+    my $block_reward = skip_scripts() ? $stake_reward : (ref $block)->reward($block->prev_block, $fee, $block->time);
     # There are no block rewards for empty blocks
     if ($empty_tx >= @{$block->transactions} - 1 && (timeslot($block->time) - $genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS) {
         $block_reward = 0;
@@ -123,7 +123,7 @@ sub validate {
     $stake_reward == $block_reward
         or return "Incorrect stake reward for block " . $block->height . ": $stake_reward, expected $block_reward";
     $block->upgraded = $upgraded;
-    my $static_reward = $block_reward ? (ref $block)->static_reward($block->prev_block, $block->timeslot) : 0;
+    my $static_reward = $block_reward ? (ref $block)->static_reward($block->prev_block, $block->time) : 0;
     $block->reward_fund = $block->prev_block ? $block->prev_block->reward_fund + $fee + $static_reward - $block_reward : 0;
     $block->size = $block_size;
     $block->min_fee = $block_size > MAX_BLOCK_SIZE / 2 ? $min_block_fee : $min_fee;
@@ -217,7 +217,7 @@ sub validate_chain {
         # It's not possible to include a tx twice in the same block, it's checked on block validation
         foreach my $tx (@{$block->transactions}) { # TODO: Do we need reverse order for unconfirm here?
             last if $fail_tx eq $tx->hash;
-            $tx->unconfirm() if $tx->is_cached;
+            $tx->unconfirm($block) if $tx->is_cached;
         }
     }
     return $fail_tx;
