@@ -94,6 +94,7 @@ use constant QBITCOIN_CONST => {
     MAX_RPC_CONNECTIONS     => 10,
     MAX_REST_CONNECTIONS    => 10,
     MAX_ADDR_PEERS          => 50,
+    ANNOUNCE_MAX_FAILS      => 3, # do not announce peers with this many failed connects since last success
     BTC_GENESIS             => scalar reverse(pack("H*", "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")),
     BTC_GENESIS_TESTNET     => scalar reverse(pack("H*", "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943")),
     MAX_INT64               => unpack("Q>", pack("H*", "7fffffffffffffff")), # 2^63-1, prevent warning about non-portable

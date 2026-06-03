@@ -212,9 +212,9 @@ sub main_loop {
             else {
                 Infof("Incoming connection from %s", $peer_ip);
                 my $peer = QBitcoin::Peer->get_or_create(
-                    ipv4    => $peer_addr,
-                    host    => $peer_ip,
-                    type_id => PROTOCOL_QBITCOIN,
+                    ipv4      => $peer_addr,
+                    type_id   => PROTOCOL_QBITCOIN,
+                    transient => 1, # persisted only after a successful greeting, see QBitcoin::Peer::persist
                 );
                 # TODO: drop connection from peers with too low reputation (banned)
                 my ($my_port, $my_addr) = unpack_sockaddr_in(getsockname($new_socket));
@@ -426,6 +426,7 @@ sub main_loop {
 
 sub set_pinned_peers {
     my %pinned_qbtc = map { $_->ip => $_ } grep { $_->pinned } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
+    my %hidden_qbtc = map { $_->ip => $_ } grep { $_->hidden } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
     foreach my $peer_host ($config->get_all('peer')) {
         my @peers = QBitcoin::Peer->get_or_create(
             host       => $peer_host,
@@ -436,7 +437,21 @@ sub set_pinned_peers {
             or next;
         delete @pinned_qbtc{ map { $_->ip } @peers };
     }
+    # "hidden-peer": connect to them like pinned peers, but never announce them to other peers.
+    foreach my $peer_host ($config->get_all('hidden_peer')) {
+        my @peers = QBitcoin::Peer->get_or_create(
+            host       => $peer_host,
+            type_id    => PROTOCOL_QBITCOIN,
+            pinned     => 1,
+            hidden     => 1,
+            reputation => 1000,
+        )
+            or next;
+        delete @pinned_qbtc{ map { $_->ip } @peers };
+        delete @hidden_qbtc{ map { $_->ip } @peers };
+    }
     $_->update(pinned => 0) foreach values %pinned_qbtc;
+    $_->update(hidden => 0) foreach values %hidden_qbtc;
 
     if (!upgrade_finished()) {
         my %pinned_btc = map { $_->ip => $_ } grep { $_->pinned } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN);

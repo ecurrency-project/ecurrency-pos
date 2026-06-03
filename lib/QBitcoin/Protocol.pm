@@ -101,10 +101,30 @@ sub cmd_version {
         return -1;
     }
     my ($protocol_version, $protocol_features, $remote_time) = unpack("VQ<Q<", $data);
+    # The peer advertises its own listening address (see pack_my_address): features(8) addr(16) port(2).
+    # We need the advertised port to know the peer's real service port (especially for incoming connections).
+    my $adv_port;
+    if (length($data) >= 20 + 26) {
+        (undef, undef, $adv_port) = unpack("Q<a16n", substr($data, 20, 26));
+    }
 
     $self->send_message("verack", "");
     $self->greeted = 1;
     $self->protocol_version = $protocol_version;
+    if ($self->connection->direction == DIR_OUT) {
+        # We reached this peer ourselves: it is confirmed reachable / accepts incoming connections.
+        $self->peer->connect_success();
+    }
+    else {
+        # Incoming connection: store the peer now that the greeting succeeded (req: do not persist random connects).
+        my $peer = $self->peer;
+        $peer->port($adv_port) if $adv_port;
+        $peer = $peer->persist();
+        if ($peer != $self->peer) {
+            $self->peer($peer);
+            $self->connection->peer($peer);
+        }
+    }
     $self->request_btc_blocks() if UPGRADE_POW && !upgrade_finished() && !btc_synced();
     $self->request_mempool if blockchain_synced() && !mempool_synced() && (!UPGRADE_POW || btc_synced());
     $self->announce_best_btc_block() if UPGRADE_POW && !upgrade_finished();
@@ -169,7 +189,7 @@ sub cmd_sendtx {
     my $hash = unpack("a32", $data); # yes, it's copy of $data
     my $tx = QBitcoin::Transaction->get_by_hash($hash);
     if ($tx) {
-        $self->send_message("tx", $tx->serialize . ($tx->received_from_peer ? $tx->received_from->peer->ip : "\x00"x16));
+        $self->send_message("tx", $tx->serialize . QBitcoin::Peer->announce_origin_ip($tx->received_from, $tx->rcvd));
         $self->connection->obj_sent++;
     }
     else {
@@ -819,8 +839,13 @@ sub cmd_reject {
 
 sub _pack_peer_list {
     my $self = shift;
-    my @peers = sort { $b->reputation <=> $a->reputation }
-                grep { $_->reputation > 0 && $_->port && $_->ip ne $self->peer->ip }
+    # Announce only peers that are reachable, public and not hidden (see is_announceable).
+    # Verified peers (we successfully connected to them ourselves) come first, then unverified ones.
+    my @peers = sort {
+                    (defined($b->last_success_time) <=> defined($a->last_success_time))
+                        || ($b->reputation <=> $a->reputation)
+                }
+                grep { $_->ip ne $self->peer->ip && $_->is_announceable }
                 QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
     splice(@peers, MAX_ADDR_PEERS) if @peers > MAX_ADDR_PEERS;
     my $payload = pack("C", scalar(@peers));

@@ -6,6 +6,7 @@ use Role::Tiny;
 
 use QBitcoin::Const;
 use QBitcoin::Crypto qw(hash256);
+use QBitcoin::Peer;
 use Bitcoin::Serialized;
 
 sub serialize {
@@ -15,7 +16,7 @@ sub serialize {
         pack("VQ<", $self->time, $self->weight) .
         ( $self->prev_hash // ZERO_HASH ) .
         $self->merkle_root .
-        pack("a16", $self->received_from ? $self->received_from->peer_id : "") .
+        pack("a16", QBitcoin::Peer->announce_origin_ip($self->received_from, $self->rcvd)) .
         pack("v", scalar(@{$self->tx_hashes})) .
         join('', @{$self->tx_hashes});
 }

@@ -113,6 +113,9 @@ CREATE TABLE `peer` (
   ping_avg_ms int unsigned,
   reputation float NOT NULL DEFAULT 0,
   failed_connects int NOT NULL DEFAULT 0,
+  last_success_time int unsigned,
+  last_fail_time int unsigned,
+  hidden smallint unsigned NOT NULL DEFAULT 0,
   pinned smallint unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY (type_id, ip)
 );
