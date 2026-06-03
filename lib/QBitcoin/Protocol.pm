@@ -857,7 +857,7 @@ sub cmd_vernak {
     my $count = $self->_parse_peer_list($data);
     return -1 if $count < 0;
     Infof("Received vernak with %u peer addresses from %s", $count, $self->peer->id);
-    $self->greeted = 1; # prevent failed_connect() increment, vernak is a graceful rejection
+    $self->greeted = -1; # prevent failed_connect() increment, vernak is a graceful rejection
     return -1;
 }
 

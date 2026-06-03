@@ -528,6 +528,7 @@ sub announce_to_peers {
     foreach my $connection (QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN)) {
         next if $self->received_from && $connection->peer->id eq $self->received_from->peer->id;
         next unless $connection->protocol->can('announce_block');
+        next unless ($connection->protocol->greeted // 0) == 1;
         $connection->protocol->announce_block($self);
     }
 }
