@@ -11,7 +11,8 @@ use QBitcoin::Log;
 use QBitcoin::Config;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ORM qw(find fetch create delete :types);
-use QBitcoin::Crypto qw(hash256);
+use QBitcoin::Crypto qw(hash160 hash256);
+use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::TXO;
 use QBitcoin::Coinbase;
 use QBitcoin::ValueUpgraded qw(level_by_total);
@@ -575,22 +576,35 @@ sub as_hashref {
 sub input_as_hashref {
     my $in = shift;
     $in->{siglist} or die "Undefined siglist during input_as_hashref";
+    my $redeem_script = $in->{txo}->redeem_script // die "Undefined redeem_script during input_as_hashref";
+    my $alg = 0;
+    $alg = unpack("C", $in->{siglist}->[0]) if @{$in->{siglist}} && length($in->{siglist}->[0]) > 0;
+    my $hash = $alg & CRYPT_ALGO_POSTQUANTUM ? hash256($redeem_script) : hash160($redeem_script);
     return {
         txid          => unpack("H*", $in->{txo}->tx_in),
         num           => $in->{txo}->num+0,
         siglist       => [ map { unpack("H*", $_) } @{$in->{siglist}} ],
-        redeem_script => unpack("H*", $in->{txo}->redeem_script // die "Undefined redeem_script during input_as_hashref"),
+        redeem_script => unpack("H*", $redeem_script),
+        address       => address_by_hash($hash),
     };
 }
 
 sub inputraw_as_hashref {
     my $in = shift;
     $in->{siglist} or die "Undefined siglist during input_as_hashref";
+    my $redeem_script = $in->{txo}->redeem_script // "";
+    my $hash;
+    if ($redeem_script) {
+        my $alg = 0;
+        $alg = unpack("C", $in->{siglist}->[0]) if @{$in->{siglist}} && length($in->{siglist}->[0]) > 0;
+        $hash = $alg & CRYPT_ALGO_POSTQUANTUM ? hash256($redeem_script) : hash160($redeem_script);
+    }
     return {
         txid          => unpack("H*", $in->{tx_out}),
         num           => $in->{num}+0,
         siglist       => [ map { unpack("H*", $_) } @{$in->{siglist} // []} ],
-        redeem_script => unpack("H*", $in->{redeem_script} // ""),
+        redeem_script => unpack("H*", $redeem_script),
+        $redeem_script ? ( address => address_by_hash($hash) ) : (),
     };
 }
 
