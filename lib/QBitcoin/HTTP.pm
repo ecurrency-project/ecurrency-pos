@@ -51,7 +51,9 @@ sub receive {
     $self->connection->recvbuf = "";
     my $res = eval { $self->process_request($http_request) };
     if ($@) {
-        Errf("process_http exception: %s", "$@");
+        my $error = "$@";
+        $error =~ s/\s+$//s;
+        Errf("process_http exception: %s", $error);
         $self->response_error("Internal error", ERR_INTERNAL_ERROR);
         return -1;
     }
