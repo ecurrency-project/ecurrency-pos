@@ -979,12 +979,22 @@ sub validate_coinbase {
 sub validate_hash {
     my $self = shift;
 
-    my $hash = $self->hash;
-    $self->calculate_hash;
-    if ($self->hash ne $hash) {
-        Warningf("Incorrect serialized transaction has different hash: %s != %s", $self->hash_str, $self->hash_str($hash));
+    # Do not use calculate_hash() here: it would overwrite $self->hash. That hash is the
+    # identity key under which the transaction's outputs are registered in the global TXO
+    # cache and its inputs are marked as spent (see load_txo). If we changed it here and the
+    # transaction is then rejected, the cleanup (spent_del / weakened %TXO entries) would use
+    # the new hash and fail to release the old registrations, leaking the transaction and its
+    # txo (observed as "Attempt to override already loaded txo" on the next attempt).
+    my $tx_raw_data = $self->serialize;
+    my $hash = tx_data_hash($tx_raw_data);
+    if ($hash ne $self->hash) {
+        # The most common cause is non-canonical input order: inputs must be serialized
+        # sorted by (tx_in, num), the same order the node uses to compute the hash.
+        Warningf("Incorrect serialized transaction has different hash: %s != %s (inputs must be sorted by tx_in, num)",
+            $self->hash_str($hash), $self->hash_str);
         return -1;
     }
+    $self->size = length($tx_raw_data);
     return 0;
 }
 
@@ -1227,11 +1237,21 @@ sub on_load {
         $self = $TRANSACTION{$hash};
     }
     else {
-        $self->calculate_hash;
-        if ($self->hash ne $hash) {
-            Errf("Incorrect hash for loaded transaction %s != %s", $self->hash_str, $self->hash_str($hash));
-            Errf("Serialized transaction in hex: %s", unpack("H*", $self->serialize));
-            die "Incorrect hash for loaded transaction " . $self->hash_str . " != " . $self->hash_str($hash) . "\n";
+        # Verify the integrity of the data loaded from the database. Compute the hash into a
+        # local variable instead of via calculate_hash(): the latter would overwrite
+        # $self->hash and $self->size, which are exactly the stored values we are validating
+        # against (and which serve as identity keys elsewhere, see the note in validate_hash).
+        my $tx_raw_data = $self->serialize;
+        my $calc_hash = tx_data_hash($tx_raw_data);
+        if ($calc_hash ne $hash) {
+            Errf("Incorrect hash for loaded transaction %s != %s", $self->hash_str($calc_hash), $self->hash_str($hash));
+            Errf("Serialized transaction in hex: %s", unpack("H*", $tx_raw_data));
+            die "Incorrect hash for loaded transaction " . $self->hash_str($calc_hash) . " != " . $self->hash_str($hash) . "\n";
+        }
+        if (($self->size // -1) != length($tx_raw_data)) {
+            Errf("Incorrect size for loaded transaction %s: %s != %u",
+                $self->hash_str, $self->size // "undef", length($tx_raw_data));
+            die "Incorrect size for loaded transaction " . $self->hash_str . ": " . ($self->size // "undef") . " != " . length($tx_raw_data) . "\n";
         }
     }
 
