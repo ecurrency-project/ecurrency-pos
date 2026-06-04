@@ -180,7 +180,7 @@ sub cmd_getblockheader {
     my $hash = pack("H*", $self->args->[0]);
     my $best_height = QBitcoin::Block->blockchain_height;
     my $block = $self->get_block_by_hash($hash)
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Block not found");
+        or return $self->response_error("Block not found", ERR_INVALID_ADDRESS_OR_KEY);
     my $best_block = QBitcoin::Block->best_block($best_height);
     my $next_block = QBitcoin::Block->best_block($block->height + 1) // QBitcoin::Block->find(height => $block->height + 1);
 
@@ -264,7 +264,7 @@ sub cmd_getblock {
 
     my $best_height = QBitcoin::Block->blockchain_height;
     my $block = $self->get_block_by_hash($hash)
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Block not found");
+        or return $self->response_error("Block not found", ERR_INVALID_ADDRESS_OR_KEY);
     my $best_block = QBitcoin::Block->best_block($best_height);
     my $next_block = QBitcoin::Block->best_block($block->height + 1) // QBitcoin::Block->find(height => $block->height + 1);
 
@@ -308,7 +308,7 @@ sub cmd_getblockhash {
     my $height = $self->args->[0];
     my $block = QBitcoin::Block->best_block($height) // QBitcoin::Block->find(height => $height);
     if (!$block) {
-        return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Block not found");
+        return $self->response_error("Block not found", ERR_INVALID_ADDRESS_OR_KEY);
     }
     return $self->response_ok(unpack("H*", $block->hash));
 }
@@ -369,7 +369,7 @@ sub cmd_getrawtransaction {
     my $verbose = $self->args->[1] // TRUE;
     my $tx = QBitcoin::Transaction->get_by_hash($hash);
     if (!$tx) {
-        return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "No such mempool or blockchain transaction");
+        return $self->response_error("No such mempool or blockchain transaction", ERR_INVALID_ADDRESS_OR_KEY);
     }
     if (!$verbose) {
         return $self->response_ok(unpack("H*", $tx->serialize));
@@ -447,11 +447,11 @@ sub cmd_createrawtransaction {
     my $token_hash;
     foreach my $out (@$outputs) {
         my ($txo, $out_token_hash) = create_txo($out);
-        $txo or return $self->response_error("", ERR_INVALID_REQUEST, "Invalid output");
+        $txo or return $self->response_error("Invalid output", ERR_INVALID_REQUEST);
         push @out, @$txo;
         if (defined($out_token_hash)) {
             if (defined($token_hash) && $token_hash ne $out_token_hash) {
-                return $self->response_error("", ERR_INVALID_REQUEST, "Different token_id in outputs");
+                return $self->response_error("Different token_id in outputs", ERR_INVALID_REQUEST);
             }
             $token_hash //= $out_token_hash;
         }
@@ -464,7 +464,7 @@ sub cmd_createrawtransaction {
     );
     my $tx_data = $tx->serialize_unsigned;
     if (length($tx_data) > MAX_TX_SIZE) {
-        return $self->response_error("", ERR_INVALID_REQUEST, "Transaction size too large: " . length($tx_data) . " > " . MAX_TX_SIZE);
+        return $self->response_error("Transaction size too large: " . length($tx_data) . " > " . MAX_TX_SIZE, ERR_INVALID_REQUEST);
     }
     return $self->response_ok(unpack("H*", $tx_data));
 }
@@ -501,36 +501,36 @@ sub cmd_sendrawtransaction {
     my $data = Bitcoin::Serialized->new(pack("H*", $self->args->[0]));
     my $tx = QBitcoin::Transaction->deserialize($data);
     if (!$tx || $data->length) {
-        return $self->response_error("", ERR_DESERIALIZATION_ERROR, "TX decode failed.");
+        return $self->response_error("TX decode failed.", ERR_DESERIALIZATION_ERROR);
     }
     $tx->received_from = $self;
     if (QBitcoin::Transaction->has_pending($tx->hash)) {
-        return $self->response_error("", ERR_VERIFY_ALREADY_IN_CHAIN, "Transaction already published.");
+        return $self->response_error("Transaction already published.", ERR_VERIFY_ALREADY_IN_CHAIN);
     }
     if (QBitcoin::Transaction->check_by_hash($tx->hash)) {
-        return $self->response_error("", ERR_VERIFY_ALREADY_IN_CHAIN, "Transaction already published.");
+        return $self->response_error("Transaction already published.", ERR_VERIFY_ALREADY_IN_CHAIN);
     }
     if (!$tx->load_txo()) {
-        return $self->response_error("", ERR_DESERIALIZATION_ERROR, "Incorrect transaction data.");
+        return $self->response_error("Incorrect transaction data.", ERR_DESERIALIZATION_ERROR);
     }
     # Reject downgrade transactions (outputs to freeze address) when upgrade threshold reached
     if (my $best_block = QBitcoin::Block->best_block) {
         if (($best_block->upgraded // 0) >= UPGRADE_MAX_VALUE) {
             my $freeze_scripthash = hash160(QBT_BURN_SCRIPT);
             if (grep { $_->scripthash eq $freeze_scripthash && $_->data } @{$tx->out}) {
-                return $self->response_error("", ERR_INVALID_REQUEST, "Conversion threshold reached, downgrade not accepted.");
+                return $self->response_error("Conversion threshold reached, downgrade not accepted.", ERR_INVALID_REQUEST);
             }
         }
     }
     if ($tx->is_pending) {
-        return $self->response_error("", ERR_VERIFY_ALREADY_IN_CHAIN, "Some inputs unknown.");
+        return $self->response_error("Some inputs unknown.", ERR_VERIFY_ALREADY_IN_CHAIN);
     }
     my $rc = $self->process_tx($tx);
     if (!defined($rc)) {
-        return $self->response_error("", ERR_INVALID_REQUEST, "Transaction fee is too low.");
+        return $self->response_error("Transaction fee is too low.", ERR_INVALID_REQUEST);
     }
     if ($rc != 0) {
-        return $self->response_error("", ERR_VERIFY_ALREADY_IN_CHAIN, "Transaction failed.");
+        return $self->response_error("Transaction failed.", ERR_VERIFY_ALREADY_IN_CHAIN);
     }
     return $self->response_ok(unpack("H*", $tx->hash));
 }
@@ -579,17 +579,17 @@ sub cmd_signrawtransactionwithkey {
     my $replace = $self->args->[2] // FALSE;
     my $tx = QBitcoin::Transaction->deserialize($data);
     if (!$tx || $data->length) {
-        return $self->response_error("", ERR_DESERIALIZATION_ERROR, "TX decode failed.");
+        return $self->response_error("TX decode failed.", ERR_DESERIALIZATION_ERROR);
     }
     if (!$tx->is_standard && !$tx->is_tokens) {
-        return $self->response_error("", ERR_INVALID_REQUEST, "Non-standard transaction.");
+        return $self->response_error("Non-standard transaction.", ERR_INVALID_REQUEST);
     }
     $tx->received_from = $self;
     if (!$tx->load_inputs(1)) {
-        return $self->response_error("", ERR_DESERIALIZATION_ERROR, "Incorrect transaction data.");
+        return $self->response_error("Incorrect transaction data.", ERR_DESERIALIZATION_ERROR);
     }
     if ($tx->is_pending) {
-        return $self->response_error("", ERR_DESERIALIZATION_ERROR, "Some inputs unknown.");
+        return $self->response_error("Some inputs unknown.", ERR_DESERIALIZATION_ERROR);
     }
     my @address = map { QBitcoin::MyAddress->new(private_key => $_) } @$privkeys;
     my @errors;
@@ -599,11 +599,11 @@ sub cmd_signrawtransactionwithkey {
         my $txo = $in->{txo};
         if ($txo->tx_out) {
             # Already confirmed spent
-            return $self->response_error("", ERR_DESERIALIZATION_ERROR, "Input " . $txo->tx_in_str . ":" . $txo->num . " already confirmed spent.");
+            return $self->response_error("Input " . $txo->tx_in_str . ":" . $txo->num . " already confirmed spent.", ERR_DESERIALIZATION_ERROR);
         }
         elsif (!$txo->unspent && !$replace) {
             # Unconfirmed spent
-            return $self->response_error("", ERR_DESERIALIZATION_ERROR, "Input " . $txo->tx_in_str . ":" . $txo->num . " already spent.");
+            return $self->response_error("Input " . $txo->tx_in_str . ":" . $txo->num . " already spent.", ERR_DESERIALIZATION_ERROR);
         }
         $input_amount += $txo->value;
         my ($address, $script);
@@ -628,7 +628,7 @@ sub cmd_signrawtransactionwithkey {
     if (!@errors) {
         $tx->calculate_hash;
         if (QBitcoin::Transaction->check_by_hash($tx->hash)) {
-            return $self->response_error("", ERR_VERIFY_ALREADY_IN_CHAIN, "Transaction already published.");
+            return $self->response_error("Transaction already published.", ERR_VERIFY_ALREADY_IN_CHAIN);
         }
     }
 
@@ -637,16 +637,16 @@ sub cmd_signrawtransactionwithkey {
         $output_amount += $out->value;
     }
     if ($input_amount < $output_amount) {
-        return $self->response_error("", ERR_INVALID_REQUEST, "Insufficient funds: $input_amount < $output_amount");
+        return $self->response_error("Insufficient funds: $input_amount < $output_amount", ERR_INVALID_REQUEST);
     }
     my $tx_data = $tx->serialize_unsigned;
     if (length($tx_data) > MAX_TX_SIZE) {
-        return $self->response_error("", ERR_INVALID_REQUEST, "Transaction size too large: " . length($tx_data) . " > " . MAX_TX_SIZE);
+        return $self->response_error("Transaction size too large: " . length($tx_data) . " > " . MAX_TX_SIZE, ERR_INVALID_REQUEST);
     }
     my $fee_per_kb = ($input_amount - $output_amount) * 1024 / length($tx_data);
     my $max_fee_per_kb = $self->max_fee_per_kb;
     if ($max_fee_per_kb && $fee_per_kb > $max_fee_per_kb) {
-        return $self->response_error("", ERR_INVALID_REQUEST, "Transaction fee too high: " . $fee_per_kb / DENOMINATOR . " > " . $max_fee_per_kb / DENOMINATOR . " BTC/kb");
+        return $self->response_error("Transaction fee too high: " . $fee_per_kb / DENOMINATOR . " > " . $max_fee_per_kb / DENOMINATOR . " BTC/kb", ERR_INVALID_REQUEST);
     }
 
     return $self->response_ok({
@@ -708,7 +708,7 @@ sub cmd_decoderawtransaction {
 
     my $tx = QBitcoin::Transaction->deserialize($data);
     if (!$tx || $data->length) {
-        return $self->response_error("", ERR_DESERIALIZATION_ERROR, "TX decode failed.");
+        return $self->response_error("TX decode failed.", ERR_DESERIALIZATION_ERROR);
     }
     return $self->response_ok($tx->as_hashref);
 }
@@ -921,12 +921,12 @@ sub cmd_getchaintxstats {
     my $last_block;
     if (my $blockhash = $self->args->[1]) {
         $last_block = $self->get_block_by_hash(pack("H*", $blockhash))
-            or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Block not found");
+            or return $self->response_error("Block not found", ERR_INVALID_ADDRESS_OR_KEY);
     }
     else {
         my $best_height = QBitcoin::Block->blockchain_height;
         $last_block = QBitcoin::Block->best_block($best_height)
-            or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Block not found");
+            or return $self->response_error("Block not found", ERR_INVALID_ADDRESS_OR_KEY);
     }
     my $start_height = $last_block->height - $nblocks + 1;
     $start_height = 0 if $start_height < 0;
@@ -1008,7 +1008,7 @@ sub cmd_getblockstats {
     else {
         $block = QBitcoin::Block->best_block($hash_or_height) // QBitcoin::Block->find(height => $hash_or_height);
     }
-    $block or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Block not found");
+    $block or return $self->response_error("Block not found", ERR_INVALID_ADDRESS_OR_KEY);
     my @tx = sort { $a->fee/$a->size <=> $b->fee/$b->size } grep { $_->fee >= 0 } @{$block->transactions};
     my $res = {
         blockhash  => unpack("H*", $block->hash),
@@ -1067,7 +1067,7 @@ sub cmd_getmempoolentry {
     my $hash = pack("H*", $self->args->[0]);
     my $verbose = $self->args->[1] // TRUE;
     my $tx = QBitcoin::Transaction->get($hash)
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "No such mempool");
+        or return $self->response_error("No such mempool", ERR_INVALID_ADDRESS_OR_KEY);
     return $self->response_ok($tx->as_hashref);
 }
 
@@ -1104,12 +1104,12 @@ sub cmd_importprivkey {
     my $pk_alg = $self->args->[1];
     if (!$pk_alg) {
         ($pk_alg) = pk_alg($private_key)
-            or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Incorrect private key");
+            or return $self->response_error("Incorrect private key", ERR_INVALID_ADDRESS_OR_KEY);
     }
     my $privkey = pk_import($private_key, $pk_alg)
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Incorrect private key");
+        or return $self->response_error("Incorrect private key", ERR_INVALID_ADDRESS_OR_KEY);
     my $pubkey = $privkey->pubkey_by_privkey
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "This type of private key is not supported for my_address");
+        or return $self->response_error("This type of private key is not supported for my_address", ERR_INVALID_ADDRESS_OR_KEY);
     my $address = address_by_pubkey($pubkey, $pk_alg);
     my $my_address = QBitcoin::MyAddress->create({
         private_key => wallet_import_format($private_key),
@@ -1191,7 +1191,7 @@ sub cmd_setaddresstag {
     my $scripthash  = scripthash_by_address($address_str);
 
     my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Address not found in wallet");
+        or return $self->response_error("Address not found in wallet", ERR_INVALID_ADDRESS_OR_KEY);
 
     if (defined $tag_name && length $tag_name) {
         my $tag = QBitcoin::Tag->get_or_create($tag_name);
@@ -1225,11 +1225,11 @@ Examples:
 sub cmd_dumpprivkey {
     my $self = shift;
     $config->{allow_dumpprivkey}
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "This command is disabled");
+        or return $self->response_error("This command is disabled", ERR_INVALID_ADDRESS_OR_KEY);
     my $scripthash = scripthash_by_address($self->args->[0])
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not correct");
+        or return $self->response_error("The address is not correct", ERR_INVALID_ADDRESS_OR_KEY);
     my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Private key is unknown for this address");
+        or return $self->response_error("Private key is unknown for this address", ERR_INVALID_ADDRESS_OR_KEY);
     return $self->response_ok($my_address->private_key);
 }
 
@@ -1313,12 +1313,12 @@ As a JSON-RPC call
 sub cmd_getaddressbalance {
     my $self = shift;
     blockchain_synced() && mempool_synced()
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+        or return $self->response_error("Blockchain is not synced", ERR_INTERNAL_ERROR);
     my $address = $self->args->[0];
     my $minconf = $self->args->[1] // 1;
     my $value = address_balance($address, $minconf);
     defined $value
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
+        or return $self->response_error("Too many transactions on this address", ERR_INTERNAL_ERROR);
     return $self->response_ok($value/DENOMINATOR);
 }
 
@@ -1352,12 +1352,12 @@ As a JSON-RPC call
 sub cmd_getreceivedbyaddress {
     my $self = shift;
     blockchain_synced() && mempool_synced()
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+        or return $self->response_error("Blockchain is not synced", ERR_INTERNAL_ERROR);
     my $address = $self->args->[0];
     my $minconf = $self->args->[1] // 1;
     my $value = address_received($address, $minconf);
     defined($value)
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Internal error");
+        or return $self->response_error("Internal error", ERR_INTERNAL_ERROR);
     return $self->response_ok($value/DENOMINATOR);
 }
 
@@ -1391,12 +1391,12 @@ Examples:
 sub cmd_listunspent {
     my $self = shift;
     blockchain_synced() && mempool_synced()
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+        or return $self->response_error("Blockchain is not synced", ERR_INTERNAL_ERROR);
     my $address = $self->args->[0];
     my $minconf = $self->args->[1] // 1;
     my ($chain_utxo, $mempool_utxo) = get_address_utxo($address);
     $chain_utxo
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
+        or return $self->response_error("Too many transactions on this address", ERR_INTERNAL_ERROR);
     my $best_height = QBitcoin::Block->blockchain_height
         or return $self->response_ok([]);
     my @utxo;
@@ -1466,10 +1466,10 @@ sub cmd_listtransactions {
     my $address = $self->args->[0];
     my $minconf = $self->args->[1] // 1;
     blockchain_synced() && mempool_synced()
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+        or return $self->response_error("Blockchain is not synced", ERR_INTERNAL_ERROR);
     my ($txs_chain, $txs_mempool) = get_address_txs($address, undef, undef, undef);
     $txs_chain
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Incorrect address");
+        or return $self->response_error("Incorrect address", ERR_INTERNAL_ERROR);
     my $best_height = QBitcoin::Block->blockchain_height
         or return $self->response_ok([]);
     $txs_mempool = [] if $minconf > 0;
@@ -1540,7 +1540,7 @@ Examples:
 sub cmd_getbalance {
     my $self = shift;
     blockchain_synced() && mempool_synced()
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+        or return $self->response_error("Blockchain is not synced", ERR_INTERNAL_ERROR);
     my @my_txo = QBitcoin::TXO->my_utxo();
     my $minconf = $self->args->[0] // 1;
     my $value = 0;
@@ -1627,7 +1627,7 @@ sub cmd_estimatesmartfee {
     $target /= 2 if uc($mode) eq "CONSERVATIVE";
     my ($result, $error) = estimate_fees($target);
     if ($error) {
-        return $self->response_error("", ERR_INTERNAL_ERROR, $error);
+        return $self->response_error($error, ERR_INTERNAL_ERROR);
     }
     return $self->response_ok({ feerate => $result->{$target} * 1024 / DENOMINATOR });
 }
@@ -1655,11 +1655,11 @@ sub cmd_stakeaddress {
     my $self = shift;
     my ($address) = @{$self->args};
     my $scripthash = scripthash_by_address($self->args->[0])
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not correct");
+        or return $self->response_error("The address is not correct", ERR_INVALID_ADDRESS_OR_KEY);
     my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not in the wallet");
+        or return $self->response_error("The address is not in the wallet", ERR_INVALID_ADDRESS_OR_KEY);
     $my_address->private_key
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "Private key is unknown for this address");
+        or return $self->response_error("Private key is unknown for this address", ERR_INVALID_ADDRESS_OR_KEY);
     if ($my_address->staked) {
         return $self->response_ok("Address $address is already using for staking");
     }
@@ -1690,9 +1690,9 @@ sub cmd_unstakeaddress {
     my $self = shift;
     my ($address) = @{$self->args};
     my $scripthash = scripthash_by_address($self->args->[0])
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not correct");
+        or return $self->response_error("The address is not correct", ERR_INVALID_ADDRESS_OR_KEY);
     my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
-        or return $self->response_error("", ERR_INVALID_ADDRESS_OR_KEY, "The address is not in the wallet");
+        or return $self->response_error("The address is not in the wallet", ERR_INVALID_ADDRESS_OR_KEY);
     if (!$my_address->staked) {
         return $self->response_ok("Address $address is not using for staking");
     }
@@ -1732,13 +1732,13 @@ As a JSON-RPC call
 sub cmd_gettokensbalance {
     my $self = shift;
     blockchain_synced() && mempool_synced()
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+        or return $self->response_error("Blockchain is not synced", ERR_INTERNAL_ERROR);
     my $address = $self->args->[0];
     my $token_hash = pack("H*", $self->args->[1]);
     my $minconf = $self->args->[2] // 1;
     my $value = tokens_balance($address, $token_hash, $minconf);
     defined $value
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
+        or return $self->response_error("Too many transactions on this address", ERR_INTERNAL_ERROR);
     if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($token_hash))) {
         my $token_info = $token_tx->token_info;
         $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
@@ -1777,13 +1777,13 @@ As a JSON-RPC call
 sub cmd_gettokensreceived {
     my $self = shift;
     blockchain_synced() && mempool_synced()
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+        or return $self->response_error("Blockchain is not synced", ERR_INTERNAL_ERROR);
     my $address = $self->args->[0];
     my $token_hash = pack("H*", $self->args->[1]);
     my $minconf = $self->args->[2] // 1;
     my $value = tokens_received($address, $token_hash, $minconf);
     defined $value
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Too many transactions on this address");
+        or return $self->response_error("Too many transactions on this address", ERR_INTERNAL_ERROR);
     if ($value && (my $token_tx = QBitcoin::Transaction->get_by_hash($token_hash))) {
         my $token_info = $token_tx->token_info;
         $value /= 10 ** ($token_info->{decimals} // TOKEN_DEFAULT_DECIMALS);
@@ -1814,10 +1814,10 @@ As a JSON-RPC call
 sub cmd_gettokensinfo {
     my $self = shift;
     blockchain_synced() && mempool_synced()
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Blockchain is not synced");
+        or return $self->response_error("Blockchain is not synced", ERR_INTERNAL_ERROR);
     my $token_hash  = pack("H*", $self->args->[0]);
     my $info = get_tokens_info($token_hash)
-        or return $self->response_error("", ERR_INTERNAL_ERROR, "Token not found");
+        or return $self->response_error("Token not found", ERR_INTERNAL_ERROR);
     return $self->response_ok($info);
 }
 

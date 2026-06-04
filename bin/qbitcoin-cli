@@ -61,10 +61,27 @@ sub call_rpc {
         }),
     });
     my $result = eval { $JSON->decode($response->{content}) };
-    if (!$result || $result->{error}) {
+    if (!$result || (ref($result) eq 'HASH' && $result->{error})) {
         select STDERR;
-        if (ref($result) eq 'HASH' && ref($result->{error}) eq 'HASH' && defined($result->{error}->{message})) {
-            print "$result->{error}->{message}\n" if $result->{error}->{message};
+        my $error = ref($result) eq 'HASH' ? $result->{error} : undef;
+        if (ref($error) eq 'HASH') {
+            my $message = $error->{message};
+            # Be robust: never exit silently if the message is empty - fall back to a
+            # scalar result field (if any), then to the HTTP status line.
+            if (!defined($message) || $message eq '') {
+                $message = defined($result->{result}) && !ref($result->{result})
+                    ? $result->{result} : "$response->{status} $response->{reason}";
+            }
+            if (defined $error->{code}) {
+                print "error code: $error->{code}\n";
+                print "error message:\n$message\n";
+            }
+            else {
+                print "$message\n";
+            }
+        }
+        elsif (defined($error) && !ref($error)) {
+            print "$error\n";
         }
         else {
             print "$response->{status} $response->{reason}\n";
