@@ -560,7 +560,10 @@ sub call_qbt_peers {
         $connection->direction == DIR_IN ? $connect_in++ : $connect_out++;
     }
     if ($connect_in + $connect_out < MIN_CONNECTIONS || $connect_out < MIN_OUT_CONNECTIONS+1) {
-        @peers = sort { $b->reputation <=> $a->reputation } grep { $_->reputation > 0 } @peers;
+        # reputation >= 0: also try neutral peers we have never connected to yet (e.g. addresses
+        # just learned from vernak/addr), otherwise a node could never bootstrap past a full seed.
+        # Only peers that misbehaved (negative reputation) are skipped here.
+        @peers = sort { $b->reputation <=> $a->reputation } grep { $_->reputation >= 0 } @peers;
         my @connected = grep { $_->type_id == PROTOCOL_QBITCOIN && $_->direction == DIR_OUT && $_->state == STATE_CONNECTED }
             QBitcoin::ConnectionList->list();
         my $worst_reputation = min map { $_->peer->reputation } @connected;

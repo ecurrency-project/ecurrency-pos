@@ -1156,7 +1156,7 @@ sub announce {
     foreach my $connection (QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN)) {
         next if $recv_peer && $connection->peer->id eq $recv_peer->id;
         next unless $connection->protocol->can("announce_tx");
-        next unless ($connection->protocol->greeted // 0) == 1;
+        next unless $connection->protocol->greeted;
         $connection->protocol->announce_tx($self);
     }
 }

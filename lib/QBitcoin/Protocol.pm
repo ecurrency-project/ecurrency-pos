@@ -882,7 +882,10 @@ sub cmd_vernak {
     my $count = $self->_parse_peer_list($data);
     return -1 if $count < 0;
     Infof("Received vernak with %u peer addresses from %s", $count, $self->peer->id);
-    $self->greeted = -1; # prevent failed_connect() increment, vernak is a graceful rejection
+    # Graceful rejection: the peer is at capacity. Apply the regular (exponential) connect backoff
+    # so we do not reconnect to it in a tight loop and instead try the addresses it gave us.
+    $self->greeted = 1;
+    $self->peer->failed_connect();
     return -1;
 }
 
