@@ -839,11 +839,11 @@ sub cmd_reject {
 
 sub _pack_peer_list {
     my $self = shift;
-    # Announce only peers that are reachable, public and not hidden (see is_announceable).
-    # Verified peers (we successfully connected to them ourselves) come first, then unverified ones.
+    # Announce only peers we have actually reached ourselves, that are public and not hidden
+    # (see is_announceable). Prefer higher reputation, then the most recently confirmed reachable.
     my @peers = sort {
-                    (defined($b->last_success_time) <=> defined($a->last_success_time))
-                        || ($b->reputation <=> $a->reputation)
+                    ($b->reputation <=> $a->reputation)
+                        || (($b->last_success_time // 0) <=> ($a->last_success_time // 0))
                 }
                 grep { $_->ip ne $self->peer->ip && $_->is_announceable }
                 QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);

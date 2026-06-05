@@ -260,20 +260,20 @@ sub is_public_ip {
         return 0 if $o[0] == 0;                                  # 0.0.0.0/8
         return 0 if $o[0] == 10;                                 # 10.0.0.0/8
         return 0 if $o[0] == 127;                                # 127.0.0.0/8 loopback
-        return 0 if $o[0] == 169 && $o[1] == 254;               # 169.254.0.0/16 link-local
-        return 0 if $o[0] == 172 && $o[1] >= 16 && $o[1] <= 31; # 172.16.0.0/12
-        return 0 if $o[0] == 192 && $o[1] == 168;               # 192.168.0.0/16
-        return 0 if $o[0] == 100 && $o[1] >= 64 && $o[1] <= 127;# 100.64.0.0/10 CGNAT
+        return 0 if $o[0] == 169 && $o[1] == 254;                # 169.254.0.0/16 link-local
+        return 0 if $o[0] == 172 && $o[1] >= 16 && $o[1] <= 31;  # 172.16.0.0/12
+        return 0 if $o[0] == 192 && $o[1] == 168;                # 192.168.0.0/16
+        return 0 if $o[0] == 100 && $o[1] >= 64 && $o[1] <= 127; # 100.64.0.0/10 CGNAT
         return 0 if $o[0] >= 224;                                # 224.0.0.0/4 multicast, 240.0.0.0/4 reserved, broadcast
         return 1;
     }
     else {
         return 0 if $ip eq "\x00" x 16;                          # :: unspecified
-        return 0 if $ip eq "\x00" x 15 . "\x01";                # ::1 loopback
+        return 0 if $ip eq "\x00" x 15 . "\x01";                 # ::1 loopback
         my $b0 = unpack("C", substr($ip, 0, 1));
         return 0 if ($b0 & 0xfe) == 0xfc;                        # fc00::/7 unique local
         my $w0 = unpack("n", substr($ip, 0, 2));
-        return 0 if ($w0 & 0xffc0) == 0xfe80;                   # fe80::/10 link-local
+        return 0 if ($w0 & 0xffc0) == 0xfe80;                    # fe80::/10 link-local
         return 1;
     }
 }
@@ -286,14 +286,24 @@ sub is_hidden_addr {
     return $self->hidden || !$self->is_public;
 }
 
-# Eligible to be advertised to other peers (in vernak/addr).
 sub is_announceable {
     my $self = shift;
     return 0 if $self->is_hidden_addr;
     return 0 unless $self->port;
-    return 0 unless $self->reputation > 0;
+    return 0 unless defined $self->last_success_time;
+    return 0 if $self->reputation < 0;
     return 0 if $self->failed_connects >= ANNOUNCE_MAX_FAILS;
     return 1;
+}
+
+# A peer worth probing to (re)confirm its reachability: dialable, public, not hidden, not in backoff,
+# and either never verified or verified long enough ago to be worth re-checking.
+sub need_probe {
+    my $self = shift;
+    my ($now) = @_;
+    return 0 unless $self->ipv4; # TODO: ipv6
+    return 0 unless $self->is_connect_allowed;
+    return !defined($self->last_success_time) || $self->last_success_time < $now - PEER_REVERIFY_PERIOD;
 }
 
 # Which origin IP to advertise when re-announcing a block/transaction.

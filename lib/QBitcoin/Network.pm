@@ -63,6 +63,7 @@ sub listen_socket {
 
 sub connect_to {
     my $peer = shift;
+    my %opts = @_;
     my $iaddr = $peer->ipv4
         or die "No ipv4 address for peer " . $peer->id . "\n";
     my $paddr = pack_sockaddr_in($peer->port, $iaddr);
@@ -84,6 +85,7 @@ sub connect_to {
         bytes_recv => 0,
         obj_sent   => 0,
         obj_recv   => 0,
+        $opts{probe} ? (probe => 1) : (),
     );
     connect($socket, $paddr);
     Debugf("Connecting to %s peer %s:%u", $peer->type, $peer->id, $peer->port);
@@ -183,6 +185,8 @@ sub main_loop {
 
         call_qbt_peers();
         call_btc_peers();
+        check_probes();
+        probe_peers();
         check_blockchain_alive();
         check_sync_peer();
 
@@ -530,6 +534,39 @@ sub call_btc_peers {
     foreach my $peer (@peers) {
         connect_to($peer);
     }
+}
+
+# Tear down reachability-probe connections once the greeting has confirmed the peer is alive:
+# the probe only needs to set last_success_time (done on greeting), we do not keep the connection.
+sub check_probes {
+    foreach my $connection (grep { $_->probe } QBitcoin::ConnectionList->list()) {
+        next unless $connection->state == STATE_CONNECTED;
+        next unless $connection->protocol && $connection->protocol->greeted;
+        Debugf("Reachability probe of peer %s succeeded, disconnecting", $connection->peer->id);
+        $connection->disconnect();
+    }
+}
+
+my $last_probe_time = 0;
+# Periodically probe an idle peer (typically a zero-reputation one we never dialed) to learn whether
+# it is reachable. Confirmed peers then become announceable (see QBitcoin::Peer::is_announceable),
+# so a node can advertise its many idle peers instead of only the few it actively talks to.
+sub probe_peers {
+    blockchain_synced() # do not interfere with the initial synchronization
+        or return;
+    my $now = time();
+    $now - $last_probe_time >= PEER_PROBE_PERIOD
+        or return;
+    my $active = grep { $_->probe } QBitcoin::ConnectionList->list();
+    $active < MAX_PROBE_CONNECTIONS
+        or return;
+    my @candidates = grep { $_->need_probe($now) } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN)
+        or return;
+    # Round-robin: probe the least recently contacted peer first.
+    my ($peer) = sort { ($a->update_time // 0) <=> ($b->update_time // 0) } @candidates;
+    $last_probe_time = $now;
+    Debugf("Probing peer %s to verify reachability", $peer->id);
+    connect_to($peer, probe => 1);
 }
 
 sub call_qbt_peers {
