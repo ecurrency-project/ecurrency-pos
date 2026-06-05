@@ -437,17 +437,16 @@ sub set_pinned_peers {
             or next;
         delete @pinned_qbtc{ map { $_->ip } @peers };
     }
-    # "hidden-peer": connect to them like pinned peers, but never announce them to other peers.
+    # "hidden-peer": only mark the peer as hidden (never announce it / hide it as object origin).
+    # This does NOT pin the peer and does NOT trigger outgoing connections to it; to also connect
+    # to a hidden peer, list it under "peer" as well (it will then be both pinned and hidden).
     foreach my $peer_host ($config->get_all('hidden_peer')) {
         my @peers = QBitcoin::Peer->get_or_create(
-            host       => $peer_host,
-            type_id    => PROTOCOL_QBITCOIN,
-            pinned     => 1,
-            hidden     => 1,
-            reputation => 1000,
+            host    => $peer_host,
+            type_id => PROTOCOL_QBITCOIN,
+            hidden  => 1,
         )
             or next;
-        delete @pinned_qbtc{ map { $_->ip } @peers };
         delete @hidden_qbtc{ map { $_->ip } @peers };
     }
     $_->update(pinned => 0) foreach values %pinned_qbtc;
