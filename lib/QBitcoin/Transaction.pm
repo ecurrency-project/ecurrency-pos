@@ -592,7 +592,7 @@ sub input_as_hashref {
 sub inputraw_as_hashref {
     my $in = shift;
     $in->{siglist} or die "Undefined siglist during input_as_hashref";
-    my $redeem_script = $in->{txo}->redeem_script // "";
+    my $redeem_script = $in->{redeem_script} // "";
     my $hash;
     if ($redeem_script) {
         my $alg = 0;
