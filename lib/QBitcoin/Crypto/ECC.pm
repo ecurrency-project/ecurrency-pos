@@ -14,7 +14,7 @@ sub verify_signature {
 sub signature {
     my $self = shift;
     my ($data) = @_;
-    return $self->pk->sign_hash($data);
+    return $self->pk->sign_hash($data, 'SHA256');
 }
 
 sub new {
