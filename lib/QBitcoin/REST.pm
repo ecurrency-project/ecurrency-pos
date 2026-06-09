@@ -8,6 +8,7 @@ use strict;
 use JSON::XS;
 use Time::HiRes;
 use List::Util qw(sum0);
+use MIME::Base64 qw(decode_base64);
 use HTTP::Headers;
 use HTTP::Response;
 use QBitcoin::Const;
@@ -17,6 +18,7 @@ use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(address_by_hash address_by_pubkey wallet_import_format wif_to_pk);
 use QBitcoin::MyAddress;
+use QBitcoin::Password;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::TXO;
@@ -279,7 +281,9 @@ sub process_request {
         return $self->http_response(404, "Unknown request");
     }
     elsif ($path[0] eq "admin") {
-        $self->is_local or return $self->http_response(403, "Forbidden");
+        if (defined(my $deny = $self->check_access($http_request))) {
+            return $deny;
+        }
         shift @path; # remove "admin"
         return $self->http_response(404, "Unknown request") unless @path;
         if ($path[0] eq "status") {
@@ -288,12 +292,22 @@ sub process_request {
         elsif ($path[0] eq "peers") {
             return $self->http_ok(peer_info());
         }
+        elsif ($path[0] eq "password") {
+            @path == 1
+                or return $self->http_response(404, "Unknown request");
+            if ($http_request->method eq "POST") {
+                return $self->set_wallet_password($http_request);
+            }
+            return $self->http_ok({ password_set => QBitcoin::Password->is_set ? TRUE : FALSE });
+        }
         else {
             return $self->http_response(404, "Unknown request");
         }
     }
     elsif ($path[0] eq "wallet") {
-        $self->is_local or return $self->http_response(403, "Forbidden");
+        if (defined(my $deny = $self->check_access($http_request))) {
+            return $deny;
+        }
         shift @path; # remove "wallet"
         return $self->http_response(404, "Unknown request") unless @path;
         if ($path[0] eq "my_addresses") {
@@ -926,6 +940,56 @@ sub peer_info {
 sub is_local {
     my $self = shift;
     return $self->connection->my_ip eq "127.0.0.1";
+}
+
+# Guard for /admin/* and /wallet/*.
+# Returns undef if the request is allowed, or an (already sent) error response otherwise.
+# - If a wallet password is configured, require HTTP Basic auth (the username is
+#   ignored, only the password is checked) and allow the request from any address.
+# - If no password is configured, keep the historical localhost-only restriction.
+sub check_access {
+    my $self = shift;
+    my ($http_request) = @_;
+    if (QBitcoin::Password->is_set) {
+        my $auth = $http_request->header('Authorization');
+        if (defined($auth) && $auth =~ /^\s*Basic\s+(\S+)/i) {
+            my $decoded = eval { decode_base64($1) };
+            if (defined($decoded)) {
+                my (undef, $password) = split(/:/, $decoded, 2);
+                return undef if defined($password) && QBitcoin::Password->check_password($password);
+            }
+        }
+        return $self->http_auth_required;
+    }
+    return $self->is_local ? undef : $self->http_response(403, "Forbidden");
+}
+
+sub http_auth_required {
+    my $self = shift;
+    my $body = "Authentication required";
+    my $headers = HTTP::Headers->new(
+        Content_Type     => "text/plain",
+        Content_Length   => length($body),
+        WWW_Authenticate => 'Basic realm="qbitcoin wallet"',
+    );
+    my $response = HTTP::Response->new(401, "Unauthorized", $headers, $body);
+    $response->protocol("HTTP/1.1");
+    return $self->send($response->as_string("\r\n"));
+}
+
+sub set_wallet_password {
+    my $self = shift;
+    my ($http_request) = @_;
+    my $content = eval { $JSON->decode($http_request->decoded_content) };
+    ref($content) eq "HASH" && defined($content->{password}) && !ref($content->{password})
+        or return $self->http_response(400, "Invalid request body");
+    my $password = $content->{password};
+    length($password) > 0
+        or return $self->http_response(400, "Password must not be empty");
+    length($password) <= QBitcoin::Password::MAX_LEN()
+        or return $self->http_response(400, "Password too long");
+    QBitcoin::Password->set_password($password);
+    return $self->http_ok({});
 }
 
 1;

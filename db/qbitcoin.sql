@@ -121,6 +121,12 @@ CREATE TABLE `peer` (
 );
 CREATE INDEX `peer_reputation` ON `peer` (reputation);
 
+-- Key-value store for node-local settings (e.g. hashed wallet password)
+CREATE TABLE `setting` (
+  name  varchar(64)  NOT NULL PRIMARY KEY,
+  value varchar(255) NOT NULL
+);
+
 CREATE TABLE `version` (
   time timestamp not null DEFAULT CURRENT_TIMESTAMP,
   version int unsigned NOT NULL,

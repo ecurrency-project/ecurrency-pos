@@ -17,6 +17,7 @@ use QBitcoin::Transaction;
 use QBitcoin::TXO;
 use QBitcoin::Address qw(wif_to_pk scripthash_by_address address_by_pubkey wallet_import_format address_by_hash);
 use QBitcoin::MyAddress;
+use QBitcoin::Password;
 use QBitcoin::Tag;
 use QBitcoin::Generate;
 use QBitcoin::Protocol;
@@ -1833,6 +1834,44 @@ sub cmd_gettokensinfo {
 # getconnectioncount
 # listbanned
 # setban
+
+$PARAMS{setwalletpassword} = "password";
+$HELP{setwalletpassword} = qq(
+Set the wallet password that protects the /admin/* and /wallet/* REST API.
+
+When no password is set yet this command works unconditionally, so it is the
+recommended way to protect the wallet right after installing the node.
+
+If a password is already set, this command overwrites it (recovery from a
+forgotten password). For safety that case is disabled by default and must be
+explicitly enabled in the configuration file:
+
+    allow_password_reset = 1
+
+Alternatively a forgotten password can be cleared by editing the database
+directly: DELETE FROM setting WHERE name = 'wallet_password';
+
+Arguments:
+1. password    (string, required) the new wallet password
+
+Result:
+null    (json null)
+
+Examples:
+> qbitcoin-cli setwalletpassword "mysecret"
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "setwalletpassword", "params": ["mysecret"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_setwalletpassword {
+    my $self = shift;
+    my ($password) = @{$self->args};
+    if (QBitcoin::Password->is_set && !$config->{allow_password_reset}) {
+        return $self->response_error(
+            "Wallet password is already set; resetting a forgotten password requires 'allow_password_reset' in the configuration file (or clearing it directly in the database)",
+            ERR_MISC);
+    }
+    QBitcoin::Password->set_password($password);
+    return $self->response_ok;
+}
 
 # signmessagewithprivkey
 # verifymessage

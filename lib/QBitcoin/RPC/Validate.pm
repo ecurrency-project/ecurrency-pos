@@ -9,6 +9,7 @@ use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
 use QBitcoin::Address qw(wif_to_pk);
+use QBitcoin::Password;
 use QBitcoin::Accessors qw(mk_accessors);
 
 mk_accessors(qw(validate_message));
@@ -37,6 +38,7 @@ my %SPEC = (
     privkey        => \&validate_privkey,
     address_type   => \&validate_address_type,
     tag            => qr/^(?:[a-zA-Z][a-zA-Z0-9_.-]{0,63})?\z/,
+    password       => \&validate_password,
 );
 
 sub validate {
@@ -236,6 +238,13 @@ sub validate_privkeys {
             or return 0;
     }
     $_[0] = $privkeys;
+    return 1;
+}
+
+sub validate_password {
+    my $value = $_[0];
+    return 0 if ref($value);
+    return 0 unless defined($value) && length($value) >= 1 && length($value) <= QBitcoin::Password::MAX_LEN();
     return 1;
 }
 
