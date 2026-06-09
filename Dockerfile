@@ -1,9 +1,9 @@
 # It's highly recommended to run the docker container with volume /database mounted to external directory
 # for save blockchain and wallet data on restart container
 # Example for run container from this image:
-# docker run --volume $(pwd)/database:/database --read-only --rm --detach -p 9555:9555 -p 9558:9558 --name qbitcoin qbitcoin
+# docker run --volume $(pwd)/database:/database --read-only --rm --detach -p 9555:9555 -p 127.0.0.1:9558:9558 --name qbitcoin qbitcoin
 # or:
-# docker run -e dbi=mysql --mount type=bind,source=/etc/qbitcoin.conf,target=/etc/qbitcoin.conf,readonly -mount type=bind,source=/var/run/mysqld/mysqld.sock,target=/var/lib/mysql.sock --rm --detach -p 9555:9555 -p 9558:9558 --name qbitcoin qbitcoin
+# docker run -e dbi=mysql --mount type=bind,source=/etc/qbitcoin.conf,target=/etc/qbitcoin.conf,readonly -mount type=bind,source=/var/run/mysqld/mysqld.sock,target=/var/lib/mysql.sock --rm --detach -p 9555:9555 -p 127.0.0.1:9558:9558 --name qbitcoin qbitcoin
 # then you can run "docker exec qbitcoin qbitcoin-cli help"
 FROM alpine:latest AS builder
 LABEL stage=builder
