@@ -31,7 +31,51 @@ sub main {
     read_config($conffile);
     $config->set($_ => $opts{$_}) foreach grep { defined $opts{$_} } keys %opts;
     my $command = shift @ARGV;
+    # Read the password from stdin (instead of argv) when it is not given on the
+    # command line, so it does not leak into the process list or shell history.
+    if ($command && $command eq 'setwalletpassword' && !@ARGV) {
+        @ARGV = (read_password("New wallet password: "));
+    }
     return call_rpc($command, @ARGV);
+}
+
+# Read a secret from stdin. On a terminal echo is disabled and the value is asked
+# twice for confirmation; on a pipe a single line is read.
+sub read_password {
+    my ($prompt) = @_;
+    if (-t STDIN) { ## no critic (InputOutput::ProhibitInteractiveTest)
+        local $| = 1;
+        my $echo_off = system("stty", "-echo") == 0;
+        my $pass = _prompt_line($prompt, $echo_off);
+        if ($echo_off) {
+            my $confirm = _prompt_line("Confirm password: ", $echo_off);
+            system("stty", "echo");
+            if ($pass ne $confirm) {
+                print STDERR "Passwords do not match\n";
+                exit 1;
+            }
+        }
+        return $pass;
+    }
+    my $line = <STDIN>;
+    defined($line)
+        or do { print STDERR "No password provided on stdin\n"; exit 1; };
+    $line =~ s/\r?\n?\z//;
+    return $line;
+}
+
+sub _prompt_line {
+    my ($prompt, $echo_off) = @_;
+    print STDERR $prompt;
+    my $line = <STDIN>;
+    print STDERR "\n" if $echo_off; # the user's Enter was not echoed
+    if (!defined($line)) {
+        system("stty", "echo") if $echo_off;
+        print STDERR "Aborted\n";
+        exit 1;
+    }
+    $line =~ s/\r?\n?\z//;
+    return $line;
 }
 
 sub usage {

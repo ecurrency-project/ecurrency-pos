@@ -65,7 +65,8 @@ sub process_request {
         return $self->response_error("Unknown method", ERR_UNKNOWN_METHOD);
     }
     Debugf("RPC request %s %s from %s:%u", $body->{method},
-        join(" ", map { ref($_) ? $JSON->encode($_) : $_ } @{$body->{params}}),
+        $self->sensitive($body->{method}) ? "***"
+            : join(" ", map { ref($_) ? $JSON->encode($_) : $_ } @{$body->{params}}),
         $self->connection->ip, $self->connection->port);
     $self->args = $body->{params};
     $self->cmd  = $body->{method};

@@ -28,9 +28,11 @@ use Bitcoin::Block;
 
 my %PARAMS;
 my %HELP;
+my %SENSITIVE; # commands whose params must not be logged in plaintext (e.g. passwords)
 
-sub params { $PARAMS{$_[1]} }
-sub help   { $HELP{$_[1]}   }
+sub params    { $PARAMS{$_[1]}    }
+sub help      { $HELP{$_[1]}      }
+sub sensitive { $SENSITIVE{$_[1]} }
 
 $PARAMS{ping} = "";
 $HELP{ping} = qq(
@@ -536,6 +538,7 @@ sub cmd_sendrawtransaction {
     return $self->response_ok(unpack("H*", $tx->hash));
 }
 
+$SENSITIVE{signrawtransactionwithkey} = 1;
 $PARAMS{signrawtransactionwithkey} = "hexstring privatekeys replace?";
 $HELP{signrawtransactionwithkey} = qq(
 signrawtransactionwithkey "hexstring" ["privatekey",...] ( replace )
@@ -1072,6 +1075,7 @@ sub cmd_getmempoolentry {
     return $self->response_ok($tx->as_hashref);
 }
 
+$SENSITIVE{importprivkey} = 1;
 $PARAMS{importprivkey} = "privkey address_type?";
 $HELP{importprivkey} = qq(
 importprivkey "privkey" ( address_type )
@@ -1836,11 +1840,19 @@ sub cmd_gettokensinfo {
 # setban
 
 $PARAMS{setwalletpassword} = "password";
+$SENSITIVE{setwalletpassword} = 1;
 $HELP{setwalletpassword} = qq(
 Set the wallet password that protects the /admin/* and /wallet/* REST API.
 
 When no password is set yet this command works unconditionally, so it is the
 recommended way to protect the wallet right after installing the node.
+
+The password may be passed as an argument, but for safety qbitcoin-cli also reads
+it from standard input when the argument is omitted (so it does not appear in the
+process list or shell history):
+
+    qbitcoin-cli setwalletpassword            # prompts on a terminal
+    echo -n "mysecret" | qbitcoin-cli setwalletpassword
 
 If a password is already set, this command overwrites it (recovery from a
 forgotten password). For safety that case is disabled by default and must be
