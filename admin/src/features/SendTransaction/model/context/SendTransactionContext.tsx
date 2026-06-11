@@ -1,15 +1,17 @@
-import { createContext, type FC, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type FC, type ReactNode, useCallback, useContext, useMemo, useState } from 'react';
 
 import { useGetFeeEstimateQuery } from '@/entities/Transaction';
 
 import type { TransactionJSON, TransactionStatus } from '../types/types';
 import { useWalletUtxoData } from '../../lib/useWalletUtxoData';
+import type { SpendableUtxo } from '../../lib/processUtxos';
+import { getDefaultFeeRate, suggestFeeSat } from '../../lib/feeEstimation';
 import { createTransactionJSON as buildTransaction, type CreateTransactionJSONResult } from '../../lib/createTransactionJSON';
 
 export interface AddressData {
     balance: number;
     balanceFormatted: string;
-    utxos: string[];
+    utxos: SpendableUtxo[];
 }
 
 interface SendTransactionContextValue {
@@ -23,13 +25,13 @@ interface SendTransactionContextValue {
     setAmountSat: (value: number) => void;
     selectedAddresses: string[];
     setSelectedAddresses: (value: string[]) => void;
-    feeRate: number;
-    setFeeRate: (value: number) => void;
     feeSat: number;
+    suggestedFeeSat: number;
+    isFeeManual: boolean;
+    setFeeSat: (value: number | null) => void;
     changeAddress: string;
     setChangeAddress: (value: string) => void;
 
-    feeEstimate?: Record<string, number>;
     addressesData?: Record<string, AddressData>;
     isUtxoLoading: boolean;
     isUtxoError: boolean;
@@ -52,8 +54,7 @@ export const SendTransactionProvider: FC<SendTransactionProviderProps> = ({ chil
     const [targetAddress, setTargetAddress] = useState('');
     const [amountSat, setAmountSat] = useState(0);
     const [selectedAddresses, setSelectedAddresses] = useState<string[]>([]);
-    const [feeRate, setFeeRate] = useState(0);
-    const [isFeeRateManual, setIsFeeRateManual] = useState(false);
+    const [manualFeeSat, setManualFeeSat] = useState<number | null>(null);
     const [changeAddress, setChangeAddress] = useState('');
     const [transactionJSON, setTransactionJSON] = useState<TransactionJSON | undefined>();
 
@@ -62,31 +63,24 @@ export const SendTransactionProvider: FC<SendTransactionProviderProps> = ({ chil
         pollingInterval: 60_000,
     });
 
-    useEffect(() => {
-        if (feeEstimate && !isFeeRateManual) {
-            const defaultRate = feeEstimate['3'] ?? feeEstimate['1'] ?? Object.values(feeEstimate)[0];
-            if (defaultRate) setFeeRate(Math.ceil(defaultRate));
-        }
-    }, [feeEstimate, isFeeRateManual]);
+    const feeRate = useMemo(() => getDefaultFeeRate(feeEstimate) ?? 0, [feeEstimate]);
 
-    const handleSetFeeRate = useCallback((value: number) => {
-        setIsFeeRateManual(true);
-        setFeeRate(value);
+    const suggestedFeeSat = useMemo(() => {
+        if (feeRate <= 0 || !addressesData) return 0;
+
+        const availableUtxos = selectedAddresses.flatMap(
+            (address) => addressesData[address]?.utxos ?? []
+        );
+        if (availableUtxos.length === 0) return 0;
+
+        return suggestFeeSat({ utxos: availableUtxos, amountSat, feeRate });
+    }, [feeRate, addressesData, selectedAddresses, amountSat]);
+
+    const feeSat = manualFeeSat ?? suggestedFeeSat;
+
+    const handleSetFeeSat = useCallback((value: number | null) => {
+        setManualFeeSat(value);
     }, []);
-
-    const feeSat = useMemo(() => {
-        if (!feeEstimate || !addressesData) return 0;
-
-        const inputCount = selectedAddresses.reduce((count, address) => {
-            return count + (addressesData[address]?.utxos.length || 0);
-        }, 0);
-        // 1 output (target) + possible change output
-        const outputCount = 2;
-        // Rough tx size: ~148 bytes per input + ~34 bytes per output + ~10 bytes overhead
-        const estimatedSize = inputCount * 148 + outputCount * 34 + 10;
-
-        return Math.ceil(estimatedSize * feeRate);
-    }, [feeEstimate, addressesData, selectedAddresses, feeRate]);
 
     const next = useCallback(() => {
         setStep((s) => s + 1);
@@ -123,12 +117,12 @@ export const SendTransactionProvider: FC<SendTransactionProviderProps> = ({ chil
         setAmountSat,
         selectedAddresses,
         setSelectedAddresses,
-        feeRate,
-        setFeeRate: handleSetFeeRate,
         feeSat,
+        suggestedFeeSat,
+        isFeeManual: manualFeeSat != null,
+        setFeeSat: handleSetFeeSat,
         changeAddress,
         setChangeAddress,
-        feeEstimate,
         addressesData,
         isUtxoLoading,
         isUtxoError,

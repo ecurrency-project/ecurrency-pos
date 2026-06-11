@@ -1,5 +1,7 @@
 import type { TransactionInput, TransactionJSON } from '../model/types/types';
 import type { AddressData } from '../model/context/SendTransactionContext';
+import type { SpendableUtxo } from './processUtxos';
+import { selectCoins } from './coinSelection';
 
 export interface CreateTransactionParams {
     targetAddress: string;
@@ -25,44 +27,42 @@ export const createTransactionJSON = (params: CreateTransactionParams): CreateTr
         return { success: false, error: 'Invalid amount' };
     }
 
-    const totalSelectedBalance = selectedAddresses.reduce((total, address) => {
-        return total + (addressesData?.[address]?.balance || 0);
-    }, 0);
+    const trimmedTarget = targetAddress.trim();
 
-    const changeSat = totalSelectedBalance - amountSat - feeSat;
+    const availableUtxos: SpendableUtxo[] = selectedAddresses.flatMap(
+        (address) => addressesData?.[address]?.utxos ?? []
+    );
 
-    if (changeSat < 0) {
+    if (availableUtxos.length === 0) {
+        return { success: false, error: 'No UTXOs available for selected addresses' };
+    }
+
+    const selected = selectCoins(availableUtxos, amountSat + feeSat);
+    if (selected === null) {
         return { success: false, error: 'Insufficient balance' };
     }
+
+    const selectedSumSat = selected.reduce((sum, utxo) => sum + utxo.valueSat, 0);
+
+    const changeSat = selectedSumSat - amountSat - feeSat;
 
     // Outputs — an array of objects {address: value_in_satoshis}
     const outputs: Record<string, number>[] = [];
 
-    if (changeSat > 0 && changeAddress === targetAddress.trim()) {
-        outputs.push({ [targetAddress.trim()]: amountSat + changeSat });
+    if (changeSat > 0 && changeAddress === trimmedTarget) {
+        outputs.push({ [trimmedTarget]: amountSat + changeSat });
     } else {
-        outputs.push({ [targetAddress.trim()]: amountSat });
+        outputs.push({ [trimmedTarget]: amountSat });
         if (changeSat > 0) {
             outputs.push({ [changeAddress]: changeSat });
         }
     }
 
-    // Inputs — an array {txid, vout} of UTXO strings in the format "txid:vout"
-    const inputs: TransactionInput[] = [];
-
-    for (const address of selectedAddresses) {
-        const data = addressesData?.[address];
-        if (!data) continue;
-
-        for (const utxo of data.utxos) {
-            const [txid, voutStr] = utxo.split(':');
-            inputs.push({ txid, vout: Number(voutStr) });
-        }
-    }
-
-    if (inputs.length === 0) {
-        return { success: false, error: 'No UTXOs available for selected addresses' };
-    }
+    // Inputs — an array {txid, vout} built from the selected UTXOs
+    const inputs: TransactionInput[] = selected.map((utxo) => {
+        const [txid, voutStr] = utxo.outpoint.split(':');
+        return { txid, vout: Number(voutStr) };
+    });
 
     return { success: true, data: { inputs, outputs } };
 };

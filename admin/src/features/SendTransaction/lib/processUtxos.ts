@@ -1,8 +1,13 @@
 import type { UTXO } from '@/entities/Address';
 
+export interface SpendableUtxo {
+    outpoint: string;
+    valueSat: number;
+}
+
 interface ProcessedUtxos {
     value: number;
-    utxos: string[];
+    utxos: SpendableUtxo[];
 }
 
 export const processUtxos = (utxos: UTXO[]): ProcessedUtxos => {
@@ -10,10 +15,10 @@ export const processUtxos = (utxos: UTXO[]): ProcessedUtxos => {
         (acc, utxo) => {
             if (utxo.status === 'confirmed') {
                 acc.value += utxo.value;
-                acc.utxos.push(`${utxo.txid}:${utxo.vout}`);
+                acc.utxos.push({ outpoint: `${utxo.txid}:${utxo.vout}`, valueSat: utxo.value });
             }
             return acc;
         },
-        { value: 0, utxos: [] as string[] }
+        { value: 0, utxos: [] as SpendableUtxo[] }
     );
 };

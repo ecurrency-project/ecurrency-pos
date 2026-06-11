@@ -13,13 +13,12 @@ interface SendTransactionPageProps {
 }
 
 const steps = [
-    { key: 'First', title: 'First' },
-    { key: 'Second', title: 'Second' },
-    { key: 'Last', title: 'Last' },
+    { key: 'details', title: 'Details' },
+    { key: 'confirm', title: 'Confirmation' },
+    { key: 'result', title: 'Result' },
 ];
 
 const contentStyle: CSSProperties = {
-    height: '400px',
     marginTop: 16,
 };
 
