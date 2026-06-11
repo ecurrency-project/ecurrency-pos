@@ -1,0 +1,23 @@
+.SettingsPage {
+    padding-top: 24px;
+}
+
+.title {
+    margin-bottom: 16px;
+}
+
+.card {
+    border-radius: 12px;
+    background-color: var(--stats-bg-color);
+    box-shadow: var(--stats-box-shadow);
+}
+
+.card :global(.ant-card-body) {
+    padding: 24px;
+}
+
+@media screen and (max-width: 768px) {
+    .card :global(.ant-card-body) {
+        padding: 16px;
+    }
+}
