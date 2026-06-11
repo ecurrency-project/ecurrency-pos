@@ -132,13 +132,13 @@ sub get_or_create {
 
 # Store a transient (incoming-connection) peer into the database after a successful greeting.
 # Returns the canonical persisted peer object (may differ from $self if it became known meanwhile).
+# The caller updates the port itself if it has a trustworthy one (see cmd_version).
 sub persist {
     my $self = shift;
     return $self if $self->in_db;
     $self->load();
     if (my $existing = $PEERS[$self->type_id]->{$self->ip}) {
         # Became known (e.g. via addr/tx) while the handshake was in progress: adopt the stored record
-        $existing->update(port => $self->port) if $self->port && $existing->port != $self->port;
         return $existing;
     }
     $self->update_time(time());

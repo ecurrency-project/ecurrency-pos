@@ -6,7 +6,8 @@ use strict;
 # Single connection
 # Commands:
 # >> version <version:4 features:8 time:8 my_address:26 nonce:8 software:1+n>
-#    my_address: features:8 addr:16 port:2 (the address the node advertises for incoming connections)
+#    my_address: features:8 addr:16 port:2 (port is the node's listening port, to dial it back
+#    and to announce it to other peers; 0 means the node does not accept incoming connections)
 #    nonce: random session id, used to detect duplicate connections with the same node
 #    software: 1-byte length + string, name and version of the node software (see SOFTWARE, as BIP14)
 #    nonce and software are optional (old nodes do not send them), unknown trailing data must be ignored
@@ -45,6 +46,7 @@ use strict;
 use parent 'QBitcoin::Protocol::Common';
 use Time::HiRes;
 use QBitcoin::Const;
+use QBitcoin::Config;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer last_qbt_data_time);
@@ -89,9 +91,18 @@ sub startup {
     return 0;
 }
 
+# The port on which this node accepts incoming connections, advertised to peers in the
+# "version" message so they can dial us back; must match bind_addr() in QBitcoin::Network
+sub listen_port {
+    my (undef, $port) = split(/:/, $config->{bind} // BIND_ADDR);
+    return $port // $config->{port} // getservbyname(SERVICE_NAME, 'tcp') // ($config->{testnet} ? PORT_TESTNET : PORT);
+}
+
 sub pack_my_address {
     my $self = shift;
-    return pack("Q<a16n", PROTOCOL_FEATURES, $self->connection->my_addr, $self->connection->my_port);
+    # not connection->my_port: for outgoing connections it is the ephemeral port of the socket,
+    # the peer needs our listening port
+    return pack("Q<a16n", PROTOCOL_FEATURES, $self->connection->my_addr, listen_port());
 }
 
 sub peer_id {
@@ -149,12 +160,21 @@ sub cmd_version {
     }
     else {
         # Incoming connection: store the peer now that the greeting succeeded (req: do not persist random connects).
-        my $peer = $self->peer;
-        $peer->port($adv_port) if $adv_port;
-        $peer = $peer->persist();
-        if ($peer != $self->peer) {
-            $self->peer($peer);
-            $self->connection->peer($peer);
+        # The advertised port is trusted only when the session nonce is present: older nodes mistakenly
+        # advertise the ephemeral port of their outgoing socket instead of their listening port,
+        # for them keep the default port (a reachability probe will verify it before announcing).
+        my $adv_port_trusted = defined($nonce) ? $adv_port : undef;
+        if (defined($adv_port_trusted) && !$adv_port_trusted) {
+            # The peer explicitly advertises port 0: it does not accept incoming connections,
+            # do not store it - useless for dial-back and for announcing to other peers
+        }
+        else {
+            my $peer = $self->peer->persist();
+            if ($peer != $self->peer) {
+                $self->peer($peer);
+                $self->connection->peer($peer);
+            }
+            $peer->update(port => $adv_port_trusted) if $adv_port_trusted && $peer->port != $adv_port_trusted;
         }
     }
     Infof("Peer %s greeted: version %u, features 0x%x, software %s",

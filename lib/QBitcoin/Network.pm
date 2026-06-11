@@ -23,9 +23,9 @@ use QBitcoin::REST;
 sub bind_addr {
     my $class = shift;
 
-    my ($address, $port) = split(/:/, $config->{bind} // BIND_ADDR);
-    $port //= $config->{port} // getservbyname(SERVICE_NAME, 'tcp') // ($config->{testnet} ? PORT_TESTNET : PORT);
-    return listen_socket($address, $port);
+    my ($address) = split(/:/, $config->{bind} // BIND_ADDR);
+    # the same port is advertised to peers in the "version" message
+    return listen_socket($address, QBitcoin::Protocol::listen_port());
 }
 
 sub bind_rpc_addr {
