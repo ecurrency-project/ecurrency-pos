@@ -219,7 +219,7 @@ sub reputation {
 
 sub conn_state {
     my $self = shift;
-    if (my $connection = QBitcoin::ConnectionList->get($self->type_id, $self->ip)) {
+    if (my ($connection) = QBitcoin::ConnectionList->find_ip($self->type_id, $self->ip)) {
         return $connection->state;
     }
     else {

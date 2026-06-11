@@ -91,6 +91,7 @@ use constant QBITCOIN_CONST => {
     MIN_CONNECTIONS         => 5,
     MIN_OUT_CONNECTIONS     => 2,
     MAX_IN_CONNECTIONS      => 8,
+    MAX_IN_CONNECTIONS_PER_IP => 4, # several nodes may share one IP (NAT); duplicates are detected by version nonce
     MAX_RPC_CONNECTIONS     => 10,
     MAX_REST_CONNECTIONS    => 10,
     MAX_ADDR_PEERS          => 50,

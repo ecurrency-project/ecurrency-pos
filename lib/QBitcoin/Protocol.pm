@@ -5,7 +5,10 @@ use strict;
 # TCP exchange with a peer
 # Single connection
 # Commands:
-# >> version <options>
+# >> version <version:4 features:8 time:8 my_address:26 nonce:8>
+#    my_address: features:8 addr:16 port:2 (the address the node advertises for incoming connections)
+#    nonce: random session id, used to detect duplicate connections with the same node (optional,
+#    old nodes do not send it; unknown trailing data in "version" must be ignored)
 # << verack <options>
 # >> ihave <time> <weight> <hash>
 # << sendblock <hash>
@@ -65,13 +68,22 @@ use constant {
     REJECT_INVALID => 1,
 };
 
-mk_accessors(qw(has_weight best_block_hash reject_with_peers protocol_version));
+mk_accessors(qw(has_weight best_block_hash reject_with_peers protocol_version remote_nonce));
 
 sub type_id() { PROTOCOL_QBITCOIN }
 
+# Random identifier of this node instance, sent in the "version" message.
+# It identifies the remote node better than the IP address: several nodes may share
+# one NAT address, and one node may be reachable via different addresses.
+# Used to detect duplicate connections with the same node, including self-connections.
+my $MY_NONCE;
+sub my_nonce {
+    return $MY_NONCE //= pack("VV", int(rand(2**32)), int(rand(2**32)));
+}
+
 sub startup {
     my $self = shift;
-    my $version = pack("VQ<Q<a26", PROTOCOL_VERSION, PROTOCOL_FEATURES, time(), $self->pack_my_address);
+    my $version = pack("VQ<Q<a26a8", PROTOCOL_VERSION, PROTOCOL_FEATURES, time(), $self->pack_my_address, my_nonce());
     $self->send_message("version", $version);
     return 0;
 }
@@ -107,6 +119,15 @@ sub cmd_version {
     if (length($data) >= 20 + 26) {
         (undef, undef, $adv_port) = unpack("Q<a16n", substr($data, 20, 26));
     }
+    # Optional trailing session nonce (see my_nonce); old nodes do not send it and ignore these bytes
+    my $nonce;
+    if (length($data) >= 20 + 26 + 8) {
+        $nonce = substr($data, 20 + 26, 8);
+    }
+    if ($self->check_duplicate_connection($nonce) != 0) {
+        return -1;
+    }
+    $self->remote_nonce = $nonce;
 
     $self->send_message("verack", "");
     $self->greeted = 1;
@@ -145,6 +166,65 @@ sub cmd_verack {
     my @known_peers = grep { $_->reputation > 0 } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
     if (@known_peers < MIN_CONNECTIONS * 2) {
         $self->send_message("getaddr", "");
+    }
+    return 0;
+}
+
+# Drop duplicate connections with the same remote node: simultaneous mutual connects,
+# or a reconnect while the old (dead) session has not timed out yet.
+# The node is identified by the session nonce from the "version" message rather than by IP address:
+# different nodes behind one NAT address have the same IP, so the IP identifies the node
+# only among old peers which do not send the nonce.
+# Returns 0 if this connection is unique (or wins the tie-break), -1 if it must be closed.
+sub check_duplicate_connection {
+    my $self = shift;
+    my ($nonce) = @_;
+    my $connection = $self->connection;
+    if (defined $nonce) {
+        if ($nonce eq my_nonce()) {
+            Warningf("Connection with myself via %s, closing", $self->peer->id);
+            # no "nocall" status for the peer: another node may be reachable via the same (NAT) address
+            return -1;
+        }
+        foreach my $other (grep { $_ != $connection && $_->type_id == $self->type_id } QBitcoin::ConnectionList->list()) {
+            $other->protocol && defined($other->protocol->remote_nonce) && $other->protocol->remote_nonce eq $nonce
+                or next;
+            my $drop_this;
+            if ($connection->probe || $other->probe) {
+                # a reachability probe must never displace a working connection
+                $drop_this = $connection->probe;
+            }
+            elsif ($other->direction == $connection->direction) {
+                # The remote node opened a new connection knowing nothing about the old one
+                # (reconnect after silent disconnect, or dial via our different addresses),
+                # so the old session is stale or will be dropped on the remote side; keep the new one
+                $drop_this = 0;
+            }
+            else {
+                # Simultaneous mutual connect; both sides must keep the same connection,
+                # so the choice depends only on the nonces: the lesser nonce is the caller
+                $drop_this = $connection->direction == (my_nonce() lt $nonce ? DIR_IN : DIR_OUT);
+            }
+            if ($drop_this) {
+                Infof("Duplicate connection with peer %s, closing this one", $self->peer->id);
+                # the handshake did succeed, closing a duplicate is not a failed connect
+                $self->greeted = 1;
+                $self->peer->connect_success() if $connection->direction == DIR_OUT;
+                return -1;
+            }
+            Infof("Duplicate connection with peer %s, closing the old one", $self->peer->id);
+            $other->disconnect();
+        }
+    }
+    else {
+        # The remote node sends no nonce (old version): assume single node per IP, as before,
+        # but only among connections which did not prove otherwise by their nonce
+        foreach my $other (grep { $_ != $connection && $_->type_id == $self->type_id } QBitcoin::ConnectionList->list()) {
+            next unless $other->addr eq $connection->addr;
+            next if $other->protocol && defined($other->protocol->remote_nonce); # a new node behind the same IP
+            Warningf("Already connected with peer %s, closing duplicate connection", $self->peer->id);
+            return -1;
+        }
     }
     return 0;
 }

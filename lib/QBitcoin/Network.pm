@@ -209,8 +209,14 @@ sub main_loop {
             my $peerinfo = accept(my $new_socket, $listen_socket);
             my ($remote_port, $peer_addr) = unpack_sockaddr_in($peerinfo);
             my $peer_ip = inet_ntoa($peer_addr);
-            if (my $connection = QBitcoin::ConnectionList->get(PROTOCOL_QBITCOIN, IPV6_V4_PREFIX . $peer_addr)) {
-                Warningf("Already connected with peer %s, status %s", $peer_ip, $connection->state);
+            # Do not reject a duplicate IP here: several nodes behind one NAT address may connect
+            # from the same IP. Duplicate connections with the same node are detected by the session
+            # nonce from the "version" message (see QBitcoin::Protocol::check_duplicate_connection),
+            # here we only limit the number of incoming connections per IP.
+            my $in_from_ip = grep { $_->direction == DIR_IN }
+                QBitcoin::ConnectionList->find_ip(PROTOCOL_QBITCOIN, IPV6_V4_PREFIX . $peer_addr);
+            if ($in_from_ip >= ($config->{max_in_connections_per_ip} // MAX_IN_CONNECTIONS_PER_IP)) {
+                Warningf("Too many incoming connections from %s (%u), reject", $peer_ip, $in_from_ip);
                 close($new_socket);
             }
             else {

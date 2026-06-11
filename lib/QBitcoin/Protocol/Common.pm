@@ -32,7 +32,8 @@ sub new {
     my $self = bless $args, $class;
     $self->peer //= $self->connection->peer if $self->connection;
     $self->last_recv_time = time();
-    $self->id = $self->connection->addr;
+    # addr alone is not unique: several nodes behind one NAT address may be connected at the same time
+    $self->id = $self->connection->addr . pack("vC", $self->connection->port // 0, $self->connection->direction // 0);
     return $self;
 }
 
