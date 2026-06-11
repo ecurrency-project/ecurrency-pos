@@ -334,7 +334,7 @@ Result (if verbose is set false):
 
 Result (if verbose is not set or is set to true):
 {                                    (json object)
-  "hash" : "hex",                    (string) The transaction hash (differs from txid for witness transactions)
+  "hash" : "hex",                    (string) The transaction hash (the same as the txid)
   "size" : n,                        (numeric) The serialized transaction size
   "in" : [                           (json array)
     {                                (json object)
@@ -1057,8 +1057,8 @@ Arguments:
 
 Result:
 {                                       (json object)
-  "size" : n,                           (numeric) virtual transaction size as defined in BIP 141. This is different from actual serialized size for witness transactions as witness data is discounted.
-  "fee" : n,                            (numeric) transaction fee in BTC (DEPRECATED)
+  "size" : n,                           (numeric) transaction size in bytes
+  "fee"  : n,                           (numeric) transaction fee in BTC
   "time" : xxx,                         (numeric) local time transaction entered pool in seconds since 1 Jan 1970 GMT
 }
 

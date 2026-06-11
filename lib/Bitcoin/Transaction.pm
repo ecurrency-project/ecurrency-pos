@@ -14,11 +14,8 @@ sub deserialize {
     my $start_index = $tx_data->index;
     my ($version) = unpack("V", $tx_data->get(4) // return undef); # 1 or 2
     my $txin_count = $tx_data->get_varint() // return undef;
-    my $has_witness = 0;
-    if ($txin_count == 0) {
-        $has_witness = unpack("C", $tx_data->get(1) // return undef); # should be always 1
-        $txin_count = $tx_data->get_varint() // return undef;
-    }
+    # We requested by MSG_BLOCK (not MSG_WITNESS_BLOCK), so the transaction cannot contain witness data (tx_count == 0).
+    # Witness data is not usable for us because we cannot build SPV proof for it, it's not part of bitcoin block merkle tree.
     my @tx_in;
     for (my $n = 0; $n < $txin_count; $n++) {
         my $prev_output = $tx_data->get(36) // return undef; # (prev_tx_hash, output_index)
@@ -41,16 +38,6 @@ sub deserialize {
             value       => $value,
             open_script => $open_script,
         };
-    }
-    if ($has_witness) {
-        foreach (my $n = 0; $n < $txin_count; $n++) {
-            my $witness_count = $tx_data->get_varint() // return undef;
-            my @witness;
-            foreach (my $k = 0; $k < $witness_count; $k++) {
-                push @witness, $tx_data->get_string() // return undef;
-            }
-            $tx_in[$n]->{witness} = \@witness;
-        }
     }
     my $lock_time = unpack("V", $tx_data->get(4) // return undef);
     my $end_index = $tx_data->index;

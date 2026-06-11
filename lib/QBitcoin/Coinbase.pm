@@ -274,55 +274,41 @@ sub get_scripthash {
     # OK, make scripthash by first input of this transaction
     my $in = $tx->in->[0]
         or return undef;
+    # Witness (P2WPKH) input address is not proofable by SPV, so we cannot use it for coinbase upgrade.
+    # That's because we request blocks by MSG_BLOCK (not by MSG_WITNESS_BLOCK), so the transaction cannot contain witness data.
     my $input_script = $in->{script};
-    if (my $witness = $tx->in->[0]->{witness}) {
-        if ($input_script eq "" && @$witness == 2 && length($witness->[0]) <= 72 && length($witness->[1]) == 33) {
-            # P2WPKH
-            return hash160(script_by_pubkey($witness->[1]));
-        }
-        elsif (@$witness > 1) {
-            # P2WSH?
-            # return hash160($witness->[-1]);
-            Warningf("Burn from P2WSH script in tx %s", $tx->hash_str);
-            return undef;
-        }
-        else {
-            Warningf("Burn from unknown witness script in tx %s", $tx->hash_str);
-            return undef;
-        }
-    }
-    elsif ($input_script eq "") {
-        Warningf("Burn from empty script in tx %s", $tx->hash_str);
+    if ($input_script eq "") {
+        Warningf("Upgrade from empty script in tx %s", $tx->hash_str);
         return undef;
     }
     # Can we reliable get pubkey or scripthash by the bitcoin input script?
     # In particular, how can we distinguish "push <serialized-script>" for P2SH and "push <pubkeyhash>" for P2PKH without unlock-script?
     # Assume the <serialized-script> is longer than 33 bytes.
     # It's not fully reliable but if somebody tries to deceive this algorithm by creating unusually short script
-    # then he will simple lost (burn) his money
+    # then they will simple lost (burn) their money
     if ($input_script =~ /^([\x41-\x48])(??{ ".{" . ord($1) . "}" })\x21(.{33})\z/s) {
         # it's P2PKH: push 72-bytes signature, push 33-bytes pubkey (compressed)
-        Infof("Burn from P2PKH script in tx %s", $tx->hash_str);
+        Infof("Upgrade from P2PKH script in tx %s", $tx->hash_str);
         return hash160(script_by_pubkey($2));
     }
     elsif ($input_script =~ /^([\x41-\x48])(??{ ".{" . ord($1) . "}" })\x41(.{65})\z/s) {
         # it's P2PKH: push 72-bytes signature, push 65-bytes pubkey (uncompressed): legacy but still possible
         # generate output to the address for compressed pubkey
-        Infof("Burn from P2PKH script in tx %s", $tx->hash_str);
+        Infof("Upgrade from P2PKH script in tx %s", $tx->hash_str);
         return hash160(script_by_pubkey(compress_ecc_pubkey($2)));
     }
     elsif ($input_script =~ /^([\x41-\x48])(??{ ".{" . ord($1) . "}" })\z/s) {
         # it's P2PK, push only 72-bytes DER-encoded signature
-        # TODO: fetch pubkey from the locking script?
+        # Pubkey is in the locking script, but we cannot fetch it from the input script.
         # P2PK is deprecated and not allowed by bitcoind anymore
-        Warningf("Burn from P2PK script in tx %s", $tx->hash_str);
+        Warningf("Upgrade from P2PK script in tx %s - unsupported", $tx->hash_str);
         return undef;
     }
     elsif (0) {
         # BTC and QBT scripts are not fully compatible
         # It should work correctly in most cases, but isn't it better deterministic "never" than "almost always"?
         # P2SH script may contains only pushes, and the last one contains the serialized script
-        Infof("Burn from P2SH in tx %s", $tx->hash_str);
+        Infof("Upgrade from P2SH in tx %s", $tx->hash_str);
         my $last_push_data;
         while ($input_script ne "") {
             my $first_byte = unpack("C", substr($input_script, 0, 1));
@@ -349,7 +335,7 @@ sub get_scripthash {
         return hash160($last_push_data);
     }
     else {
-        Warningf("Burn from unknown script in tx %s", $tx->hash_str);
+        Warningf("Upgrade from unknown script in tx %s - unsupported", $tx->hash_str);
         return undef;
     }
     return undef;
