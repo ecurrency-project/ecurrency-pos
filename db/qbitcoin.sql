@@ -50,7 +50,7 @@ CREATE TABLE `txo` (
   FOREIGN KEY (tx_out)     REFERENCES `transaction`   (id) ON DELETE SET NULL,
   FOREIGN KEY (scripthash) REFERENCES `redeem_script` (id) ON DELETE RESTRICT
 );
-CREATE INDEX `tx_out` ON `txo` (tx_out);
+CREATE INDEX `tx_out` ON `txo` (tx_out, scripthash);
 
 CREATE TABLE `tag` (
   id integer NOT NULL AUTO_INCREMENT PRIMARY KEY,
