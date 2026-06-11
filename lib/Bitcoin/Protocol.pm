@@ -109,7 +109,20 @@ sub cmd_version {
     my ($data) = @_;
 
     my ($version, $features, $time, $pack_address) = unpack("VQ<Q<a26", $data);
-    Infof("Remote version %u, features 0x%x", $version, $features);
+    # user_agent: var_str after two addresses and the nonce; 1-byte length covers all real-world agents
+    my $software;
+    if (length($data) > 4 + 8 + 8 + 26 + 26 + 8) {
+        my $len = unpack("C", substr($data, 80, 1));
+        if ($len < 0xfd && length($data) >= 81 + $len) {
+            $software = substr($data, 81, $len);
+            # the string is written to logs and to the database, keep only printable ascii
+            $software =~ tr/\x20-\x7e//cd;
+        }
+    }
+    Infof("Remote version %u, features 0x%x, software %s", $version, $features, $software // "unknown");
+    if (defined($software) && ($self->peer->software // "") ne $software) {
+        $self->peer->update(software => $software);
+    }
     $self->send_message("verack", "");
     $self->greeted = 1;
     return 0;

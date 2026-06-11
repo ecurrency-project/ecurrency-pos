@@ -925,6 +925,7 @@ sub peer_info {
             addrlocal   => $connection->my_ip . ":" . $connection->my_port,
             inbound     => $connection->direction == DIR_IN ? TRUE : FALSE,
             protocol    => $connection->type,
+            software    => $peer->software // "",
             network     => "ipv4",
             createtime  => $connection->state_time,
             bytessent   => $connection->bytes_sent,

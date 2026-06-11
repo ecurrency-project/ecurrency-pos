@@ -5,10 +5,11 @@ use strict;
 # TCP exchange with a peer
 # Single connection
 # Commands:
-# >> version <version:4 features:8 time:8 my_address:26 nonce:8>
+# >> version <version:4 features:8 time:8 my_address:26 nonce:8 software:1+n>
 #    my_address: features:8 addr:16 port:2 (the address the node advertises for incoming connections)
-#    nonce: random session id, used to detect duplicate connections with the same node (optional,
-#    old nodes do not send it; unknown trailing data in "version" must be ignored)
+#    nonce: random session id, used to detect duplicate connections with the same node
+#    software: 1-byte length + string, name and version of the node software (see SOFTWARE, as BIP14)
+#    nonce and software are optional (old nodes do not send them), unknown trailing data must be ignored
 # << verack <options>
 # >> ihave <time> <weight> <hash>
 # << sendblock <hash>
@@ -83,7 +84,7 @@ sub my_nonce {
 
 sub startup {
     my $self = shift;
-    my $version = pack("VQ<Q<a26a8", PROTOCOL_VERSION, PROTOCOL_FEATURES, time(), $self->pack_my_address, my_nonce());
+    my $version = pack("VQ<Q<a26a8C/a*", PROTOCOL_VERSION, PROTOCOL_FEATURES, time(), $self->pack_my_address, my_nonce(), SOFTWARE);
     $self->send_message("version", $version);
     return 0;
 }
@@ -124,6 +125,16 @@ sub cmd_version {
     if (length($data) >= 20 + 26 + 8) {
         $nonce = substr($data, 20 + 26, 8);
     }
+    # Optional software name and version (see SOFTWARE), 1-byte length + string after the nonce
+    my $software;
+    if (length($data) >= 20 + 26 + 8 + 1) {
+        my $len = unpack("C", substr($data, 54, 1));
+        if (length($data) >= 55 + $len) {
+            $software = substr($data, 55, $len);
+            # the string is written to logs and to the database, keep only printable ascii
+            $software =~ tr/\x20-\x7e//cd;
+        }
+    }
     if ($self->check_duplicate_connection($nonce) != 0) {
         return -1;
     }
@@ -145,6 +156,11 @@ sub cmd_version {
             $self->peer($peer);
             $self->connection->peer($peer);
         }
+    }
+    Infof("Peer %s greeted: version %u, features 0x%x, software %s",
+        $self->peer->id, $protocol_version, $protocol_features, $software // "unknown");
+    if (defined($software) && ($self->peer->software // "") ne $software) {
+        $self->peer->update(software => $software);
     }
     $self->request_btc_blocks() if UPGRADE_POW && !upgrade_finished() && !btc_synced();
     $self->request_mempool if blockchain_synced() && !mempool_synced() && (!UPGRADE_POW || btc_synced());

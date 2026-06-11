@@ -852,7 +852,7 @@ sub cmd_getnetworkinfo {
     }
     return $self->response_ok({
         version         => VERSION,
-        subversion      => "/QBitcoinCore:0.1/",
+        subversion      => SOFTWARE,
         protocolversion => QBitcoin::Protocol->PROTOCOL_VERSION,
         connections_in  => $connect_in,
         connections_out => $connect_out,
@@ -1257,6 +1257,7 @@ Result:
     "minping" : n,                    (numeric) minimum observed ping time (if any at all)
     "inbound" : true|false,           (boolean) Inbound (true) or Outbound (false)
     "protocol" : "str",               (string) Protocol (qbitcoin, bitcoin)
+    "software" : "str",               (string) Name and version of the peer software (user agent)
   },
 ]
 
@@ -1274,6 +1275,7 @@ sub cmd_getpeerinfo {
             addrlocal   => $connection->my_ip . ":" . $connection->my_port,
             inbound     => $connection->direction == DIR_IN ? TRUE : FALSE,
             protocol    => $connection->type,
+            software    => $peer->software // "",
             network     => "ipv4",
             createtime  => $connection->state_time,
             bytessent   => $connection->bytes_sent,
