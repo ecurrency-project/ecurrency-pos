@@ -88,13 +88,13 @@ sub make_out_join {
 }
 
 sub my_txo_by_address {
-    my ($my_txo) = @_;
+    my ($my_txo, $timeslot) = @_;
     if (@$my_txo == 1) {
         # The most common case, only one my_txo
         # Weight is not important here, so use 1
         return [ $my_txo->[0]->scripthash, $my_txo->[0]->value, 1 ];
     }
-    my $time = timeslot(time());
+    my $time = $timeslot // timeslot(time());
     my %my;
     foreach my $my_txo (@$my_txo) {
         my $my = $my{$my_txo->scripthash} //= [ 0, 0 ];
@@ -109,9 +109,9 @@ sub my_txo_by_address {
 }
 
 sub make_out_separate {
-    my ($reward, $my_txo) = @_;
+    my ($reward, $my_txo, $timeslot) = @_;
     @$my_txo or return make_out_join($reward, $my_txo);
-    my ($my_best) = my_txo_by_address($my_txo);
+    my ($my_best) = my_txo_by_address($my_txo, $timeslot);
     @$my_txo = grep { $_->scripthash eq $my_best->[0] } @$my_txo;
     return QBitcoin::TXO->new_txo(
         value      => $my_best->[1] + $reward,
@@ -120,14 +120,14 @@ sub make_out_separate {
 }
 
 sub make_out_union {
-    my ($reward, $my_txo) = @_;
+    my ($reward, $my_txo, $timeslot) = @_;
     my @my;
     if (!@$my_txo) {
         # Reward to all stake addresses in equal parts
         @my = map { [ scalar($_->scripthash), 0, 1 ] } stake_address();
     }
     else {
-        @my = my_txo_by_address($my_txo);
+        @my = my_txo_by_address($my_txo, $timeslot);
     }
     my $total_weight = sum0 map { $_->[2] } @my;
     my @out;
@@ -154,7 +154,7 @@ sub make_out_union {
 }
 
 sub make_stake_tx {
-    my ($reward, $block_sign_data) = @_;
+    my ($reward, $block_sign_data, $timeslot) = @_;
     my @my_txo = grep { txo_confirmed($_) } QBitcoin::TXO->staked_utxo();
     my $reward_to = $config->{reward_to} // "union";
     my @out;
@@ -162,10 +162,10 @@ sub make_stake_tx {
         @out = make_out_join($reward, \@my_txo);
     }
     elsif ($reward_to eq "separate") {
-        @out = make_out_separate($reward, \@my_txo);
+        @out = make_out_separate($reward, \@my_txo, $timeslot);
     }
     elsif ($reward_to eq "union") {
-        @out = make_out_union($reward, \@my_txo);
+        @out = make_out_union($reward, \@my_txo, $timeslot);
     }
     elsif ($reward_to eq "none") {
         return undef;
@@ -201,6 +201,15 @@ sub generate {
     if ($timeslot < genesis_time) {
         die "Genesis time " . genesis_time . " is in future\n";
     }
+    # A best-branch switch may have filled a slot that was empty before the current
+    # timeslot with a block received from a peer (a weak validator can grab the smoothed
+    # reward this way). Try once to generate our own block for that slot and height; if our
+    # stake yields a heavier branch it switches over on weight, then we fall through and
+    # build the block for the current timeslot on top of it.
+    if (defined(my $level = QBitcoin::Generate::Control->generate_level)) {
+        QBitcoin::Generate::Control->generate_level(undef); # one contest attempt per filled slot
+        $class->contest_level($level, $timeslot);
+    }
     my $prev_block;
     my $height = QBitcoin::Block->blockchain_height() // -1;
     if ($height >= 0) {
@@ -230,6 +239,41 @@ sub generate {
         }
     }
     $height++;
+    return $class->_generate($timeslot, $height, $prev_block);
+}
+
+# Try to generate our own block at the given height to contest a block that filled a
+# previously empty slot. The block at $level and its parent are taken from the current best
+# branch; we build at the contested block's own (past) timeslot, not the current one, so it
+# competes for the same slot. If the result is not a heavier branch, _generate() drops it.
+sub contest_level {
+    my $class = shift;
+    my ($level, $timeslot) = @_;
+    $level >= 1
+        or return; # genesis has no slot to contest
+    my $contested = QBitcoin::Block->best_block($level)
+        or return;
+    my $prev_block = QBitcoin::Block->best_block($level - 1)
+        or return;
+    # Only contest a block received from a peer, and only if its slot is in the past:
+    # a block in the current timeslot is handled by the normal generation path below.
+    $contested->received_from
+        or return;
+    timeslot($contested->time) < $timeslot
+        or return;
+    # Generate in the latest past slot (the previous one), not the contested block's own
+    # slot: a later slot gives our stake more weight and a better chance to outweigh the
+    # branch. Use only the contested branch's transactions (the $contest flag), not the
+    # mempool, so the mempool stays available for the current-timeslot block on top -
+    # otherwise our branch could end up without a current-slot block while the contested
+    # branch gets one and so weighs more.
+    Debugf("Contest block %s height %u from past slot %u", $contested->hash_str, $level, timeslot($contested->time));
+    return $class->_generate($timeslot - BLOCK_INTERVAL, $level, $prev_block, 1);
+}
+
+sub _generate {
+    my $class = shift;
+    my ($timeslot, $height, $prev_block, $contest) = @_;
     my $upgraded_total = $prev_block ? $prev_block->upgraded : 0;
     my $upgrade_level = level_by_total($upgraded_total);
     foreach my $coinbase (QBitcoin::Coinbase->get_new($timeslot)) {
@@ -237,10 +281,10 @@ sub generate {
         QBitcoin::Transaction->new_coinbase($coinbase, $upgrade_level);
     }
     # Just get upper limit for the stake tx size
-    my $stake_tx = make_stake_tx("0e0", "");
+    my $stake_tx = make_stake_tx("0e0", "", $timeslot);
     my $size = $stake_tx ? $stake_tx->size : 0;
 
-    my @transactions = QBitcoin::Mempool->choose_for_block($size, $timeslot, $prev_block, $stake_tx && $stake_tx->in);
+    my @transactions = QBitcoin::Mempool->choose_for_block($size, $timeslot, $prev_block, $stake_tx && $stake_tx->in, $contest);
     if (!@transactions && ($timeslot - genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS != 0) {
         return;
     }
@@ -274,7 +318,7 @@ sub generate {
         # Generate new stake_tx with correct output value
         my $block_sign_data = $prev_block ? $prev_block->hash : ZERO_HASH;
         $block_sign_data .= $_->hash foreach @transactions;
-        $stake_tx = make_stake_tx($reward, $block_sign_data);
+        $stake_tx = make_stake_tx($reward, $block_sign_data, $timeslot);
         Infof("Generated stake tx %s with input amount %lu, consume %lu fee", $stake_tx->hash_str,
             sum0(map { $_->{txo}->value } @{$stake_tx->in}), -$stake_tx->fee);
         # It's possible that the $stake_tx has no my_txo, so it may be not unique, already received or pending
@@ -315,7 +359,7 @@ sub generate {
     $generated->merkle_root = $generated->calculate_merkle_root();
     $generated->hash = $generated->calculate_hash();
     $generated->add_tx($_) foreach @transactions;
-    QBitcoin::Generate::Control->generated_time($time);
+    QBitcoin::Generate::Control->generated_time($timeslot);
     Debugf("Generated block %s height %u weight %Lu, %u transactions",
         $generated->hash_str, $height, $generated->weight, scalar(@transactions));
     if ($generated->receive()) {

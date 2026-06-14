@@ -15,14 +15,20 @@ use QBitcoin::Transaction;
 
 sub choose_for_block {
     my $class = shift;
-    my ($size, $block_time, $prev_block, $can_consume) = @_;
+    my ($size, $block_time, $prev_block, $can_consume, $branch_only) = @_;
     my $block_height = $prev_block ? $prev_block->height+1 : 0;
     my $upgraded_total = $prev_block ? $prev_block->upgraded : 0;
-    my @mempool =
-        grep { defined($_->min_tx_block_height) && $_->min_tx_block_height <= $block_height &&
-               defined($_->min_tx_time) && $_->min_tx_time <= $block_time }
-            QBitcoin::Transaction->mempool_list();
-    Debugf("Mempool: %s", join(',', map { $_->hash_str } @mempool)) if @mempool;
+    # $branch_only: take transactions only from the branch on top of $prev_block, not from
+    # the mempool. Used when contesting a block in a past slot, so the mempool stays free
+    # for the block in the current timeslot built on top (see QBitcoin::Generate).
+    my @mempool;
+    if (!$branch_only) {
+        @mempool =
+            grep { defined($_->min_tx_block_height) && $_->min_tx_block_height <= $block_height &&
+                   defined($_->min_tx_time) && $_->min_tx_time <= $block_time }
+                QBitcoin::Transaction->mempool_list();
+        Debugf("Mempool: %s", join(',', map { $_->hash_str } @mempool)) if @mempool;
+    }
     if ($block_height) {
         for (my $block = $prev_block->next_block; $block; $block = $block->next_block) {
             push @mempool, grep { $_->fee >= 0 } @{$block->transactions};

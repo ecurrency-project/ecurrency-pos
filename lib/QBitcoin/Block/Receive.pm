@@ -192,6 +192,8 @@ sub receive {
             $new_best->hash_str, $new_best->height, $self->weight, $self->best_weight);
     }
 
+    my $old_tip_slot = defined($HEIGHT) ? timeslot($best_block[$HEIGHT]->time) : -1;
+
     # reset all txo in the current best branch (started from the fork block) as unspent;
     # then set output in all txo in the new branch and check it against possible double-spend
     for (my $bl = $class->best_block($HEIGHT // $new_best->height); $bl && $bl->height >= $new_best->height; $bl = $bl->prev_block_load) {
@@ -241,8 +243,22 @@ sub receive {
         QBitcoin::Block->delete_by(height => { '>=' => $new_best->height });
         QBitcoin::Block->max_db_height($new_best->height-1);
     }
+    # While installing the new branch, find its lowest block in a slot later than our
+    # previous best tip: that slot was empty in our branch, so its block is a candidate to
+    # contest (a weak validator may have grabbed the smoothed reward by filling it back
+    # in time). Its height is handed to QBitcoin::Generate via generate_level so the next
+    # generate() pass tries to contest it on weight. Done structurally here (no time or
+    # generation logic) to keep receive() isolated; generate() decides whether the slot is
+    # actually in the past and worth contesting.
+    my $contest_level;
     for (my $bl = $new_best; $bl; $bl = $bl->next_block) {
+        if (!defined($contest_level) && timeslot($bl->time) > $old_tip_slot) {
+            $contest_level = $bl->height;
+        }
         $best_block[$bl->height] = $bl;
+    }
+    if (blockchain_synced() && !$loaded) {
+        QBitcoin::Generate::Control->generate_level($contest_level);
     }
 
     # Notify about confirmed transactions to tracked addresses
