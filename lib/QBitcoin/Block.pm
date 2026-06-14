@@ -1,6 +1,7 @@
 package QBitcoin::Block;
 use warnings;
 use strict;
+use feature 'state';
 
 use QBitcoin::Const;
 use QBitcoin::ORM qw(:types);
@@ -165,8 +166,11 @@ sub static_reward {
     my ($prev_block, $time) = @_;
     my $static_reward = 0;
     if ($prev_block) {
-        if (!UPGRADE_POW || $prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped(timeslot($time))) {
-            $static_reward = int(STATIC_REWARD / 2**int($prev_block->height / REWARD_HALVING));
+        my $timeslot = timeslot($time);
+        if (!UPGRADE_POW || $prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped($timeslot)) {
+            state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
+            $static_reward = int(STATIC_REWARD / 2**int(($timeslot - $genesis_time) / BLOCK_INTERVAL / REWARD_HALVING));
+            $static_reward *= ($timeslot - $prev_block->time) / BLOCK_INTERVAL;
         }
     }
     return $static_reward;
