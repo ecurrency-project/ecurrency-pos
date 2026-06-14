@@ -8,7 +8,7 @@ use constant GENESIS_BLOCK_HASH => "";
 use constant GENESIS_BLOCK_HASH_TESTNET => "";
 use constant QBT_BURN_HASH      => pack("H*", "fe5205472fb87124923f4be64292ef289478b06d"); # 1QBitcoin1QBitcoin1QBitcoin1pSAg3e
 use constant QBT_BURN_SCRIPT    => OP_DUP . OP_HASH160 . pack("C", length(QBT_BURN_HASH)) . QBT_BURN_HASH . OP_EQUALVERIFY . OP_CHECKSIG;
-use constant VERSION            => "0.2";
+use constant VERSION            => "0.1";
 
 use constant QBITCOIN_CONST => {
     VERSION                 => VERSION,
