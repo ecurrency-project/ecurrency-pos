@@ -29,7 +29,7 @@ RUN cpan -i Encode::Base58::GMP Math::GMPz Crypt::PK::ECC::Schnorr Crypt::PQClea
 RUN apk add --no-cache perl-test-mockmodule
 COPY . /qbitcoin
 RUN cd /qbitcoin; make test || exit 1
-RUN cd /qbitcoin/admin; make || exit 1
+RUN cd /qbitcoin/admin; CI=true make || exit 1
 RUN cd /qbitcoin; rm -rf test systemd Dockerfile Makefile admin/Makefile admin/src admin/node_modules
 RUN apk del --no-cache perl-test-mockmodule
 
