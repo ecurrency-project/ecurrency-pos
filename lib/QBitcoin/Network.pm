@@ -1,6 +1,7 @@
 package QBitcoin::Network;
 use warnings;
 use strict;
+use feature 'state';
 
 use Time::HiRes;
 use Socket;
@@ -136,7 +137,10 @@ sub main_loop {
     $generate //= !!QBitcoin::TXO->staked_utxo;
 
     if ($config->{genesis} && !QBitcoin::Block->blockchain_time) {
-        QBitcoin::Generate->generate($config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME);
+        my $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
+        $genesis_time % BLOCK_INTERVAL == 0
+            or die "Genesis time $genesis_time is not a multiple of block interval " . BLOCK_INTERVAL;
+        QBitcoin::Generate->generate($genesis_time);
     }
 
     my $listen_socket = $class->bind_addr;
@@ -163,16 +167,25 @@ sub main_loop {
             QBitcoin::Produce->produce() if $config->{produce};
             if ($generate) {
                 my $time = time();
+                my $timeslot = timeslot($time);
                 my $generated_time = QBitcoin::Generate->generated_time;
-                if (!$generated_time || timeslot($time) > timeslot($generated_time)) {
-                    if ($config->{genesis} && $time > QBitcoin::Block->blockchain_time + BLOCK_INTERVAL*FORCE_BLOCKS) {
-                        $time = QBitcoin::Block->blockchain_time + BLOCK_INTERVAL*FORCE_BLOCKS;
+                my $blockchain_time = QBitcoin::Block->blockchain_time // 0;
+                if (!$generated_time || $timeslot > timeslot($generated_time)) {
+                    state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
+                    my $next_forced = $blockchain_time - ($blockchain_time - $genesis_time) % (BLOCK_INTERVAL*FORCE_BLOCKS) + BLOCK_INTERVAL*FORCE_BLOCKS;
+                    if ($config->{genesis} && $timeslot > $next_forced) {
+                        $timeslot = $next_forced;
                     }
-                    QBitcoin::Generate->generate($time);
+                    if ($timeslot <= $next_forced) {
+                        QBitcoin::Generate->generate($timeslot);
+                        $blockchain_time = QBitcoin::Block->blockchain_time // 0;
+                    }
+                    else {
+                        blockchain_synced(0);
+                    }
                 }
 
                 my $now = Time::HiRes::time(); # generate() takes some time, get new timestamp
-                my $blockchain_time = QBitcoin::Block->blockchain_time // 0;
                 my $time_next_block = timeslot($blockchain_time > $now ? $blockchain_time : $now) + BLOCK_INTERVAL;
                 $timeout = $time_next_block - $now;
             }

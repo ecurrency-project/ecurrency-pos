@@ -47,6 +47,14 @@ sub validate {
         }
     }
     state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
+    if ($block->prev_block) {
+        my $timeslot = int(($block->time - $genesis_time) / BLOCK_INTERVAL);
+        my $prev_timeslot = int(($block->prev_block->time - $genesis_time) / BLOCK_INTERVAL);
+        $timeslot > $prev_timeslot
+            or return "Block time " . $block->time . " is not after previous block time " . $block->prev_block->time;
+        int($prev_timeslot / FORCE_BLOCKS) == int(($timeslot - 1) / FORCE_BLOCKS)
+            or return "Forced block missed";
+    }
     if (!@{$block->transactions} && (timeslot($block->time) - $genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS) {
         return "Empty block";
     }
