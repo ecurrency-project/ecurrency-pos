@@ -411,7 +411,11 @@ sub wallet_tx_create {
     ref($content) eq "HASH" && ref($content->{inputs}) eq "ARRAY" && ref($content->{outputs}) eq "ARRAY"
         or return $self->http_response(400, "Invalid request body");
     @{$content->{inputs}}  or return $self->http_response(400, "No inputs specified");
+    @{$content->{inputs}} <= MAX_INPUTS_PER_TX
+        or return $self->http_response(400, "Too many inputs specified");
     @{$content->{outputs}} or return $self->http_response(400, "No outputs specified");
+    @{$content->{outputs}} <= MAX_OUTPUTS_PER_TX
+        or return $self->http_response(400, "Too many outputs specified");
 
     # Construct inputs
     my @in;

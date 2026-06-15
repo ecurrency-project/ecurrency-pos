@@ -96,6 +96,8 @@ sub load_siglist {
     my ($stored) = @_;
     my $data = Bitcoin::Serialized->new($stored);
     my $num = $data->get_varint();
+    $num < MAX_SIGLIST_SIZE
+        or die "Too many signatures in siglist: $num\n";
     my @siglist = map { $data->get_string() } 1 .. $num;
     return \@siglist;
 }

@@ -638,17 +638,23 @@ sub serialize_input_for_sign {
 sub deserialize_siglist {
     my $data = shift;
     my $num = $data->get_varint() // return undef;
+    $num <= MAX_SIGLIST_SIZE or return undef;
     my @siglist = map { $data->get_string() // return undef } 1 .. $num;
     return \@siglist;
 }
 
 sub deserialize_input {
     my $data = shift;
+    my $tx_out = $data->get(32) // return undef;
+    my $num = $data->get_varint() // return undef;
+    $num < MAX_OUTPUTS_PER_TX or return undef;
+    my $siglist = deserialize_siglist($data) // return undef;
+    my $redeem_script = $data->get_string() // return undef;
     return {
-        tx_out        => ( $data->get(32) // return undef ),
-        num           => ( $data->get_varint() // return undef ),
-        siglist       => ( deserialize_siglist($data) // return undef ),
-        redeem_script => ( $data->get_string() // return undef ),
+        tx_out        => $tx_out,
+        num           => $num,
+        siglist       => $siglist,
+        redeem_script => $redeem_script,
     };
 }
 
@@ -697,8 +703,12 @@ sub deserialize {
     my $tx_type = unpack("c", $data->get(1));
     my $token_hash;
     $token_hash = $data->get_string() if $tx_type == TX_TYPE_TOKENS;
-    my @input  = map { deserialize_input($data)  // return undef } 1 .. ($data->get_varint // return undef);
-    my @output = map { deserialize_output($data) // return undef } 1 .. ($data->get_varint // return undef);
+    my $inputs = $data->get_varint // return undef;
+    $inputs <= MAX_INPUTS_PER_TX or return undef;
+    my @input  = map { deserialize_input($data)  // return undef } 1 .. $inputs;
+    my $outputs = $data->get_varint // return undef;
+    $outputs <= MAX_OUTPUTS_PER_TX or return undef;
+    my @output = map { deserialize_output($data) // return undef } 1 .. $outputs;
     my $up;
     my $upgrade_level;
     if ($tx_type == TX_TYPE_COINBASE) {

@@ -445,6 +445,10 @@ sub cmd_createrawtransaction {
     my $self = shift;
     my $inputs  = $self->args->[0];
     my $outputs = $self->args->[1];
+    @$inputs <= MAX_INPUTS_PER_TX
+        or return $self->response_error("Too many inputs: " . @$inputs . " > " . MAX_INPUTS_PER_TX, ERR_INVALID_REQUEST);
+    @$outputs <= MAX_OUTPUTS_PER_TX
+        or return $self->response_error("Too many outputs: " . @$outputs . " > " . MAX_OUTPUTS_PER_TX, ERR_INVALID_REQUEST);
     my @in  = map {{ txo => QBitcoin::TXO->new_txo(tx_in => pack("H*", $_->{txid}), num => $_->{vout}+0) }} @$inputs;
     my @out;
     my $token_hash;
