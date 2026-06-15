@@ -52,8 +52,12 @@ sub validate {
         my $prev_timeslot = int(($block->prev_block->time - $genesis_time) / BLOCK_INTERVAL);
         $timeslot > $prev_timeslot
             or return "Block time " . $block->time . " is not after previous block time " . $block->prev_block->time;
-        int($prev_timeslot / FORCE_BLOCKS) == int(($timeslot - 1) / FORCE_BLOCKS)
-            or return "Forced block missed";
+        unless (int($prev_timeslot / FORCE_BLOCKS) == int(($timeslot - 1) / FORCE_BLOCKS)) {
+            $timeslot < 1782864000 # 2026-07-01
+                or return "Forced block missed";
+            Warningf("Block %s time %u is not in the next timeslot after previous block %s time %u",
+                $block->hash_str, $block->time, $block->prev_block->hash_str, $block->prev_block->time);
+        }
     }
     if (!@{$block->transactions} && (timeslot($block->time) - $genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS) {
         return "Empty block";
