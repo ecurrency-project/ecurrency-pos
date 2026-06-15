@@ -49,7 +49,9 @@ sub make_sign {
         $sign_alg = $pk_alg[0];
     }
     my $sighash_type = SIGHASH_ALL;
-    my $signature = signature($self->sign_data($input_num, $sighash_type), $address, $sign_alg, $sighash_type);
+    my $sign_data = $self->sign_data($input_num, $sighash_type)
+        or die "Can't get sign data for input $input_num";
+    my $signature = signature($sign_data, $address, $sign_alg, $sighash_type);
     $in->{txo}->set_redeem_script($redeem_script);
     my $script_type = QBitcoin::RedeemScript->script_type($redeem_script);
     if ($script_type eq "P2PKH") {

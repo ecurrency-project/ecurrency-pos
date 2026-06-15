@@ -83,7 +83,9 @@ sub cmd_checksigadd($) {
 sub check_tx_signature {
     my ($pubkey, $signature, $tx, $input_num) = @_;
     my $sighash_type = unpack('C', $signature);
-    return check_sig($tx->sign_data($input_num, $sighash_type), substr($signature, 1), $pubkey);
+    my $sign_data = $tx->sign_data($input_num, $sighash_type)
+        or return 0;
+    return check_sig($sign_data, substr($signature, 1), $pubkey);
 }
 
 1;

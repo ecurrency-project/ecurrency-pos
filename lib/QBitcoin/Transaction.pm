@@ -538,7 +538,8 @@ sub sign_data {
             $data .= defined($self->out->[$input_num]) ? serialize_output($self->out->[$input_num]) : "";
         }
         elsif ($sighash_type != SIGHASH_NONE) {
-            die "Unsupported sighash type $sighash_type";
+            Warningf("Unsupported sighash type %s in transaction %s", $sighash_type, $self->hash_str);
+            return undef;
         }
         # We do not need to sign coinbase transactions
         $self->{sign_data}->[$sighash_type] = $data;
