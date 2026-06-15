@@ -4,7 +4,7 @@ clean:
 	rm -rf www
 
 install:
-	pnpm install
+	pnpm install --ignore-scripts
 	pnpm build
 
 dev:
