@@ -17,7 +17,7 @@ RUN apk add --no-cache \
     perl-role-tiny perl-tie-ixhash perl-cryptx
 
 RUN apk add --no-cache \
-    perl-dev make clang gmp-dev \
+    perl-dev make clang build-base gmp-dev \
     openssl-dev curl wget git pnpm
 
 # pqclean does not build with alpine gcc due to musl; clang is ok
