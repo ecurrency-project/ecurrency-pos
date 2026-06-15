@@ -518,7 +518,9 @@ sub sign_data {
     my ($input_num, $sighash_type) = @_;
 
     my $data;
-    if (!defined($data = $self->{sign_data}->[$sighash_type])) {
+    my $per_input = ($sighash_type & SIGHASH_ANYONECANPAY) || $sighash_type == SIGHASH_SINGLE;
+    my $cached_data = $per_input ?  \$self->{sign_data}->[$sighash_type]->[$input_num] : \$self->{sign_data}->[$sighash_type];
+    if (!defined($data = $$cached_data)) {
         $data = pack("C", $self->tx_type);
         if ($sighash_type & SIGHASH_ANYONECANPAY) {
             # Only the current input is signed, not all inputs
@@ -542,7 +544,7 @@ sub sign_data {
             return undef;
         }
         # We do not need to sign coinbase transactions
-        $self->{sign_data}->[$sighash_type] = $data;
+        $$cached_data = $data;
     }
     if ($self->is_stake) {
         # It's stake tx which signs block, add block info
