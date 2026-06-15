@@ -81,9 +81,14 @@ sub difficulty {
     my $self = shift;
     # https://bitcoin.stackexchange.com/questions/5838/how-is-difficulty-calculated
     # https://www.oreilly.com/library/view/mastering-bitcoin/9781491902639/ch08.html#difficulty_bits
-    return ($self->bits & 0xff000000) < 0x1e000000 ?
-        0xffff / ($self->bits & 0xffffff) * (1 << (8*(29 - ($self->bits >> 24)))) :
-        0xffff / ($self->bits & 0xffffff) / (1 << (8*(($self->bits >> 24) - 29)));
+    # difficulty = difficulty_1_target / current_target = (0xffff/coef) * 256^(29-expo)
+    # Use floating-point 2**N rather than integer "1 << N": for high-difficulty blocks
+    # (small exponent) the shift count reaches >= 64 and "1 << N" silently overflows to 0
+    # on a 64-bit perl, which would make a real bitcoin block contribute zero chainwork;
+    # for a large exponent the divisor "1 << N" becomes 0 and crashes with division by zero.
+    my $coef = $self->bits & 0xffffff;
+    my $expo = $self->bits >> 24;
+    return $coef ? 0xffff / $coef * 2**(8*(29 - $expo)) : 0;
 }
 
 sub validate {
@@ -91,6 +96,15 @@ sub validate {
     # compare hash with bits
     my $bits_coef = $self->bits & 0xffffff;
     my $bits_expo = $self->bits >> 24;
+    # Reject nonsensical "bits" before using them to index into the hash below.
+    # A valid bitcoin target keeps the coefficient within 32 bytes and is non-zero;
+    # the checks below read a 4-byte window at offset (32-expo-4), which only stays
+    # inside the 32-byte hash for 4 <= expo <= 31. Out-of-range values are garbage
+    # (and would otherwise read past the string / compare against an empty pattern).
+    if ($bits_coef == 0 || $bits_expo < 4 || $bits_expo > 31) {
+        Warningf("PoW bits out of range: block hash %s, bits %u, coef %u, expo %u", unpack("H*", reverse $self->hash), $self->bits, $bits_expo, $bits_coef);
+        return 0;
+    }
     my $zero_bytes = 32-$bits_expo;
     # hash must have first 8*(32-$bits_expo) zero bits
     if (substr($self->hash, -$zero_bytes) ne "\x00" x $zero_bytes) {
