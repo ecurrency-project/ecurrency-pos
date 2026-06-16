@@ -554,10 +554,13 @@ sub unconfirm {
 
     $self->hash eq $best_block[$HEIGHT]->hash
         or die "Can unconfirm only best block";
+    my $height = $HEIGHT;
     foreach my $tx (reverse @{$self->transactions}) {
         $tx->unconfirm($self);
     }
     $self->free();
+    delete $best_block[$height]
+        if $best_block[$height] && refaddr($best_block[$height]) == refaddr($self);
     $HEIGHT--;
 }
 
