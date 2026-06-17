@@ -35,7 +35,6 @@ my @best_block;
 my %descendant;
 my $HEIGHT;
 my $MIN_INCORE_HEIGHT;
-my $best_is_generated = 0;
 
 END {
     # free structures
@@ -61,10 +60,6 @@ sub best_block {
     my ($block_height) = @_;
     $block_height //= $HEIGHT;
     return defined($block_height) ? $best_block[$block_height] : undef;
-}
-
-sub best_is_generated {
-    return $best_is_generated;
 }
 
 sub min_incore_height {
@@ -296,8 +291,6 @@ sub receive {
             # Do not announce old blocks loaded from the local database or generated
             $self->announce_to_peers();
         }
-        # This flag is used for regenerate block on receive new transaction
-        $best_is_generated = $self->received_from ? 0 : 1;
     }
 
     my $old_height = $HEIGHT;
