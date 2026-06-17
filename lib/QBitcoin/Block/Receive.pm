@@ -252,7 +252,7 @@ sub receive {
         }
         $best_block[$bl->height] = $bl;
     }
-    if (blockchain_synced() && !$loaded) {
+    if (blockchain_synced() && !$loaded && $contest_level) {
         QBitcoin::Generate::Control->generate_level($contest_level);
     }
 
@@ -285,6 +285,10 @@ sub receive {
     if (blockchain_synced()) {
         my $timeslot = timeslot(time());
         if ($timeslot > timeslot($new_best->time)) {
+            QBitcoin::Generate::Control->generate_new();
+        }
+        elsif ($self->received_from && $old_best && $old_best->prev_block && $self->prev_block
+               && $self->prev_block->weight > $old_best->prev_block->weight) {
             QBitcoin::Generate::Control->generate_new();
         }
         if ($self->received_from || timeslot($self->time) >= $timeslot) {

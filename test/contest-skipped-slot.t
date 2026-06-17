@@ -69,12 +69,14 @@ $generate_module->mock('_generate', sub {
     return undef;
 });
 my $now_slot = timeslot(time());
-QBitcoin::Generate->contest_level(1, $now_slot);
-is(scalar(@gen), 1, "contest_level builds exactly one block");
+QBitcoin::Generate::Control->generate_level(1);
+QBitcoin::Generate->generate($now_slot);
+is(scalar(@gen), 2, "generate builds two blocks");
 is($gen[0][0], $now_slot - BLOCK_INTERVAL, "...in the previous slot (more stake weight), not a2's slot");
 is($gen[0][1], 1, "...at a2's height");
 is($gen[0][2], "a1", "...on a1, the block before the filled slot");
 ok($gen[0][3], "...using only the contested branch's transactions");
+is(QBitcoin::Generate::Control->generate_level, undef, "generate_level cleared after generate()");
 
 # Switching to b2, which is in the same slot as our tip a2 (not a later one), is a reorg
 # we cannot outweigh with our own block for that slot: generate_level must be cleared.
