@@ -136,6 +136,24 @@ sub notify {
     _notify_channel($BASE_CHANNEL, $message);
 }
 
+# Prevent multiply notifying the same transaction in the same timeslot due to micro reorgs
+my $NOTIFY_HEIGHT = -1;
+my %NOTIFIED_TXS;
+
+sub _notified {
+    my ($block_height, $tx) = @_;
+    my $txid = $tx->hash;
+    if ($block_height != $NOTIFY_HEIGHT) {
+        $NOTIFY_HEIGHT = $block_height;
+        %NOTIFIED_TXS = ();
+    }
+    elsif (exists $NOTIFIED_TXS{$txid}) {
+        return 1;
+    }
+    $NOTIFIED_TXS{$txid} = 1;
+    return 0;
+}
+
 sub check_output {
     my $class = shift;
     my ($txo, $tx, $block) = @_;
@@ -143,6 +161,7 @@ sub check_output {
 
     my $my_address = QBitcoin::MyAddress->get_by_hash($txo->scripthash, 1)
         or return;
+    return if $block && _notified($block->height, $tx);
 
     my $timestamp    = $block ? $block->time : time();
     my $address      = $my_address->address // address_by_hash($txo->scripthash);
