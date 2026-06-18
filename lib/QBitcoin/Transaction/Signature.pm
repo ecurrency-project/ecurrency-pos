@@ -21,7 +21,7 @@ sub sign_transaction {
     my $self = shift;
     foreach my $num (0 .. $#{$self->in}) {
         my $in = $self->in->[$num];
-        if (my $address = QBitcoin::MyAddress->get_by_hash($in->{txo}->scripthash)) {
+        if (my $address = QBitcoin::MyAddress->get_by_hash($in->{txo}->scripthash, 0)) {
             $self->make_sign($in, $address, $num);
         }
         else {

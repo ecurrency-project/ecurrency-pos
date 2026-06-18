@@ -141,7 +141,7 @@ sub check_output {
     my ($txo, $tx, $block) = @_;
     return unless $ENABLED;
 
-    my $my_address = QBitcoin::MyAddress->get_by_hash($txo->scripthash)
+    my $my_address = QBitcoin::MyAddress->get_by_hash($txo->scripthash, 1)
         or return;
 
     my $timestamp    = $block ? $block->time : time();
@@ -169,7 +169,7 @@ sub check_block {
 
     foreach my $tx (@{$block->transactions}) {
         foreach my $txo (@{$tx->out}) {
-            $class->check_output($txo, $tx, $block) if $txo->is_my;
+            $class->check_output($txo, $tx, $block);
         }
     }
 }

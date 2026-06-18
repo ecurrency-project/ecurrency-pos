@@ -379,8 +379,7 @@ sub process_request {
                 if (($my_address->staked && !$content->{staked}) || (!$my_address->staked && $content->{staked})) {
                     $my_address->private_key || !$content->{staked}
                         or return $self->http_response(400, "Cannot set watch-only address as staked");
-                    $my_address->update(staked => $content->{staked} ? 1 : 0);
-                    update_my_utxo($my_address);
+                    $my_address->set_staked($content->{staked} ? 1 : 0);
                 }
                 return $self->http_ok({});
             }
@@ -470,7 +469,7 @@ sub wallet_tx_create {
             return $self->http_response(400, "Input " . $txo->tx_in_str . ":" . $txo->num . " already spent");
         }
         $input_amount += $txo->value;
-        my $address = QBitcoin::MyAddress->get_by_hash($txo->scripthash)
+        my $address = QBitcoin::MyAddress->get_by_hash($txo->scripthash, 0)
             or return $self->http_response(400, "Input " . $txo->tx_in_str . ":" . $txo->num . " does not belong to a known address");
         $address->private_key
             or return $self->http_response(400, "No private key for address " . $address->address);

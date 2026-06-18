@@ -12,7 +12,7 @@ use QBitcoin::Address qw(wif_to_pk address_by_pubkey script_by_pubkey script_by_
 use QBitcoin::Tag;
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(my_address stake_address);
+our @EXPORT_OK = qw(my_address stake_address watched_address);
 
 use constant TABLE => 'my_address';
 
@@ -29,13 +29,21 @@ use constant PRIMARY_KEY => 'address';
 mk_accessors(qw(private_key staked algo tag_id));
 
 my $MY_ADDRESS;
-my $MY_HASHES;
 my $STAKE_ADDRESS;
+my $WATCHED_ADDRESS;
+my $MY_HASHES;
+my $WATCH_HASHES;
 my %TAG_CACHE;
+
+sub watched_address {
+    my $class = shift // __PACKAGE__;
+    $WATCHED_ADDRESS //= [ $class->find() ];
+    return wantarray ? @$WATCHED_ADDRESS : $WATCHED_ADDRESS->[0];
+}
 
 sub my_address {
     my $class = shift // __PACKAGE__;
-    $MY_ADDRESS //= [ $class->find() ];
+    $MY_ADDRESS //= [ grep { $_->private_key } $class->watched_address ];
     return wantarray ? @$MY_ADDRESS : $MY_ADDRESS->[0];
 }
 
@@ -43,6 +51,23 @@ sub stake_address {
     my $class = shift // __PACKAGE__;
     $STAKE_ADDRESS //= [ grep { $_->staked } $class->my_address ];
     return wantarray ? @$STAKE_ADDRESS : $STAKE_ADDRESS->[0];
+}
+
+sub set_stake {
+    my $self = shift;
+    my ($value) = @_;
+    return 1 if ($self->staked ? 1 : 0) == ($value ? 1 : 0);
+    return 0 unless $self->private_key;
+    $self->update(staked => $value ? 1 : 0);
+    update_my_utxo($self);
+    if ($STAKE_ADDRESS) {
+        if ($value) {
+            push @$STAKE_ADDRESS, $self;
+        } else {
+            @$STAKE_ADDRESS = grep { $_->address ne $self->address } @$STAKE_ADDRESS;
+        }
+    }
+    return 1;
 }
 
 sub tag {
@@ -116,20 +141,54 @@ sub pubkeyhash {
 sub create {
     my $class = shift;
     my $attr = @_ == 1 ? $_[0] : { @_ };
+    $attr->{address} or die "Missing address";
+    if ($attr->{private_key}) {
+        my $scripthash = scripthash_by_address($attr->{address});
+        if (my $address = $class->get_by_hash($scripthash, 1)) {
+            if ($address->private_key) {
+                Errf("Address %s already exists with private key", $attr->{address});
+                return undef;
+            }
+            else {
+                Infof("Updating watch-only address %s with private key", $attr->{address});
+                $address->update(private_key => $attr->{private_key});
+                push @$MY_ADDRESS, $address if $MY_ADDRESS;
+                if ($attr->{staked}) {
+                    $address->update(staked => 1);
+                    push @$STAKE_ADDRESS, $address if $STAKE_ADDRESS;
+                }
+                if ($MY_HASHES) {
+                    foreach my $scripthash ($address->scripthash) {
+                        $MY_HASHES->{$scripthash} = $address;
+                    }
+                }
+                return $address;
+            }
+        }
+    }
+    elsif ($attr->{staked}) {
+        Errf("Cannot create watch-only address %s with staked flag", $attr->{address});
+        return undef;
+    }
     my $self = QBitcoin::ORM::create($class, $attr);
     if ($self) {
         Infof("Created my address %s", $self->address);
-        push @$MY_ADDRESS, $self if $MY_ADDRESS;
+        if ($WATCHED_ADDRESS) {
+            push @$WATCHED_ADDRESS, $self;
+            push @$MY_ADDRESS, $self if $MY_ADDRESS && $self->private_key;
+            push @$STAKE_ADDRESS, $self if $STAKE_ADDRESS && $self->staked;
+        }
         if ($MY_HASHES) {
             if ($self->private_key) {
                 foreach my $scripthash ($self->scripthash) {
                     $MY_HASHES->{$scripthash} = $self;
+                    $WATCH_HASHES->{$scripthash} = $self;
                 }
             }
             else {
                 # Watch-only: derive scripthash from address string
                 my $scripthash = scripthash_by_address($self->address);
-                $MY_HASHES->{$scripthash} = $self;
+                $WATCH_HASHES->{$scripthash} = $self;
             }
         }
         # Do not forget to load utxo for this address by QBitcoin::Generate->load_address_utxo()
@@ -178,23 +237,25 @@ sub scripthash {
 
 sub get_by_hash {
     my $class = shift;
-    my ($hash) = @_;
+    my ($hash, $include_watchonly) = @_;
     if (!$MY_HASHES) {
         $MY_HASHES = {};
-        foreach my $address (my_address()) {
+        $WATCH_HASHES = {};
+        foreach my $address (watched_address()) {
             if ($address->private_key) {
                 foreach my $scripthash ($address->scripthash) {
                     $MY_HASHES->{$scripthash} = $address;
+                    $WATCH_HASHES->{$scripthash} = $address;
                 }
             }
             else {
                 # Watch-only: derive scripthash from address string
                 my $scripthash = scripthash_by_address($address->address);
-                $MY_HASHES->{$scripthash} = $address;
+                $WATCH_HASHES->{$scripthash} = $address;
             }
         }
     }
-    return $MY_HASHES->{$hash};
+    return $include_watchonly ? $WATCH_HASHES->{$hash} : $MY_HASHES->{$hash};
 }
 
 sub script_by_hash {

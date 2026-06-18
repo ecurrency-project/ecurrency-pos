@@ -1120,6 +1120,9 @@ sub cmd_importprivkey {
     my $pubkey = $privkey->pubkey_by_privkey
         or return $self->response_error("This type of private key is not supported for my_address", ERR_INVALID_ADDRESS_OR_KEY);
     my $address = address_by_pubkey($pubkey, $pk_alg);
+    if (grep { $address eq $_->address } QBitcoin::MyAddress->my_address()) {
+        return $self->response_ok("Private key for address $address already imported");
+    }
     my $my_address = QBitcoin::MyAddress->create({
         private_key => wallet_import_format($private_key),
         address     => $address,
@@ -1159,7 +1162,7 @@ sub cmd_importaddress {
     my $scripthash = scripthash_by_address($address_str);
 
     # Check if already exists
-    if (QBitcoin::MyAddress->get_by_hash($scripthash)) {
+    if (QBitcoin::MyAddress->get_by_hash($scripthash, 1)) {
         return $self->response_ok("Address $address_str is already in the wallet");
     }
 
@@ -1199,7 +1202,7 @@ sub cmd_setaddresstag {
     my $tag_name    = $self->args->[1];
     my $scripthash  = scripthash_by_address($address_str);
 
-    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
+    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash, 1)
         or return $self->response_error("Address not found in wallet", ERR_INVALID_ADDRESS_OR_KEY);
 
     if (defined $tag_name && length $tag_name) {
@@ -1237,7 +1240,7 @@ sub cmd_dumpprivkey {
         or return $self->response_error("This command is disabled", ERR_INVALID_ADDRESS_OR_KEY);
     my $scripthash = scripthash_by_address($self->args->[0])
         or return $self->response_error("The address is not correct", ERR_INVALID_ADDRESS_OR_KEY);
-    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
+    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash, 0)
         or return $self->response_error("Private key is unknown for this address", ERR_INVALID_ADDRESS_OR_KEY);
     return $self->response_ok($my_address->private_key);
 }
@@ -1523,7 +1526,7 @@ Examples:
 sub cmd_listmyaddresses {
     my $self = shift;
     my %list;
-    foreach my $my_address (QBitcoin::MyAddress->my_address) {
+    foreach my $my_address (QBitcoin::MyAddress->watched_address) {
         $list{$my_address->address} = {
             algo      => CRYPT_ALGO_NAMES->{$my_address->algo},
             staked    => $my_address->staked ? TRUE : FALSE,
@@ -1667,15 +1670,14 @@ sub cmd_stakeaddress {
     my ($address) = @{$self->args};
     my $scripthash = scripthash_by_address($self->args->[0])
         or return $self->response_error("The address is not correct", ERR_INVALID_ADDRESS_OR_KEY);
-    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
+    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash, 0)
         or return $self->response_error("The address is not in the wallet", ERR_INVALID_ADDRESS_OR_KEY);
     $my_address->private_key
         or return $self->response_error("Private key is unknown for this address", ERR_INVALID_ADDRESS_OR_KEY);
     if ($my_address->staked) {
         return $self->response_ok("Address $address is already using for staking");
     }
-    $my_address->update( staked => 1 );
-    update_my_utxo($my_address);
+    $my_address->set_stake(1);
     return $self->response_ok("Address $address set for staking");
 }
 
@@ -1702,13 +1704,12 @@ sub cmd_unstakeaddress {
     my ($address) = @{$self->args};
     my $scripthash = scripthash_by_address($self->args->[0])
         or return $self->response_error("The address is not correct", ERR_INVALID_ADDRESS_OR_KEY);
-    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash)
+    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash, 0)
         or return $self->response_error("The address is not in the wallet", ERR_INVALID_ADDRESS_OR_KEY);
     if (!$my_address->staked) {
         return $self->response_ok("Address $address is not using for staking");
     }
-    $my_address->update( staked => 0 );
-    update_my_utxo($my_address);
+    $my_address->set_stake(0);
     return $self->response_ok("Address $address will not be used for staking");
 }
 

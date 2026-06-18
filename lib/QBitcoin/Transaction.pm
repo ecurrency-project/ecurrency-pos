@@ -186,7 +186,7 @@ sub save {
     # Notify about outputs to tracked addresses (mempool event)
     if (QBitcoin::Notify->enabled()) {
         foreach my $txo (@{$self->out}) {
-            QBitcoin::Notify->check_output($txo, $self) if $txo->is_my;
+            QBitcoin::Notify->check_output($txo, $self);
         }
     }
 
