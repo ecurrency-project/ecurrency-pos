@@ -37,8 +37,22 @@ my $peer = QBitcoin::Peer->new(type_id => PROTOCOL_QBITCOIN, ip => "127.0.0.1");
 my $connection = QBitcoin::Connection->new(state => STATE_CONNECTED, peer => $peer);
 $connection->protocol->command = "block";
 
+# receive() locates the last stake-carrying block of the old branch via
+# transactions->[0]->is_stake. The mocked serializer carries only tx_hashes, not transaction
+# objects, so a received block has no transactions; mark "staked" blocks by injecting a stub
+# stake tx into the stored block after it is received. receive() only calls is_stake on it
+# (for the contest reference) and confirm/unconfirm on a reorg.
+{
+    package FakeStakeTx;
+    sub is_stake      { 1 }
+    sub confirm       { }
+    sub unconfirm     { }
+    sub del_from_block { }
+}
+my $stake_tx = bless {}, 'FakeStakeTx';
+
 sub send_blk {
-    my ($height, $hash, $prev_hash, $weight, $self_weight) = @_;
+    my ($height, $hash, $prev_hash, $weight, $self_weight, $staked) = @_;
     my $block = QBitcoin::Block->new(
         time         => GENESIS_TIME + $height * BLOCK_INTERVAL * FORCE_BLOCKS,
         hash         => $hash,
@@ -50,11 +64,16 @@ sub send_blk {
     );
     block_hash($block->hash);
     $connection->protocol->cmd_block($block->serialize);
+    if ($staked) {
+        my $stored = QBitcoin::Block->best_block($height);
+        $stored->transactions([ $stake_tx ]) if $stored && $stored->hash eq $hash;
+    }
 }
 
 # a1 is the genesis-level block; a2 fills the next (previously empty) slot on top of it.
-send_blk(0, "a1", undef, 100, 100);
-send_blk(1, "a2", "a1",  200, 100);
+# Both carry stake (staked => 1), so they anchor the contest reference.
+send_blk(0, "a1", undef, 100, 100, 1);
+send_blk(1, "a2", "a1",  200, 100, 1);
 
 is(QBitcoin::Block->best_block->hash, "a2", "Peer block a2 became best");
 is(QBitcoin::Generate::Control->generate_level, 1, "generate_level flags a2's height (the filled slot)");
@@ -78,10 +97,24 @@ is($gen[0][2], "a1", "...on a1, the block before the filled slot");
 ok($gen[0][3], "...using only the contested branch's transactions");
 is(QBitcoin::Generate::Control->generate_level, undef, "generate_level cleared after generate()");
 
-# Switching to b2, which is in the same slot as our tip a2 (not a later one), is a reorg
-# we cannot outweigh with our own block for that slot: generate_level must be cleared.
-send_blk(1, "b2", "a1", 250, 150);
+# Switching to b2, which is in the same slot as our last staked block a2 (not a later one),
+# is a reorg we cannot outweigh with our own block for that slot: generate_level must stay
+# cleared.
+send_blk(1, "b2", "a1", 250, 150, 1);
 is(QBitcoin::Block->best_block->hash, "b2", "Heavier b2 became best");
-is(QBitcoin::Generate::Control->generate_level, undef, "generate_level cleared when block is not in a later slot than our tip");
+is(QBitcoin::Generate::Control->generate_level, undef, "generate_level cleared when block is not in a later slot than our last staked block");
+
+# The bug this guards against: our own tip can be an EMPTY/forced block in a later slot (our
+# stake coin was too young to add weight). A peer block that fills the slot of our last
+# *staked* block with real stake must still be contested, even though it is not in a slot
+# later than our empty tip. e3 is our empty tip on top of b2 (self_weight 0, no stake weight).
+send_blk(2, "e3", "b2", 250, 0);
+is(QBitcoin::Block->best_block->hash, "e3", "Empty e3 extends the branch and becomes best");
+QBitcoin::Generate::Control->generate_level(undef); # ignore the flag from installing e3
+# p3: heavier peer block at e3's height, carrying real stake. The old-tip-slot rule would
+# skip it (not later than the empty tip e3); the last-staked-slot rule (b2) contests it.
+send_blk(2, "p3", "b2", 310, 60, 1);
+is(QBitcoin::Block->best_block->hash, "p3", "Heavier p3 became best");
+is(QBitcoin::Generate::Control->generate_level, 2, "generate_level flags p3: empty tip e3 must not raise the contest bar");
 
 done_testing();

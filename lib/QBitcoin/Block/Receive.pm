@@ -187,7 +187,20 @@ sub receive {
             $new_best->hash_str, $new_best->height, $self->weight, $self->best_weight);
     }
 
-    my $old_tip_slot = defined($HEIGHT) ? timeslot($best_block[$HEIGHT]->time) : -1;
+    # Reference slot for contesting a filled past slot: the timeslot of the last block in our
+    # OLD branch that actually carried stake weight (self_weight above its bare tx count).
+    # Empty/forced blocks we produced - e.g. when our own stake coin was too young to add any
+    # weight - must NOT raise this bar: otherwise a peer block that filled a later slot with
+    # real stake (riding a heavier parent) would sit at or below our empty tip's slot and so
+    # never be contested. Walk the old branch from its tip down to the fork; if none carried
+    # stake, fall back to the fork point (the last common block).
+    my $last_stake_slot = -1;
+    for (my $bl = $best_block[$HEIGHT // -1]; $bl && $bl->height >= $new_best->height; $bl = $bl->prev_block) {
+        if (@{$bl->transactions} && $bl->transactions->[0]->is_stake) {
+            $last_stake_slot = timeslot($bl->time);
+            last;
+        }
+    }
 
     # reset all txo in the current best branch (started from the fork block) as unspent;
     # then set output in all txo in the new branch and check it against possible double-spend
@@ -238,16 +251,17 @@ sub receive {
         QBitcoin::Block->delete_by(height => { '>=' => $new_best->height });
         QBitcoin::Block->max_db_height($new_best->height-1);
     }
-    # While installing the new branch, find its lowest block in a slot later than our
-    # previous best tip: that slot was empty in our branch, so its block is a candidate to
-    # contest (a weak validator may have grabbed the smoothed reward by filling it back
-    # in time). Its height is handed to QBitcoin::Generate via generate_level so the next
-    # generate() pass tries to contest it on weight. Done structurally here (no time or
-    # generation logic) to keep receive() isolated; generate() decides whether the slot is
-    # actually in the past and worth contesting.
+    # While installing the new branch, find its lowest block in a slot later than the last
+    # stake-carrying block of our old branch ($last_stake_slot): that slot was effectively
+    # empty in our branch (we either had no block there or only an empty/forced one), so its
+    # block is a candidate to contest (a weak validator may have grabbed the smoothed reward
+    # by filling it back in time). Its height is handed to QBitcoin::Generate via
+    # generate_level so the next generate() pass tries to contest it on weight. Done
+    # structurally here (no generation logic) to keep receive() isolated; generate() decides
+    # whether the slot is actually in the past and worth contesting.
     my $contest_level;
     for (my $bl = $new_best; $bl; $bl = $bl->next_block) {
-        if (!defined($contest_level) && timeslot($bl->time) > $old_tip_slot) {
+        if (!defined($contest_level) && timeslot($bl->time) > $last_stake_slot) {
             $contest_level = $bl->height;
         }
         $best_block[$bl->height] = $bl;
