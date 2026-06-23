@@ -10,6 +10,7 @@ use QBitcoin::Config;
 use QBitcoin::ProtocolState qw(skip_scripts);
 use QBitcoin::Transaction;
 use QBitcoin::ValueUpgraded qw(level_by_total upgrade_value);
+use QBitcoin::Crypto qw(hash256);
 use Bitcoin::Block;
 
 use Role::Tiny::With;
@@ -130,14 +131,20 @@ sub free_tx {
     }
 }
 
+# Data signed by the block's stake transaction. To keep slashing evidence small we
+# commit to the transaction list via a single hash256 (not the full list) and we sign
+# the timeslot explicitly: equivocation == the same stake UTXO signing two different
+# blocks (different prev_hash/digest) in the same timeslot. The first tx (the stake
+# itself) is excluded because its hash depends on this very signature.
 sub sign_data {
     my $self = shift;
-    my $data = $self->prev_hash // ZERO_HASH;
+    my $data = ($self->prev_hash // ZERO_HASH) . pack("N", timeslot($self->time));
     my $num = 0;
+    my $tx_hashes = "";
     foreach (@{$self->tx_hashes}) {
-        $data .= $_ if $num++;
+        $tx_hashes .= $_ if $num++;
     }
-    return $data;
+    return $data . hash256($tx_hashes);
 }
 
 sub hash_str {

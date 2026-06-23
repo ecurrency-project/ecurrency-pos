@@ -26,6 +26,11 @@ sub validate {
     my $now = Time::HiRes::time();
     $now >= $block->time
         or return "Block time " . $block->time . " is too early for now";
+    # Block time must be exactly on a timeslot boundary: the stake signature commits to
+    # timeslot($block->time) (see Block::sign_data), so a sub-slot time would make the
+    # signed slot ambiguous and break slashing's "same timeslot" attribution.
+    $block->time == timeslot($block->time)
+        or return "Block time " . $block->time . " is not aligned to a timeslot";
     my $merkle_root = $block->calculate_merkle_root;
     $block->merkle_root eq $merkle_root
         or return "Incorrect merkle root " . unpack("H*", $block->merkle_root) . " expected " . unpack("H*", $merkle_root);

@@ -86,6 +86,17 @@ use constant QBITCOIN_CONST => {
     COINBASE_CONFIRM_BLOCKS => 6,
     COINBASE_WEIGHT_TIME    => 365*24*3600, # 1 year
     STAKE_MATURITY          => 12*3600, # 12 hours
+    # Slashing: penalty for a validator that signs two conflicting blocks (same
+    # stake UTXO, same timeslot). The fine is a consensus value (must be identical
+    # on every node so the trustless slashing tx is byte-deterministic), NOT a
+    # per-node config. fine = floor(value * NUM/DEN) per slashed scripthash, taken
+    # as tx fee into the reward_fund; the rest is refunded to the slashed owner.
+    SLASHING_FINE_NUM       => 1,
+    SLASHING_FINE_DEN       => 10,  # 10%
+    # How long (in best-chain blocks) a seen stake is retained in memory to detect
+    # equivocation. Beyond INCORE_LEVELS + FORCE_BLOCKS a reorg is penalized, so an
+    # equivocation buried deeper can no longer be profitably slashed anyway.
+    SLASHING_WINDOW         => 6 + 100, # INCORE_LEVELS + FORCE_BLOCKS
     QBT_BURN_SCRIPT         => QBT_BURN_SCRIPT,
     QBT_BURN_SCRIPT_LEN     => length(QBT_BURN_SCRIPT),
     CONFIG_DIR              => "/etc",
@@ -137,6 +148,7 @@ use constant TX_TYPES_CONST => {
     TX_TYPE_STAKE    => 2,
     TX_TYPE_COINBASE => 3,
     TX_TYPE_TOKENS   => 4,
+    TX_TYPE_SLASHING => 5,
 };
 
 use constant CRYPT_ALGO => {

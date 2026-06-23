@@ -136,6 +136,11 @@ sub main_loop {
     # By default validate blocks if there are any my staked coins
     $generate //= !!QBitcoin::TXO->staked_utxo;
 
+    # Slashing self-guard: remember the slot we start in. Until the in-memory registry of
+    # published stakes is repopulated, we must not (re)stake this slot or any earlier one
+    # (we may have already published a stake for them in a previous run before a restart).
+    QBitcoin::Generate::Control->start_slot(timeslot(time())) if $generate;
+
     if ($config->{genesis} && !QBitcoin::Block->blockchain_time) {
         my $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
         $genesis_time % BLOCK_INTERVAL == 0

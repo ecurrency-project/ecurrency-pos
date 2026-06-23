@@ -14,6 +14,7 @@ use QBitcoin::TXO;
 use QBitcoin::Coinbase;
 use QBitcoin::MyAddress qw(my_address stake_address);
 use QBitcoin::Transaction;
+use QBitcoin::Crypto qw(hash256);
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::Utils qw(get_address_utxo);
 use QBitcoin::Generate::Control;
@@ -230,6 +231,14 @@ sub generate {
             }
             # If current best block is our with the same height than unconfirm it for use the same stake amount
             if (!$prev_block->received_from) {
+                # Slashing self-guard: if we already published a stake for this slot, our
+                # own block already occupies it. Regenerating would re-sign the same
+                # (slot, UTXO) into a different block => self-equivocation. Keep it as is.
+                if (QBitcoin::Generate::Control->staked_slot($timeslot)) {
+                    Debugf("Keep our published block %s height %u for slot %u, skip regeneration (slashing self-guard)",
+                        $prev_block->hash_str, $height, $timeslot);
+                    return;
+                }
                 Debugf("Unconfirming our block %s height %u for regenerating", $prev_block->hash_str, $height);
                 $prev_block->unconfirm();
             }
@@ -345,12 +354,30 @@ sub _generate {
                 @transactions = grep { !$_->is_coinbase } @transactions;
             }
         }
-        # Generate new stake_tx with correct output value
-        my $block_sign_data = $prev_block ? $prev_block->hash : ZERO_HASH;
-        $block_sign_data .= $_->hash foreach @transactions;
+        # Generate new stake_tx with correct output value. Must match Block::sign_data:
+        # prev_hash . timeslot . hash256(concat of non-stake tx hashes). @transactions
+        # here holds exactly the non-stake txs (the stake is unshifted to index 0 below).
+        my $tx_hashes = "";
+        $tx_hashes .= $_->hash foreach @transactions;
+        my $block_sign_data = ($prev_block ? $prev_block->hash : ZERO_HASH) . pack("N", $timeslot) . hash256($tx_hashes);
         $stake_tx = make_stake_tx($reward, $block_sign_data, $timeslot);
         Infof("Generated stake tx %s with input amount %lu, consume %lu fee", $stake_tx->hash_str,
             sum0(map { $_->{txo}->value } @{$stake_tx->in}), -$stake_tx->fee);
+        # Slashing self-guard (skip genesis / inputless stake): never (re)stake the
+        # startup slot or earlier, and never publish a second, different stake for a
+        # (slot, UTXO) we already committed - that would be self-equivocation.
+        if ($prev_block && @{$stake_tx->in}) {
+            if (!QBitcoin::Generate::Control->may_stake_slot($timeslot)) {
+                Debugf("Skip stake for slot %u: at or before the startup slot %u",
+                    $timeslot, QBitcoin::Generate::Control->start_slot // -1);
+                return;
+            }
+            if (QBitcoin::Generate::Control->stake_conflicts($timeslot, $stake_tx)) {
+                Warningf("Skip generating block: stake %s would equivocate an already-published stake for slot %u",
+                    $stake_tx->hash_str, $timeslot);
+                return;
+            }
+        }
         # It's possible that the $stake_tx has no my_txo, so it may be not unique, already received or pending
         # Ignore if already received or pending (pending means its output TXO is already in %TXO cache)
         if (QBitcoin::Transaction->check_by_hash($stake_tx->hash) ||
@@ -398,6 +425,12 @@ sub _generate {
     # Remove the block from cache (and free my utxo) if it was not added as best block
     if (QBitcoin::Block->best_block->hash ne $generated->hash) {
         $generated->free();
+    }
+    elsif (@{$generated->transactions} && $generated->transactions->[0]->is_stake
+           && @{$generated->transactions->[0]->in}) {
+        # Our block entered the best branch, so its stake signature may reach peers:
+        # record it so we never sign a conflicting stake for the same (slot, UTXO).
+        QBitcoin::Generate::Control->record_stake($timeslot, $generated->transactions->[0]);
     }
     return $generated;
 }

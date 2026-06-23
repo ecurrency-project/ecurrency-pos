@@ -2,8 +2,12 @@ package QBitcoin::Generate::Control;
 use warnings;
 use strict;
 
+use QBitcoin::Const;
+
 my $GENERATED_TIME;
 my $GENERATE_LEVEL;
+my $START_SLOT;        # timeslot the node started generating in; never (re)stake it or earlier
+my %PUBLISHED_STAKE;   # $timeslot => { $utxo_key => $stake_tx_hash } — stakes we have committed/published
 
 sub generated_time {
     my $class = shift;
@@ -23,6 +27,60 @@ sub generate_level {
 sub generate_new {
     my $class = shift;
     undef $GENERATED_TIME;
+}
+
+# The timeslot in which generation started. On restart the in-memory PUBLISHED_STAKE
+# registry is empty, so we conservatively refuse to (re)stake the startup slot or any
+# earlier one — we cannot prove we did not already publish a stake for them before the
+# restart (and a clock moved backwards must not reopen them either).
+sub start_slot {
+    my $class = shift;
+    $START_SLOT = $_[0] if @_;
+    return $START_SLOT;
+}
+
+sub may_stake_slot {
+    my $class = shift;
+    my ($timeslot) = @_;
+    return 1 if !defined $START_SLOT;
+    return $timeslot > $START_SLOT;
+}
+
+# True if publishing $stake_tx for $timeslot would equivocate: one of its input UTXOs
+# was already committed in a DIFFERENT stake for the same timeslot. Re-deriving the
+# identical stake (same hash) is not a conflict.
+sub staked_slot {
+    my $class = shift;
+    my ($timeslot) = @_;
+    return exists $PUBLISHED_STAKE{$timeslot} ? 1 : 0;
+}
+
+sub stake_conflicts {
+    my $class = shift;
+    my ($timeslot, $stake_tx) = @_;
+    my $slot = $PUBLISHED_STAKE{$timeslot}
+        or return 0;
+    foreach my $in (@{$stake_tx->in}) {
+        my $prev = $slot->{$in->{txo}->key}
+            // next;
+        return 1 if $prev ne $stake_tx->hash;
+    }
+    return 0;
+}
+
+# Record a stake we have committed to (its block entered our best branch, so the stake
+# signature may have reached peers). Keeps us from ever signing a second, different
+# stake for the same (timeslot, UTXO). Old slots beyond the slashing window are pruned.
+sub record_stake {
+    my $class = shift;
+    my ($timeslot, $stake_tx) = @_;
+    foreach my $in (@{$stake_tx->in}) {
+        $PUBLISHED_STAKE{$timeslot}{$in->{txo}->key} = $stake_tx->hash;
+    }
+    my $cutoff = $timeslot - SLASHING_WINDOW * BLOCK_INTERVAL;
+    foreach my $slot (keys %PUBLISHED_STAKE) {
+        delete $PUBLISHED_STAKE{$slot} if $slot < $cutoff;
+    }
 }
 
 1;
