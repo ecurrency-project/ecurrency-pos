@@ -15,6 +15,7 @@ use QBitcoin::Crypto qw(hash160 hash256);
 use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::TXO;
 use QBitcoin::Coinbase;
+use QBitcoin::Slashing;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::ConnectionList;
 use QBitcoin::Notify;
@@ -56,6 +57,7 @@ use constant ATTR => qw(
     drop_immune
     upgrade_level
     token_hash
+    slashing
 );
 
 mk_accessors(keys %{&FIELDS}, ATTR);
@@ -485,9 +487,17 @@ sub serialize {
     my $self = shift;
 
     my $data = pack("c", $self->tx_type);
+    $data .= $self->slashing->serialize if $self->is_slashing && $self->slashing; # equivocation evidence
     $data .= varstr($self->token_hash // "") if $self->is_tokens;
     $data .= varint(scalar @{$self->in});
-    $data .= serialize_input($_) foreach @{$self->in};
+    # Slashing inputs spend the equivocated UTXOs without a signature, so they carry an
+    # empty siglist and empty redeem_script (the evidence authorizes the spend).
+    if ($self->is_slashing) {
+        $data .= serialize_input_noscript($_) foreach @{$self->in};
+    }
+    else {
+        $data .= serialize_input($_) foreach @{$self->in};
+    }
     $data .= varint(scalar @{$self->out});
     $data .= serialize_output($_) foreach @{$self->out};
     if (my $coinbase = $self->is_coinbase) {
@@ -500,6 +510,7 @@ sub serialize_unsigned {
     my $self = shift;
 
     my $data = pack("c", $self->tx_type);
+    $data .= $self->slashing->serialize if $self->is_slashing && $self->slashing; # equivocation evidence
     $data .= varstr($self->token_hash // "") if $self->is_tokens;
     $data .= varint(scalar @{$self->in});
     if ($self->in_raw) {
@@ -638,6 +649,14 @@ sub serialize_input_for_sign {
     return $in->{txo}->tx_in . varint($in->{txo}->num);
 }
 
+# Slashing input: no signature, no redeem_script (the equivocation evidence authorizes
+# the spend). Serialized canonically as empty siglist + empty redeem_script so every
+# node produces byte-identical slashing transactions.
+sub serialize_input_noscript {
+    my $in = shift;
+    return $in->{txo}->tx_in . varint($in->{txo}->num) . serialize_siglist([]) . varstr("");
+}
+
 sub deserialize_siglist {
     my $data = shift;
     my $num = $data->get_varint() // return undef;
@@ -704,6 +723,10 @@ sub deserialize {
     my ($data) = @_;
     my $start_index = $data->index;
     my $tx_type = unpack("c", $data->get(1));
+    my $slashing;
+    if ($tx_type == TX_TYPE_SLASHING) {
+        $slashing = QBitcoin::Slashing->deserialize($data) // return undef;
+    }
     my $token_hash;
     $token_hash = $data->get_string() if $tx_type == TX_TYPE_TOKENS;
     my $inputs = $data->get_varint // return undef;
@@ -741,6 +764,7 @@ sub deserialize {
         $up ? UPGRADE_POW ? ( up => $up, upgrade_level => $upgrade_level ) : ( coins_created => $up ) : (),
         tx_type       => $tx_type,
         $tx_type == TX_TYPE_TOKENS ? ( token_hash => $token_hash ) : (),
+        $slashing ? ( slashing => $slashing ) : (),
         hash          => $hash,
         size          => $end_index - $start_index,
         received_time => time(),
@@ -762,7 +786,10 @@ sub has_pending {
 sub load_txo {
     my $self = shift;
 
-    $self->load_inputs
+    # Slashing inputs are spent without a signature (no redeem_script): load them in
+    # "unsigned" mode so the empty redeem_script is accepted; validate_slashing checks
+    # the equivocation evidence instead of the input scripts.
+    $self->load_inputs($self->is_slashing)
         or return undef; # transaction has no such output or incorrect redeem script
     $_->save foreach @{$self->out};
 
@@ -949,6 +976,7 @@ sub is_standard { $_[0]->{tx_type} == TX_TYPE_STANDARD }
 sub is_stake    { $_[0]->{tx_type} == TX_TYPE_STAKE    }
 sub is_coinbase { $_[0]->{tx_type} == TX_TYPE_COINBASE }
 sub is_tokens   { $_[0]->{tx_type} == TX_TYPE_TOKENS   }
+sub is_slashing { $_[0]->{tx_type} == TX_TYPE_SLASHING }
 
 sub validate_coinbase {
     my $self = shift;
@@ -1021,6 +1049,10 @@ sub validate {
             return -1;
         }
         return $self->validate_coinbase;
+    }
+    if ($self->is_slashing) {
+        return 0 if skip_scripts();
+        return $self->validate_slashing;
     }
     # Transaction must contains at least one output (can't spend all inputs as fee)
     if (!@{$self->out}) {
@@ -1103,6 +1135,78 @@ sub validate {
     return 0;
 }
 
+# TX_TYPE_SLASHING: trustless penalty for equivocation. Carries evidence that one
+# validator signed two conflicting blocks (same stake UTXO, same timeslot); spends the
+# shared UTXOs without a signature and refunds each owner its value minus SLASHING_FINE
+# (the fine is the fee). The whole transaction is deterministic given the evidence, so
+# we re-derive its inputs/outputs and require an exact match - any deviation is invalid.
+sub validate_slashing {
+    my $self = shift;
+
+    my $evidence = $self->slashing or do {
+        Warningf("Slashing transaction %s has no evidence", $self->hash_str);
+        return -1;
+    };
+    if (!@{$self->in}) {
+        Warningf("Slashing transaction %s has no inputs", $self->hash_str);
+        return -1;
+    }
+    if (!@{$self->out}) {
+        Warningf("Slashing transaction %s has no outputs", $self->hash_str);
+        return -1;
+    }
+    my $info = $evidence->verify;
+    if (!$info) {
+        Warningf("Slashing transaction %s carries invalid equivocation evidence", $self->hash_str);
+        return -1;
+    }
+    my $shared = $info->{shared};
+    if (@{$self->in} != keys %$shared) {
+        Warningf("Slashing transaction %s spends %u inputs but evidence has %u equivocated UTXOs",
+            $self->hash_str, scalar @{$self->in}, scalar keys %$shared);
+        return -1;
+    }
+    foreach my $in (@{$self->in}) {
+        my $txo = $in->{txo};
+        my $s = $shared->{$txo->key};
+        if (!$s) {
+            Warningf("Slashing transaction %s spends non-equivocated input %s:%u",
+                $self->hash_str, $txo->tx_in_str, $txo->num);
+            return -1;
+        }
+        # The slashed UTXO must really belong to the equivocating signer: the evidence's
+        # redeem_script must hash to the real UTXO's scripthash.
+        if (!QBitcoin::Slashing->redeem_matches_scripthash($s->{redeem_script}, $txo->scripthash)) {
+            Warningf("Slashing transaction %s input %s:%u scripthash does not match the evidence",
+                $self->hash_str, $txo->tx_in_str, $txo->num);
+            return -1;
+        }
+        if (@{$in->{siglist} // []}) {
+            Warningf("Slashing transaction %s input %s:%u must carry no signature",
+                $self->hash_str, $txo->tx_in_str, $txo->num);
+            return -1;
+        }
+    }
+    # Outputs must be the canonical, deterministic refund.
+    my @want = QBitcoin::Slashing->canonical_outputs([ map { $_->{txo} } @{$self->in} ]);
+    if (@want != @{$self->out}) {
+        Warningf("Slashing transaction %s has %u outputs, expected %u canonical refunds",
+            $self->hash_str, scalar @{$self->out}, scalar @want);
+        return -1;
+    }
+    for my $i (0 .. $#want) {
+        if (serialize_output($self->out->[$i]) ne serialize_output($want[$i])) {
+            Warningf("Slashing transaction %s output %u is not the canonical refund", $self->hash_str, $i);
+            return -1;
+        }
+    }
+    if ($self->fee <= 0) {
+        Warningf("Slashing transaction %s fine (fee) %li must be positive", $self->hash_str, $self->fee);
+        return -1;
+    }
+    return 0;
+}
+
 sub valid_for_block {
     my $self = shift;
     my ($block) = @_;
@@ -1133,14 +1237,14 @@ sub check_input_script {
                 $in->{txo}->tx_in_str, $in->{txo}->num, $self->hash_str);
             return -1;
         }
-        # Set txo min_rel_time to STAKE_MATURITY if previous tx is stake
+        # Set txo min_rel_time to STAKE_MATURITY if previous tx is stake or slashing:
         if (($self->is_standard || $self->is_tokens) && ($in->{min_rel_time} // -1) < STAKE_MATURITY) {
             my $tx_in_type = (ref $self)->type_by_hash($in->{txo}->tx_in);
             if (!defined($tx_in_type)) {
                 Errf("No input transaction %s for txo", $in->{txo}->tx_in_str);
                 return -1;
             }
-            if ($tx_in_type == TX_TYPE_STAKE) {
+            if ($tx_in_type == TX_TYPE_STAKE || $tx_in_type == TX_TYPE_SLASHING) {
                 $in->{min_rel_time} = STAKE_MATURITY;
             }
         }
