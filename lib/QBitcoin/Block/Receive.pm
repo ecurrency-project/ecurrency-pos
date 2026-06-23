@@ -149,6 +149,17 @@ sub receive {
         $self->prev_block->next_block //= $self;
     }
 
+    # Slashing detection: every validated block (best branch or not) reveals its stake's
+    # block_sign_data. If the same stake UTXO already signed a different block in this
+    # timeslot, that is equivocation - build the slashing transaction. Only once synced
+    # (during sync we replay history, where equivocations are too deep to slash anyway).
+    if (blockchain_synced() && @{$self->transactions} && $self->transactions->[0]->is_stake) {
+        my $stake = $self->transactions->[0];
+        if (my $other = QBitcoin::Slashing->observe($stake)) {
+            QBitcoin::Slashing->report_equivocation($stake, $other);
+        }
+    }
+
     # zero weight for the new block is ok, accept it
     if ($HEIGHT && ($self->weight < $best_block[$HEIGHT]->weight ||
         ($self->weight == $best_block[$HEIGHT]->weight && $self->branch_height <= $HEIGHT))) {

@@ -136,4 +136,20 @@ my $rebuilt = QBitcoin::Transaction->new(
 $rebuilt->calculate_hash;
 is(unpack("H*", $rebuilt->hash), unpack("H*", $slash->hash), "tx rebuilt from stored evidence has the same hash");
 
+# detection: observe() reports a previously seen conflicting stake
+{
+    my $c  = make_coin(pack("H*", "e1" x 32), 0, 1000);
+    my $sA = make_stake([$c], "\x33" x 32, "\xc1" x 32);
+    my $sB = make_stake([$c], "\x44" x 32, "\xc2" x 32); # same coin+slot, different block
+    is(QBitcoin::Slashing->observe($sA), undef, "first stake seen: no conflict");
+    my $conf = QBitcoin::Slashing->observe($sB);
+    ok($conf, "conflicting stake detected on observe");
+    is($conf->block_sign_data, $sA->block_sign_data, "reported conflict is the first stake");
+    is(QBitcoin::Slashing->observe($sA), undef, "re-seeing the same block is not a conflict");
+    # a non-conflicting stake (different UTXO) is not reported
+    my $c2 = make_coin(pack("H*", "e2" x 32), 0, 1000);
+    my $sC = make_stake([$c2], "\x55" x 32, "\xc3" x 32);
+    is(QBitcoin::Slashing->observe($sC), undef, "unrelated stake: no conflict");
+}
+
 done_testing();

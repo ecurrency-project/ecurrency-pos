@@ -32,12 +32,21 @@ use QBitcoin::Log;
 use QBitcoin::Const;
 use QBitcoin::Crypto qw(hash160 hash256);
 use QBitcoin::TXO;
+use QBitcoin::Generate::Control;
 use Bitcoin::Serialized qw(varint varstr);
 
 use constant ATTR => qw(proofs);
 mk_accessors(ATTR);
 
 use constant PROOF_HEAD_LEN => 32 + 4 + 32; # prev_hash . timeslot . digest
+
+# Watched stakes for equivocation detection. Holding a reference here keeps a stake
+# alive past the moment its block is dropped, which is exactly the retention the user
+# asked for: stakes linger for SLASHING_WINDOW so a later conflicting stake can be
+# caught. Indexed by timeslot then stake-UTXO key; the stored stake carries the
+# block_sign_data it signed.
+my %SEEN;       # $timeslot => { $utxo_key => $stake_tx }
+my $MAX_SLOT = 0;
 
 # --- (de)serialization -----------------------------------------------------
 
@@ -235,6 +244,73 @@ sub verify {
     %shared
         or return undef; # no shared stake UTXO -> not an equivocation
     return { timeslot => $p1->{timeslot}, shared => \%shared };
+}
+
+# --- detection -------------------------------------------------------------
+
+# Record a stake we have seen (block_sign_data already set) and report a previously
+# seen, conflicting stake (same UTXO + timeslot, different block) if one exists. Old
+# slots beyond the slashing window are pruned. Returns the conflicting stake or undef.
+sub observe {
+    my $class = shift;
+    my ($stake) = @_;
+    $stake && $stake->is_stake
+        or return undef;
+    my $bsd = $stake->block_sign_data;
+    defined($bsd) && length($bsd) == PROOF_HEAD_LEN
+        or return undef;
+    my $timeslot = unpack("N", substr($bsd, 32, 4));
+    if ($timeslot > $MAX_SLOT) {
+        $MAX_SLOT = $timeslot;
+        my $cutoff = $MAX_SLOT - SLASHING_WINDOW * BLOCK_INTERVAL;
+        foreach my $s (keys %SEEN) {
+            delete $SEEN{$s} if $s < $cutoff;
+        }
+    }
+    my $slot = $SEEN{$timeslot} //= {};
+    my $conflict;
+    foreach my $in (@{$stake->in}) {
+        my $key  = $in->{txo}->key;
+        my $prev = $slot->{$key};
+        if ($prev) {
+            # Same UTXO already staked this slot: equivocation iff it was a different block.
+            $conflict //= $prev if $prev->block_sign_data ne $bsd;
+        }
+        else {
+            $slot->{$key} = $stake;
+        }
+    }
+    return $conflict;
+}
+
+# Build, validate and inject into the mempool a slashing transaction for an observed
+# equivocation, then trigger (re)generation so a staker can include it (on a branch
+# where the equivocated UTXO is unspent, e.g. a contesting branch). Returns the tx.
+sub report_equivocation {
+    my $class = shift;
+    my ($stake_new, $stake_old) = @_;
+    my $tx = $class->new_tx($stake_new, $stake_old)
+        or return undef;
+    if (QBitcoin::Transaction->check_by_hash($tx->hash) || QBitcoin::Transaction->has_pending($tx->hash)) {
+        return undef; # already known
+    }
+    $_->{txo}->spent_add($tx) foreach @{$tx->in};
+    QBitcoin::TXO->save_all($tx->hash, $tx->out);
+    if ($tx->validate != 0) {
+        Warningf("Built invalid slashing transaction %s, ignore", $tx->hash_str);
+        $_->{txo}->spent_del($tx) foreach @{$tx->in};
+        return undef;
+    }
+    if ($tx->save != 0) {
+        $_->{txo}->spent_del($tx) foreach @{$tx->in};
+        return undef;
+    }
+    $tx->process_pending;
+    Infof("Built slashing transaction %s (fine %li) for equivocation", $tx->hash_str, $tx->fee);
+    $tx->announce;
+    # Let the staker regenerate / contest so the slashing tx can enter the chain.
+    QBitcoin::Generate::Control->generate_new();
+    return $tx;
 }
 
 1;
