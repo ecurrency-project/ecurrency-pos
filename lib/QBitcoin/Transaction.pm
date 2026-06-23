@@ -16,6 +16,7 @@ use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::TXO;
 use QBitcoin::Coinbase;
 use QBitcoin::Slashing;
+use QBitcoin::Slashing::Stored;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::ConnectionList;
 use QBitcoin::Notify;
@@ -466,6 +467,14 @@ sub store {
         $self->token_id = $tokens_tx->{id};
     }
     $self->create();
+    if ($self->is_slashing && $self->slashing) {
+        # Persist the equivocation evidence so the transaction can be rebuilt (and its
+        # hash re-verified) on load.
+        QBitcoin::Slashing::Stored->create({
+            tx_id    => $self->id,
+            evidence => $self->slashing->serialize,
+        });
+    }
     foreach my $in (@{$self->in}) {
         $in->{txo}->store_spend($self),
     }
@@ -1314,6 +1323,14 @@ sub pre_load {
                 };
             }
             $attr->{in} = \@inputs;
+        }
+        if ($attr->{tx_type} == TX_TYPE_SLASHING) {
+            my ($s) = QBitcoin::Slashing::Stored->find(tx_id => $attr->{id});
+            if (!$s) {
+                Errf("No evidence for slashing transaction %s", unpack("H*", $attr->{hash}));
+                die "No evidence for slashing transaction " . unpack("H*", $attr->{hash}) . "\n";
+            }
+            $attr->{slashing} = QBitcoin::Slashing->deserialize(Bitcoin::Serialized->new($s->evidence));
         }
         if ($attr->{tx_type} == TX_TYPE_TOKENS) {
             my $token_hash;

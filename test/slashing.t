@@ -6,7 +6,7 @@ use FindBin '$Bin';
 use lib ("$Bin/../lib", "$Bin/lib");
 
 use Test::More;
-use QBitcoin::Test::ORM;
+use QBitcoin::Test::ORM qw(dbh);
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::Crypto qw(hash160 hash256);
@@ -15,6 +15,7 @@ use QBitcoin::Script qw(op_pushdata);
 use QBitcoin::TXO;
 use QBitcoin::Transaction;
 use QBitcoin::Slashing;
+use QBitcoin::Slashing::Stored;
 use Bitcoin::Serialized;
 
 $config->{regtest} = 1;
@@ -101,5 +102,24 @@ ok($slashP, "slashing built for partial overlap");
 is(scalar @{$slashP->in}, 1, "only the shared UTXO is slashed");
 is($slashP->in->[0]->{txo}->value, 2000, "shared UTXO is the overlapping one");
 is($slashP->validate, 0, "partial-overlap slashing validates");
+
+# persistence: evidence survives a store/load round-trip and rebuilds the same tx.
+# Insert the row in isolation (no parent transaction row here), so drop the FK check.
+my $blob = $slash->slashing->serialize;
+dbh->do("PRAGMA foreign_keys = OFF");
+QBitcoin::Slashing::Stored->create({ tx_id => 1, evidence => $blob });
+my ($row) = QBitcoin::Slashing::Stored->find(tx_id => 1);
+ok($row, "stored evidence row found");
+is(unpack("H*", $row->evidence), unpack("H*", $blob), "stored evidence bytes match");
+my $ev = QBitcoin::Slashing->deserialize(Bitcoin::Serialized->new($row->evidence));
+my $rebuilt = QBitcoin::Transaction->new(
+    in       => $slash->in,
+    out      => $slash->out,
+    fee      => $slash->fee,
+    tx_type  => TX_TYPE_SLASHING,
+    slashing => $ev,
+);
+$rebuilt->calculate_hash;
+is(unpack("H*", $rebuilt->hash), unpack("H*", $slash->hash), "tx rebuilt from stored evidence has the same hash");
 
 done_testing();

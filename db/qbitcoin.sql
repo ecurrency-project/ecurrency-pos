@@ -52,6 +52,15 @@ CREATE TABLE `txo` (
 );
 CREATE INDEX `tx_out` ON `txo` (tx_out, scripthash);
 
+-- Equivocation evidence of a TX_TYPE_SLASHING transaction (two stake proofs), kept so
+-- a stored slashing transaction can be rebuilt from the database
+-- (see QBitcoin::Slashing::Stored).
+CREATE TABLE `slashing` (
+  tx_id    integer NOT NULL PRIMARY KEY,
+  evidence longblob NOT NULL,
+  FOREIGN KEY (tx_id) REFERENCES `transaction` (id) ON DELETE CASCADE
+);
+
 CREATE TABLE `tag` (
   id integer NOT NULL AUTO_INCREMENT PRIMARY KEY,
   tag varchar(64) NOT NULL UNIQUE
