@@ -6,6 +6,7 @@ use FindBin '$Bin';
 use lib ("$Bin/../lib", "$Bin/lib");
 
 use Test::More;
+use Test::MockModule;
 use QBitcoin::Test::ORM qw(dbh);
 use QBitcoin::Const;
 use QBitcoin::Config;
@@ -14,6 +15,7 @@ use QBitcoin::Script::OpCodes qw(:OPCODES);
 use QBitcoin::Script qw(op_pushdata);
 use QBitcoin::TXO;
 use QBitcoin::Transaction;
+use QBitcoin::Block;
 use QBitcoin::Slashing;
 use QBitcoin::Slashing::Stored;
 use Bitcoin::Serialized;
@@ -102,6 +104,18 @@ ok($slashP, "slashing built for partial overlap");
 is(scalar @{$slashP->in}, 1, "only the shared UTXO is slashed");
 is($slashP->in->[0]->{txo}->value, 2000, "shared UTXO is the overlapping one");
 is($slashP->validate, 0, "partial-overlap slashing validates");
+
+# weight: a slashing tx contributes the same age-weighted weight as a stake spending
+# the same UTXOs, so it can outweigh the stake it punishes.
+{
+    my $mock = Test::MockModule->new('QBitcoin::Transaction');
+    my $in_time = $timeslot - 100000 * BLOCK_INTERVAL;
+    $mock->mock('txo_time', sub { return $in_time });
+    my $block = QBitcoin::Block->new({ time => $timeslot });
+    is($slash->slashing_weight($timeslot), $stake1->stake_weight($block),
+        "slashing weight equals stake weight for the same inputs and age");
+    ok($slash->slashing_weight($timeslot) > 0, "slashing weight is positive");
+}
 
 # persistence: evidence survives a store/load round-trip and rebuilds the same tx.
 # Insert the row in isolation (no parent transaction row here), so drop the FK check.

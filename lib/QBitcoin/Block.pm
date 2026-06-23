@@ -62,15 +62,31 @@ sub self_weight {
         }
         elsif (@{$self->transactions}) {
             if (defined(my $stake_weight = $self->transactions->[0]->stake_weight($self))) {
-                $self->{self_weight} = $stake_weight + @{$self->transactions};
+                my $weight = $stake_weight + @{$self->transactions};
+                my $ok = 1;
                 # coinbase increases block weight
                 foreach my $transaction (@{$self->transactions}) {
-                    if (!$transaction->coins_created) {
+                    if ($transaction->is_coinbase) {
+                        $weight += $transaction->coinbase_weight($self->time);
+                    }
+                    elsif ($transaction->is_slashing) {
+                        # The slashed stake inputs count toward block weight exactly like
+                        # stake inputs, so a slashing tx can outweigh the stake it punishes.
+                        my $w = $transaction->slashing_weight($self->time);
+                        if (!defined $w) {
+                            $ok = 0;
+                            last;
+                        }
+                        $weight += $w;
+                    }
+                    else {
                         last if $transaction->fee >= 0;
                         next;
                     }
-                    $self->{self_weight} += $transaction->coinbase_weight($self->time);
                 }
+                # $ok false => a slashing input is not yet confirmed; leave self_weight
+                # undef and recalculate next time (same as an unknown stake input).
+                $self->{self_weight} = $weight if $ok;
             }
             # otherwise we have unknown input in stake transaction; return undef and calculate next time
         }

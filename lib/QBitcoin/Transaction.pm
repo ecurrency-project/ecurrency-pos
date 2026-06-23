@@ -1537,6 +1537,28 @@ sub stake_weight {
     return int($weight / 0x10000); # prevent int64 overflow for total blockchain weight
 }
 
+# Weight a slashing transaction contributes to its block: the slashed stake UTXOs are
+# aged exactly like stake inputs (value * slot-age), so a slashing tx carries enough
+# weight to outweigh the equivocating stake it replaces. Returns undef if an input is
+# not yet confirmed (block self_weight is then recomputed later).
+sub slashing_weight {
+    my $self = shift;
+    my ($block_time) = @_;
+    my $weight = 0;
+    my $class = ref $self;
+    foreach my $in (map { $_->{txo} } @{$self->in}) {
+        my $in_block_time = $class->txo_time($in);
+        if (!defined($in_block_time)) {
+            Warningf("Can't get slashing_weight for %s with unconfirmed input %s:%u",
+                $self->hash_str, $in->tx_in_str, $in->num);
+            return undef;
+        }
+        $weight += $in->value * ((timeslot($block_time) - timeslot($in_block_time)) / BLOCK_INTERVAL);
+    }
+    $weight = MAX_INT64 if $weight > MAX_INT64;
+    return int($weight / 0x10000); # prevent int64 overflow for total blockchain weight
+}
+
 sub coinbase_weight {
     my $self = shift;
     my ($block_time) = @_;
