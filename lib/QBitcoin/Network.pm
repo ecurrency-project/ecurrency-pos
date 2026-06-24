@@ -175,6 +175,7 @@ sub main_loop {
                 my $timeslot = timeslot($time);
                 my $generated_time = QBitcoin::Generate->generated_time;
                 my $blockchain_time = QBitcoin::Block->blockchain_time // 0;
+                my $defer_until; # wall-clock moment to wake for a delayed current-slot block
                 if (!$generated_time || $timeslot > timeslot($generated_time)) {
                     state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
                     my $next_forced = $blockchain_time - ($blockchain_time - $genesis_time) % (BLOCK_INTERVAL*FORCE_BLOCKS) + BLOCK_INTERVAL*FORCE_BLOCKS;
@@ -182,8 +183,22 @@ sub main_loop {
                         $timeslot = $next_forced;
                     }
                     if ($timeslot <= $next_forced) {
-                        QBitcoin::Generate->generate($timeslot);
-                        $blockchain_time = QBitcoin::Block->blockchain_time // 0;
+                        # Randomized in-slot delay before producing the current slot's block:
+                        # wait a bit after the slot start so we can first see peers' blocks and
+                        # collect more transactions (incl. slashing), and not commit our single
+                        # per-slot stake to a block that is about to be outcompeted. Applies
+                        # only to the current slot; a past slot (genesis catch-up / forced for
+                        # elapsed time) is produced immediately, and genesis (height 0) does not
+                        # reach this path.
+                        my $gen_at = $timeslot == timeslot($time)
+                            ? QBitcoin::Generate->gen_time($timeslot) : 0;
+                        if (Time::HiRes::time() >= $gen_at) {
+                            QBitcoin::Generate->generate($timeslot);
+                            $blockchain_time = QBitcoin::Block->blockchain_time // 0;
+                        }
+                        else {
+                            $defer_until = $gen_at;
+                        }
                     }
                     else {
                         blockchain_synced(0);
@@ -193,6 +208,8 @@ sub main_loop {
                 my $now = Time::HiRes::time(); # generate() takes some time, get new timestamp
                 my $time_next_block = timeslot($blockchain_time > $now ? $blockchain_time : $now) + BLOCK_INTERVAL;
                 $timeout = $time_next_block - $now;
+                # Wake earlier, at the randomized in-slot moment, if generation is deferred.
+                $timeout = $defer_until - $now if defined($defer_until) && $defer_until - $now < $timeout;
             }
             # Debugf("Have blockchain height %d, last block time %s, weight %d", QBitcoin::Block->blockchain_height // -1, defined(QBitcoin::Block->blockchain_height) ? scalar(localtime QBitcoin::Block->blockchain_time) : "undef", QBitcoin::Block->best_weight);
         }

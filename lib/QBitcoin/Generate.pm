@@ -57,6 +57,12 @@ sub generated_time {
     return QBitcoin::Generate::Control->generated_time;
 }
 
+sub gen_time {
+    my $class = shift;
+    my ($timeslot) = @_;
+    return QBitcoin::Generate::Control->gen_time($timeslot);
+}
+
 sub txo_confirmed {
     my ($txo) = @_;
     my $block_height = QBitcoin::Transaction->check_by_hash($txo->tx_in)

@@ -6,6 +6,7 @@ use QBitcoin::Const;
 
 my $GENERATED_TIME;
 my $GENERATE_LEVEL;
+my ($GEN_SLOT, $GEN_AT); # memoized randomized in-slot generation moment
 my $START_SLOT;        # timeslot the node started generating in; never (re)stake it or earlier
 my %PUBLISHED_STAKE;   # $timeslot => { $utxo_key => $stake_tx_hash } — stakes we have committed/published
 
@@ -27,6 +28,25 @@ sub generate_level {
 sub generate_new {
     my $class = shift;
     undef $GENERATED_TIME;
+}
+
+# The wall-clock moment within $timeslot at which we should produce our block. A fresh
+# random delay BLOCK_INTERVAL*(1 - sqrt(rand)) after the slot start, chosen once per
+# slot: small delays are most likely, the very end of the slot is very unlikely. The
+# delay makes our timing unpredictable and lets us wait for peers' blocks / more
+# transactions before committing our single per-slot stake. Local policy only, not
+# consensus, so plain rand() is fine and the value must NOT be reproducible.
+sub gen_time {
+    my $class = shift;
+    my ($timeslot) = @_;
+    if (!defined($GEN_SLOT) || $GEN_SLOT != $timeslot) {
+        $GEN_SLOT = $timeslot;
+        my $delay = BLOCK_INTERVAL * (1 - sqrt(rand()));
+        # keep strictly inside the slot so the block's timeslot stays $timeslot
+        $delay = BLOCK_INTERVAL - 0.001 if $delay >= BLOCK_INTERVAL;
+        $GEN_AT = $timeslot + $delay;
+    }
+    return $GEN_AT;
 }
 
 # The timeslot in which generation started. On restart the in-memory PUBLISHED_STAKE
