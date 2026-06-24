@@ -19,11 +19,11 @@ use QBitcoin::Generate::Control;
 use QBitcoin::Slashing;
 use QBitcoin::ProtocolState qw(blockchain_synced);
 
-# 5b: when the best tip is a peer block whose stake is equivocated and we hold a
-# slashing tx for it, generate() must unconfirm that tip and rebuild on its parent in
-# the current timeslot using the mempool (so the slashing tx, whose UTXO is now free,
-# is included). Here _generate and tip_slashing are mocked to check the decision wiring;
-# the actual rebuild/reorg is exercised by the existing generate/receive machinery.
+# 5b (robust): a best branch resting on an equivocated (banned) stake is invalid no
+# matter how heavy it is. generate() must drop the best branch down to the banned block
+# and rebuild on the last valid block. Here banned_height_in_best is mocked to point at
+# a height; we check generate() unconfirms the branch down to it (the actual evidence
+# detection/ban is covered by test/slashing.t).
 
 $config->{regtest} = 1;
 
@@ -66,21 +66,15 @@ sub send_blk {
     }
 }
 
-# genesis a1, then peer block a2 fills height 1 and becomes the tip.
+# genesis a1, then a heavy peer block a2 becomes the tip.
 send_blk(0, "a1", undef, 100, 100, 1);
-send_blk(1, "a2", "a1",  200, 100, 1);
-is(QBitcoin::Block->best_block->hash, "a2", "peer block a2 is the tip");
+send_blk(1, "a2", "a1",  900, 800, 1); # deliberately very heavy
+is(QBitcoin::Block->best_block->hash, "a2", "heavy peer block a2 is the tip");
 
-# a2's stake is equivocated: pretend we hold a slashing tx for it.
+# a2 rests on an equivocated stake we hold evidence for (real unconfirm runs).
 my $slash_module = Test::MockModule->new('QBitcoin::Slashing');
-$slash_module->mock('tip_slashing', sub {
-    my ($class, $tip) = @_;
-    return $tip && $tip->hash eq "a2" ? bless({}, 'FakeSlashingTx') : undef;
-});
+$slash_module->mock('banned_height_in_best', sub { 1 });
 
-# record unconfirm() and capture _generate()
-my @unconf;
-$block_module->mock('unconfirm', sub { my $self = shift; push @unconf, $self->hash; });
 my @gen;
 my $gen_module = Test::MockModule->new('QBitcoin::Generate');
 $gen_module->mock('_generate', sub {
@@ -89,23 +83,22 @@ $gen_module->mock('_generate', sub {
     return undef;
 });
 
-QBitcoin::Generate::Control->generate_level(undef); # ignore any contest flag from receiving a2
-my $slot = timeslot(GENESIS_TIME + 1 * BLOCK_INTERVAL * FORCE_BLOCKS); # a2's slot
+QBitcoin::Generate::Control->generate_level(undef);
+my $slot = timeslot(time());
 QBitcoin::Generate->generate($slot);
 
-is(scalar @unconf, 1, "the peer tip was unconfirmed to make room for the slashing");
-is($unconf[0], "a2", "...it is the equivocated tip a2");
-is(scalar @gen, 1, "one block is generated");
-is($gen[0][1], 1, "...at a2's height");
-is($gen[0][2], "a1", "...on a2's parent a1");
-ok(!$gen[0][3], "...using the mempool (not the branch-only contest path)");
+is(QBitcoin::Block->blockchain_height, 0, "the equivocated branch is dropped despite its higher weight");
+isnt(QBitcoin::Block->best_block && QBitcoin::Block->best_block->hash, "a2", "a2 is no longer best");
+ok(@gen >= 1, "a replacement block is generated");
+is($gen[-1][2], "a1", "...rebuilt on the last valid block a1");
+ok(!$gen[-1][3], "...using the mempool (so the slashing tx is pulled in)");
 
-# Control: with no slashing for the tip, the peer tip is NOT unconfirmed.
-@unconf = ();
-@gen = ();
-$slash_module->mock('tip_slashing', sub { undef });
+# Control: with no banned stake, a fresh heavy branch is kept (not dropped).
+$slash_module->mock('banned_height_in_best', sub { undef });
+send_blk(1, "a2", "a1", 900, 800, 1);
+is(QBitcoin::Block->best_block->hash, "a2", "branch kept when there is no equivocated stake");
 QBitcoin::Generate::Control->generate_level(undef);
 QBitcoin::Generate->generate($slot);
-is(scalar @unconf, 0, "no unconfirm when the tip has no slashing");
+is(QBitcoin::Block->blockchain_height, 1, "no drop without an equivocated stake");
 
 done_testing();

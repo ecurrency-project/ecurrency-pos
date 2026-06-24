@@ -48,6 +48,12 @@ use constant PROOF_HEAD_LEN => 32 + 4 + 32; # prev_hash . timeslot . digest
 my %SEEN;       # $timeslot => { $utxo_key => $stake_tx }
 my $MAX_SLOT = 0;
 
+# Stakes proven equivocated (we hold a slashing tx for them). A block whose stake
+# spends one of these UTXOs in the banned timeslot is INVALID regardless of its branch
+# weight - we never select such a branch and actively drop it if it is already best.
+# This is the robust rule: it does not rely on out-weighing the equivocator.
+my %BANNED;     # $utxo_key => { timeslot => $T, txo => $txo }
+
 # --- (de)serialization -----------------------------------------------------
 
 sub serialize {
@@ -283,26 +289,60 @@ sub observe {
     return $conflict;
 }
 
-# If the best tip's stake is the one a mempool slashing tx punishes (i.e. some slashed
-# UTXO is spent by a transaction confirmed at the tip's height), return that slashing
-# tx. generate() uses this to decide whether to unconfirm the tip and rebuild including
-# the slashing tx (the slashed UTXO becomes free once the tip is unconfirmed).
-sub tip_slashing {
+# Mark the stake(s) punished by a (valid) slashing tx as equivocated. Called whenever a
+# slashing tx is accepted (built locally or received): from then on any block whose
+# stake spends one of these UTXOs in that timeslot is invalid.
+sub ban_from_tx {
     my $class = shift;
-    my ($tip) = @_;
-    $tip
-        or return undef;
-    my $height = $tip->height;
-    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
-        next unless $tx->is_slashing;
-        foreach my $in (@{$tx->in}) {
-            my $out = $in->{txo}->tx_out
-                or next;
-            my $sp = QBitcoin::Transaction->get($out);
-            return $tx if $sp && defined($sp->block_height) && $sp->block_height == $height;
-        }
+    my ($tx) = @_;
+    my $ev = $tx->slashing
+        or return;
+    my $timeslot = $ev->proofs->[0]{timeslot};
+    foreach my $in (@{$tx->in}) {
+        $BANNED{$in->{txo}->key} = { timeslot => $timeslot, txo => $in->{txo} };
     }
-    return undef;
+    if ($timeslot > $MAX_SLOT) {
+        $MAX_SLOT = $timeslot;
+    }
+    my $cutoff = $MAX_SLOT - SLASHING_WINDOW * BLOCK_INTERVAL;
+    foreach my $key (keys %BANNED) {
+        delete $BANNED{$key} if $BANNED{$key}{timeslot} < $cutoff;
+    }
+}
+
+# Is this stake one we hold equivocation evidence for at the given timeslot? Used by
+# block validation to reject a block built on an equivocated stake.
+sub is_banned_stake {
+    my $class = shift;
+    my ($stake, $timeslot) = @_;
+    $stake && $stake->is_stake
+        or return 0;
+    foreach my $in (@{$stake->in}) {
+        my $b = $BANNED{$in->{txo}->key}
+            or next;
+        return 1 if $b->{timeslot} == $timeslot;
+    }
+    return 0;
+}
+
+# The lowest best-branch height that rests on an equivocated stake we can slash (its
+# UTXO is currently spent by a stake confirmed in the best branch). generate() drops
+# the best branch down to this height and rebuilds, including the slashing tx.
+sub banned_height_in_best {
+    my $class = shift;
+    my $min;
+    foreach my $key (keys %BANNED) {
+        my $txo = $BANNED{$key}{txo}
+            or next;
+        my $out = $txo->tx_out
+            or next; # not spent in the best branch (already dropped / never confirmed)
+        my $sp = QBitcoin::Transaction->get($out)
+            or next;
+        my $h = $sp->block_height;
+        next unless defined $h; # spender not confirmed in the best branch
+        $min = $h if !defined($min) || $h < $min;
+    }
+    return $min;
 }
 
 # Build, validate and inject into the mempool a slashing transaction for an observed
@@ -328,9 +368,11 @@ sub report_equivocation {
         return undef;
     }
     $tx->process_pending;
+    $class->ban_from_tx($tx);
     Infof("Built slashing transaction %s (fine %li) for equivocation", $tx->hash_str, $tx->fee);
     $tx->announce;
-    # Let the staker regenerate / contest so the slashing tx can enter the chain.
+    # Let the staker regenerate so the equivocated branch is dropped and the slashing tx
+    # enters the chain.
     QBitcoin::Generate::Control->generate_new();
     return $tx;
 }

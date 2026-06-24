@@ -17,6 +17,7 @@ use QBitcoin::CheckPoints qw(checkpoint_hash);
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::Log;
 use QBitcoin::Transaction;
+use QBitcoin::Slashing;
 use QBitcoin::MinFee qw(min_fee);
 use Role::Tiny;
 
@@ -119,6 +120,12 @@ sub validate {
         elsif ($transaction->is_stake) {
             if (keys %tx_in_block != 1) {
                 return "Stake transaction " . $transaction->hash_str . " must be the first transaction in the block";
+            }
+            # Equivocated stake: we hold a slashing tx proving this UTXO signed another
+            # block in this timeslot. Such a block is invalid no matter how heavy its
+            # branch is, so we never select it (and drop it if already best).
+            if (!skip_scripts() && QBitcoin::Slashing->is_banned_stake($transaction, timeslot($block->time))) {
+                return "Stake transaction " . $transaction->hash_str . " is equivocated (slashed); block invalid";
             }
             $stake_reward = -$transaction->fee; # fee is negative for stake transactions
         }

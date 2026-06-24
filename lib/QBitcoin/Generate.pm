@@ -216,6 +216,24 @@ sub generate {
         # block to add) and returns true so we stop here.
         return if $class->contest_level($level, $timeslot);
     }
+    # Slashing: if the best branch rests on an equivocated (banned) stake we hold
+    # evidence for, that branch is invalid regardless of its weight. Drop the best
+    # branch down to the offending block; the normal generation below then rebuilds on
+    # the last valid block in the current slot, pulling the slashing tx from the mempool
+    # (its slashed UTXO is free again). Skip while we have already staked this slot - we
+    # would self-equivocate; the slashing tx waits in the mempool and we retry next slot.
+    if (!QBitcoin::Generate::Control->staked_slot($timeslot)) {
+        if (defined(my $banned_height = QBitcoin::Slashing->banned_height_in_best())) {
+            while (1) {
+                my $tip = QBitcoin::Block->blockchain_height;
+                last unless defined($tip) && $tip >= $banned_height;
+                my $bad = QBitcoin::Block->best_block($tip)
+                    or last;
+                Debugf("Drop equivocated best block %s height %u for slashing", $bad->hash_str, $tip);
+                $bad->unconfirm();
+            }
+        }
+    }
     my $prev_block;
     my $height = QBitcoin::Block->blockchain_height() // -1;
     if ($height >= 0) {
@@ -241,17 +259,6 @@ sub generate {
                     return;
                 }
                 Debugf("Unconfirming our block %s height %u for regenerating", $prev_block->hash_str, $height);
-                $prev_block->unconfirm();
-            }
-            # The tip is a peer block whose stake is equivocated and we hold a slashing tx
-            # for it: unconfirm it so the rebuilt block (on its parent, in this timeslot,
-            # using the mempool) can include the slashing tx - its slashed UTXO is then
-            # free. Skip if we already staked this slot (would self-equivocate); the
-            # slashing tx stays in the mempool and we retry next slot.
-            elsif (!QBitcoin::Generate::Control->staked_slot($timeslot)
-                   && QBitcoin::Slashing->tip_slashing($prev_block)) {
-                Debugf("Unconfirming peer tip %s height %u to slash its equivocated stake",
-                    $prev_block->hash_str, $height);
                 $prev_block->unconfirm();
             }
             $height--;

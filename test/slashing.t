@@ -152,4 +152,34 @@ is(unpack("H*", $rebuilt->hash), unpack("H*", $slash->hash), "tx rebuilt from st
     is(QBitcoin::Slashing->observe($sC), undef, "unrelated stake: no conflict");
 }
 
+# ban primitives: a valid slashing tx makes the equivocated stake invalid at its slot
+QBitcoin::Slashing->ban_from_tx($slash);
+my $T = $slash->slashing->proofs->[0]{timeslot};
+ok(QBitcoin::Slashing->is_banned_stake($stake1, $T), "equivocated stake is banned at its timeslot");
+ok(!QBitcoin::Slashing->is_banned_stake($stake1, $T + BLOCK_INTERVAL), "not banned at a different timeslot");
+my $clean_coin  = make_coin(pack("H*", "f1" x 32), 0, 1000);
+my $clean_stake = make_stake([$clean_coin], "\x11" x 32, "\xa1" x 32);
+ok(!QBitcoin::Slashing->is_banned_stake($clean_stake, $T), "an unrelated stake is not banned");
+is(QBitcoin::Slashing->banned_height_in_best(), undef,
+    "banned_height_in_best is undef while the slashed UTXO is not spent in the best branch");
+
+# banned_height_in_best returns the height once the slashed UTXO is spent (by the
+# equivocating stake) in the best branch - the height generate() drops the branch to.
+{
+    my $coin = make_coin(pack("H*", "ab" x 32), 0, 1000);
+    my $s1   = make_stake([$coin], "\x66" x 32, "\xd1" x 32);
+    my $s2   = make_stake([$coin], "\x77" x 32, "\xd2" x 32);
+    my $sl   = QBitcoin::Slashing->new_tx($s1, $s2);
+    QBitcoin::Slashing->ban_from_tx($sl);
+    # simulate the equivocating stake confirmed at height 5 in the best branch
+    my $spender = QBitcoin::Transaction->new(
+        in => [], out => [], tx_type => TX_TYPE_STAKE, fee => -1, hash => pack("H*", "99" x 32),
+    );
+    $spender->block_height(5);
+    $spender->add_to_cache;
+    $coin->tx_out = $spender->hash;
+    is(QBitcoin::Slashing->banned_height_in_best(), 5,
+        "banned_height_in_best returns the equivocating block's height");
+}
+
 done_testing();

@@ -20,7 +20,8 @@ use QBitcoin::Slashing::Stored;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::ConnectionList;
 use QBitcoin::Notify;
-use QBitcoin::ProtocolState qw(skip_scripts);
+use QBitcoin::ProtocolState qw(skip_scripts blockchain_synced);
+use QBitcoin::Generate::Control;
 use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Coins;
 use Bitcoin::Serialized;
@@ -227,6 +228,14 @@ sub receive {
     # Evict lowest-priority transactions if over limits
     if ($MEMPOOL_SIZE > MAX_MEMPOOL_SIZE * 2) {
         evict_mempool();
+    }
+
+    if ($self->is_slashing) {
+        # A valid slashing tx (built locally or received) bans the equivocated stake:
+        # any block built on it is now invalid. Trigger (re)generation to drop such a
+        # branch if it is currently best.
+        QBitcoin::Slashing->ban_from_tx($self);
+        QBitcoin::Generate::Control->generate_new() if blockchain_synced();
     }
 
     if ($self->up) {
