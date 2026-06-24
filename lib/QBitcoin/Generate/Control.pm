@@ -75,6 +75,15 @@ sub staked_slot {
     return exists $PUBLISHED_STAKE{$timeslot} ? 1 : 0;
 }
 
+# Have we already published a stake using this exact UTXO in this timeslot? Lets
+# make_stake_tx skip published UTXOs and pick a still-free stake address for a sibling
+# block in the same slot.
+sub is_utxo_published {
+    my $class = shift;
+    my ($timeslot, $key) = @_;
+    return $PUBLISHED_STAKE{$timeslot} && $PUBLISHED_STAKE{$timeslot}{$key} ? 1 : 0;
+}
+
 sub stake_conflicts {
     my $class = shift;
     my ($timeslot, $stake_tx) = @_;

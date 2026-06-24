@@ -163,7 +163,13 @@ sub make_out_union {
 
 sub make_stake_tx {
     my ($reward, $block_sign_data, $timeslot) = @_;
-    my @my_txo = grep { txo_confirmed($_) } QBitcoin::TXO->staked_utxo();
+    # Exclude UTXOs we have already published a stake with in this timeslot: re-using
+    # them would self-equivocate. The free (still-unused) UTXOs remain available, so in
+    # "separate" reward mode a later call can build a second, independent stake with a
+    # different address in the same slot - as if it were another node (see generate()).
+    my @my_txo = grep {
+        txo_confirmed($_) && !QBitcoin::Generate::Control->is_utxo_published($timeslot, $_->key)
+    } QBitcoin::TXO->staked_utxo();
     my $reward_to = $config->{reward_to} // "union";
     my @out;
     if ($reward_to eq "join") {
@@ -200,6 +206,17 @@ sub make_stake_tx {
 sub genesis_time() {
     state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
     return $genesis_time;
+}
+
+# Is there an uncommitted, weight-increasing transaction in the mempool? Only such a
+# transaction (coinbase / burn / downgrade / slashing - not a plain fee) can make a
+# sibling block built with a smaller free stake address outweigh our already-published
+# block, so we build a sibling only when one is pending.
+sub _have_weight_tx {
+    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+        return 1 if $tx->is_coinbase || $tx->is_slashing;
+    }
+    return 0;
 }
 
 sub generate {
@@ -256,16 +273,26 @@ sub generate {
             }
             # If current best block is our with the same height than unconfirm it for use the same stake amount
             if (!$prev_block->received_from) {
-                # Slashing self-guard: if we already published a stake for this slot, our
-                # own block already occupies it. Regenerating would re-sign the same
-                # (slot, UTXO) into a different block => self-equivocation. Keep it as is.
                 if (QBitcoin::Generate::Control->staked_slot($timeslot)) {
-                    Debugf("Keep our published block %s height %u for slot %u, skip regeneration (slashing self-guard)",
-                        $prev_block->hash_str, $height, $timeslot);
-                    return;
+                    # Our block already occupies this slot (its stake is published).
+                    # Regenerating it would re-sign the same (slot, UTXO) => self-
+                    # equivocation, so we never unconfirm it. But if a new weight-
+                    # increasing transaction (coinbase/burn/downgrade/slashing) has
+                    # appeared, build a SIBLING competing block with a still-free stake
+                    # address (make_stake_tx skips published UTXOs) - like a second
+                    # independent validator - WITHOUT unconfirming the published block.
+                    if (!_have_weight_tx()) {
+                        Debugf("Keep our published block %s height %u for slot %u, nothing new to add",
+                            $prev_block->hash_str, $height, $timeslot);
+                        return;
+                    }
+                    Debugf("Slot %u already staked; build a sibling block with a free address", $timeslot);
+                    # fall through without unconfirm; make_stake_tx picks a free address
                 }
-                Debugf("Unconfirming our block %s height %u for regenerating", $prev_block->hash_str, $height);
-                $prev_block->unconfirm();
+                else {
+                    Debugf("Unconfirming our block %s height %u for regenerating", $prev_block->hash_str, $height);
+                    $prev_block->unconfirm();
+                }
             }
             $height--;
             $prev_block = QBitcoin::Block->best_block($height)
