@@ -283,6 +283,28 @@ sub observe {
     return $conflict;
 }
 
+# If the best tip's stake is the one a mempool slashing tx punishes (i.e. some slashed
+# UTXO is spent by a transaction confirmed at the tip's height), return that slashing
+# tx. generate() uses this to decide whether to unconfirm the tip and rebuild including
+# the slashing tx (the slashed UTXO becomes free once the tip is unconfirmed).
+sub tip_slashing {
+    my $class = shift;
+    my ($tip) = @_;
+    $tip
+        or return undef;
+    my $height = $tip->height;
+    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+        next unless $tx->is_slashing;
+        foreach my $in (@{$tx->in}) {
+            my $out = $in->{txo}->tx_out
+                or next;
+            my $sp = QBitcoin::Transaction->get($out);
+            return $tx if $sp && defined($sp->block_height) && $sp->block_height == $height;
+        }
+    }
+    return undef;
+}
+
 # Build, validate and inject into the mempool a slashing transaction for an observed
 # equivocation, then trigger (re)generation so a staker can include it (on a branch
 # where the equivocated UTXO is unspent, e.g. a contesting branch). Returns the tx.

@@ -439,6 +439,27 @@ sub cleanup_mempool {
             }
             next;
         }
+        if ($tx->is_slashing) {
+            # A slashing tx intentionally double-spends the equivocating stake's UTXO:
+            # its input is "already spent" by the block we mean to slash. Keep it so we
+            # can land it by unconfirming that block (see QBitcoin::Generate). Drop only
+            # once the target is buried deeper than the slashing window can reorg.
+            my $tip = QBitcoin::Block->blockchain_height // 0;
+            my $buried = 1;
+            foreach my $in (@{$tx->in}) {
+                my $out = $in->{txo}->tx_out;
+                my $sp  = $out ? $class->get($out) : undef;
+                my $h   = $sp ? $sp->block_height : undef;
+                if (!defined($h) || $tip - $h <= SLASHING_WINDOW) {
+                    $buried = 0;
+                    last;
+                }
+            }
+            if ($buried && $tx->drop()) {
+                Infof("Drop slashing tx %s: target buried beyond the slashing window", $tx->hash_str);
+            }
+            next;
+        }
         my $spent_txo;
         foreach my $in (@{$tx->in}) {
             my $txo = $in->{txo};

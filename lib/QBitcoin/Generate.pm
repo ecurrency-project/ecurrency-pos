@@ -15,6 +15,7 @@ use QBitcoin::Coinbase;
 use QBitcoin::MyAddress qw(my_address stake_address);
 use QBitcoin::Transaction;
 use QBitcoin::Crypto qw(hash256);
+use QBitcoin::Slashing;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::Utils qw(get_address_utxo);
 use QBitcoin::Generate::Control;
@@ -240,6 +241,17 @@ sub generate {
                     return;
                 }
                 Debugf("Unconfirming our block %s height %u for regenerating", $prev_block->hash_str, $height);
+                $prev_block->unconfirm();
+            }
+            # The tip is a peer block whose stake is equivocated and we hold a slashing tx
+            # for it: unconfirm it so the rebuilt block (on its parent, in this timeslot,
+            # using the mempool) can include the slashing tx - its slashed UTXO is then
+            # free. Skip if we already staked this slot (would self-equivocate); the
+            # slashing tx stays in the mempool and we retry next slot.
+            elsif (!QBitcoin::Generate::Control->staked_slot($timeslot)
+                   && QBitcoin::Slashing->tip_slashing($prev_block)) {
+                Debugf("Unconfirming peer tip %s height %u to slash its equivocated stake",
+                    $prev_block->hash_str, $height);
                 $prev_block->unconfirm();
             }
             $height--;
