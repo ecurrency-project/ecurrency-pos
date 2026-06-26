@@ -208,7 +208,11 @@ sub generate {
     # build the block for the current timeslot on top of it.
     if (defined(my $level = QBitcoin::Generate::Control->generate_level)) {
         QBitcoin::Generate::Control->generate_level(undef); # one contest attempt per filled slot
-        $class->contest_level($level, $timeslot);
+        # When the filled slot is a past one, contest_level builds a block there and we fall
+        # through to build the current-slot block on top. When it is the current slot,
+        # contest_level builds our competing block directly in it (there is no separate top
+        # block to add) and returns true so we stop here.
+        return if $class->contest_level($level, $timeslot);
     }
     my $prev_block;
     my $height = QBitcoin::Block->blockchain_height() // -1;
@@ -242,33 +246,51 @@ sub generate {
     return $class->_generate($timeslot, $height, $prev_block);
 }
 
-# Try to generate our own block at the given height to contest a block that filled a
-# previously empty slot. The block at $level and its parent are taken from the current best
-# branch; we build at the contested block's own (past) timeslot, not the current one, so it
-# competes for the same slot. If the result is not a heavier branch, _generate() drops it.
+# Try to generate our own block at the given height to contest a block that filled a slot
+# which was effectively empty in our branch (no block, or only an empty/forced one that
+# carried no stake). The contested block and its parent are taken from the current best
+# branch. The block is built reusing only the contested branch's transactions (the $contest
+# flag), not the mempool, so a fee-paying tx the contested branch consumed in that slot is
+# available to us too - without it reward would be 0 and we could not stake at all. If the
+# result is not a heavier branch, _generate() drops it.
+#
+# Returns true if it built our block in the CURRENT slot (so generate() must not also build
+# a current-slot block on top), false otherwise (a past slot - generate() falls through and
+# builds the current-slot block on top of the contested branch).
 sub contest_level {
     my $class = shift;
     my ($level, $timeslot) = @_;
     $level >= 1
-        or return; # genesis has no slot to contest
+        or return 0; # genesis has no slot to contest
     my $contested = QBitcoin::Block->best_block($level)
-        or return;
+        or return 0;
     my $prev_block = QBitcoin::Block->best_block($level - 1)
-        or return;
-    # Only contest a block received from a peer, and only if its slot is in the past:
-    # a block in the current timeslot is handled by the normal generation path below.
+        or return 0;
+    # Only contest a block received from a peer; our own block we would simply regenerate.
     $contested->received_from
-        or return;
-    timeslot($contested->time) < $timeslot
-        or return;
-    # Generate in the latest past slot (the previous one), not the contested block's own
-    # slot: a later slot gives our stake more weight and a better chance to outweigh the
-    # branch. Use only the contested branch's transactions (the $contest flag), not the
-    # mempool, so the mempool stays available for the current-timeslot block on top -
-    # otherwise our branch could end up without a current-slot block while the contested
-    # branch gets one and so weighs more.
-    Debugf("Contest block %s height %u from past slot %u", $contested->hash_str, $level, timeslot($contested->time));
-    return $class->_generate($timeslot - BLOCK_INTERVAL, $level, $prev_block, 1);
+        or return 0;
+    my $contested_slot = timeslot($contested->time);
+    if ($contested_slot < $timeslot) {
+        # Past slot: generate in the latest past slot (the previous one), not the contested
+        # block's own slot - a later slot gives our stake more weight and a better chance to
+        # outweigh the branch. The mempool stays free (we pass the $contest flag) for the
+        # current-timeslot block generate() builds on top after we return; otherwise our
+        # branch could end up without a current-slot block while the contested branch gets
+        # one and so weighs more.
+        Debugf("Contest block %s height %u from past slot %u", $contested->hash_str, $level, $contested_slot);
+        $class->_generate($timeslot - BLOCK_INTERVAL, $level, $prev_block, 1);
+        return 0; # fall through in generate() to build the current-slot block on top
+    }
+    # Current slot: the contested peer block occupies the current slot at our tip height. The
+    # normal generation path cannot beat it - it would build on top of the contested block,
+    # and that branch already consumed the slot's fee tx, so our block there would be
+    # stakeless (reward 0) with weight +1. Build our competing block in the current slot at
+    # the contested height instead, reusing the contested branch's transactions so the fee
+    # tx is available and our stake applies. If it outweighs the contested block it switches
+    # over and becomes the tip; we are already in the current slot, so no block on top.
+    Debugf("Contest block %s height %u in current slot %u", $contested->hash_str, $level, $contested_slot);
+    $class->_generate($timeslot, $level, $prev_block, 1);
+    return 1; # we hold the current slot; generate() must not build another block on top
 }
 
 sub _generate {

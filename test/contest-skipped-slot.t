@@ -117,4 +117,23 @@ send_blk(2, "p3", "b2", 310, 60, 1);
 is(QBitcoin::Block->best_block->hash, "p3", "Heavier p3 became best");
 is(QBitcoin::Generate::Control->generate_level, 2, "generate_level flags p3: empty tip e3 must not raise the contest bar");
 
+# Current-slot contest: a peer block that fills the CURRENT slot at our tip height cannot be
+# beaten by the normal generation path - that would build a stakeless block on top of it
+# (the contested branch already consumed the slot's fee tx, so reward would be 0). contest_level
+# must instead build our competing block directly in the current slot, at the contested height,
+# on its parent, reusing only the contested branch's transactions (so the fee tx is available
+# and our stake applies) - and signal generate() not to build another block on top.
+send_blk(3, "c3", "p3", 400, 90, 1);
+is(QBitcoin::Block->best_block->hash, "c3", "Heavier c3 became best");
+is(QBitcoin::Generate::Control->generate_level, 3, "generate_level flags c3 at our tip height");
+my $c3_slot = GENESIS_TIME + 3 * BLOCK_INTERVAL * FORCE_BLOCKS; # c3's own slot, used as the current slot
+@gen = ();
+QBitcoin::Generate->generate($c3_slot);
+is(scalar(@gen), 1, "current-slot contest builds exactly one block (no block on top)");
+is($gen[0][0], $c3_slot, "...in the current slot itself, not the previous one (max stake weight)");
+is($gen[0][1], 3, "...at the contested height");
+is($gen[0][2], "p3", "...on p3, the block before the contested one");
+ok($gen[0][3], "...using only the contested branch's transactions (so its fee tx lets us stake)");
+is(QBitcoin::Generate::Control->generate_level, undef, "generate_level cleared after current-slot contest");
+
 done_testing();
