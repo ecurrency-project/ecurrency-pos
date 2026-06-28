@@ -133,6 +133,9 @@ sub validate {
             }
             $stake_reward = -$transaction->fee; # fee is negative for stake transactions
         }
+        elsif ($transaction->is_slashing && $block->time < SLASHING_START) {
+            return "Slashing transaction " . $transaction->hash_str . " is not allowed before slashing time";
+        }
         else {
             return "Transaction " . $transaction->hash_str . " is not a coinbase, stake or standard transaction";
         }

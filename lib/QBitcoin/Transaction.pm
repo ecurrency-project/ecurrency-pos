@@ -1100,6 +1100,10 @@ sub validate {
     }
     if ($self->is_slashing) {
         return 0 if skip_scripts();
+        if (time() < SLASHING_START) {
+            Warningf("Slashing transaction %s rejected: slashing not started yet", $self->hash_str);
+            return -1;
+        }
         return $self->validate_slashing;
     }
     # Transaction must contains at least one output (can't spend all inputs as fee)

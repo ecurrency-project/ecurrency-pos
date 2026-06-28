@@ -151,6 +151,7 @@ sub free_tx {
 # itself) is excluded because its hash depends on this very signature.
 sub sign_data {
     my $self = shift;
+    return $self->sign_data_pre if $self->time < SLASHING_START;
     my $data = ($self->prev_hash // ZERO_HASH) . pack("N", timeslot($self->time));
     my $num = 0;
     my $tx_hashes = "";
@@ -158,6 +159,16 @@ sub sign_data {
         $tx_hashes .= $_ if $num++;
     }
     return $data . hash256($tx_hashes);
+}
+
+sub sign_data_pre {
+    my $self = shift;
+    my $data = ($self->prev_hash // ZERO_HASH);
+    my $num = 0;
+    foreach (@{$self->tx_hashes}) {
+        $data .= $_ if $num++;
+    }
+    return $data;
 }
 
 sub hash_str {
