@@ -157,7 +157,13 @@ sub receive {
     if (blockchain_synced() && @{$self->transactions} && $self->transactions->[0]->is_stake) {
         my $stake = $self->transactions->[0];
         if (my $other = QBitcoin::Slashing->observe($stake, timeslot($self->time))) {
-            QBitcoin::Slashing->report_equivocation($stake, $other);
+            if ($self->time < SLASHING_START) {
+                Warningf("Equivocation detected for stake %s vs %s in block %s height %u, but slashing is not yet active",
+                    $stake->hash_str, $other->hash_str, $self->hash_str, $self->height);
+            }
+            else {
+                QBitcoin::Slashing->report_equivocation($stake, $other);
+            }
         }
     }
 
