@@ -91,7 +91,10 @@ my $now_slot = timeslot(time());
 QBitcoin::Generate::Control->generate_level(1);
 QBitcoin::Generate->generate($now_slot);
 is(scalar(@gen), 2, "generate builds two blocks");
-is($gen[0][0], $now_slot - BLOCK_INTERVAL, "...in the previous slot (more stake weight), not a2's slot");
+# We aim for the latest past slot (more stake weight), but it is capped at the last slot of
+# prev a1's forced-block window - a later slot would skip a forced block and be invalid.
+# Here a1 sits at the genesis slot so the cap is the next forced boundary (== a2's slot).
+is($gen[0][0], GENESIS_TIME + FORCE_BLOCKS * BLOCK_INTERVAL, "...at prev's forced-block boundary, not a far-future slot");
 is($gen[0][1], 1, "...at a2's height");
 is($gen[0][2], "a1", "...on a1, the block before the filled slot");
 ok($gen[0][3], "...using only the contested branch's transactions");

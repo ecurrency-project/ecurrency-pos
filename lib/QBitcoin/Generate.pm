@@ -273,12 +273,20 @@ sub contest_level {
     if ($contested_slot < $timeslot) {
         # Past slot: generate in the latest past slot (the previous one), not the contested
         # block's own slot - a later slot gives our stake more weight and a better chance to
-        # outweigh the branch. The mempool stays free (we pass the $contest flag) for the
-        # current-timeslot block generate() builds on top after we return; otherwise our
-        # branch could end up without a current-slot block while the contested branch gets
-        # one and so weighs more.
-        Debugf("Contest block %s height %u from past slot %u", $contested->hash_str, $level, $contested_slot);
-        $class->_generate($timeslot - BLOCK_INTERVAL, $level, $prev_block, 1);
+        # outweigh the branch. But cap it at the last slot of $prev_block's forced-block
+        # window: a slot beyond that boundary would skip a forced block and make our block
+        # invalid ("Forced block missed", see QBitcoin::Block::Validate). The mempool stays
+        # free (we pass the $contest flag) for the current-timeslot block generate() builds on
+        # top after we return; otherwise our branch could end up without a current-slot block
+        # while the contested branch gets one and so weighs more.
+        my $genesis = genesis_time();
+        my $max_slot = $genesis +
+            (int(($prev_block->time - $genesis) / BLOCK_INTERVAL / FORCE_BLOCKS) + 1) * FORCE_BLOCKS * BLOCK_INTERVAL;
+        my $build_slot = $timeslot - BLOCK_INTERVAL;
+        $build_slot = $max_slot if $build_slot > $max_slot;
+        Debugf("Contest block %s height %u from past slot %u, build at slot %u",
+            $contested->hash_str, $level, $contested_slot, $build_slot);
+        $class->_generate($build_slot, $level, $prev_block, 1);
         return 0; # fall through in generate() to build the current-slot block on top
     }
     # Current slot: the contested peer block occupies the current slot at our tip height. The
