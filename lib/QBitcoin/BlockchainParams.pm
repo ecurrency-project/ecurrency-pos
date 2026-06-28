@@ -20,6 +20,7 @@ use constant MAINNET => {
     GENESIS_REWARD     => 50 * 100000000, # 50 QBTC
     ECR_GENESIS        => scalar reverse(pack("H*", "90d5a026af1ce1f31fca0f0ae12f8ce74c73470b151fb0ecbd1b3a8ad0e0ccb9")),
     UPGRADE_FINISHED   => 1,
+    SLASHING_START     => 1785542400, # 2026-08-01
     CHECKPOINTS        => {
         # height => pack('H*', "block_hash_hex"),
         1000000 => pack("H*", "17f97cf4a7bda6c31379e185a314fc6e47d6c4987b0f7bc4816c69420537c668"),
@@ -42,6 +43,7 @@ use constant TESTNET => {
     GENESIS_REWARD     => 50 * 100000000, # 50 QBTC
     ECR_GENESIS        => scalar reverse(pack("H*", "a02c0af2102947df4e31444f3b6d7f12df6e18d356830cb277610f42c4f57e85")),
     UPGRADE_FINISHED   => 0,
+    SLASHING_START     => 1784073600, # 2026-07-15
     CHECKPOINTS        => {
         150000 => pack("H*", "be4125eb25b4e527f3b87108245ddd6c18875c15b8b6451502b03d8f5eb54667"),
     },
@@ -52,6 +54,7 @@ use constant REGTEST => {
     RPC_PORT           => 29667,
     REST_PORT          => 29668,
     SEED_PEER          => "",
+    SLASHING_START     => 0,
     UPGRADE_FINISHED   => 0,
     CHECKPOINTS        => {},
 };
