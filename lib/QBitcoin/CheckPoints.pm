@@ -2,6 +2,7 @@ package QBitcoin::CheckPoints;
 use warnings;
 use strict;
 
+use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
 
