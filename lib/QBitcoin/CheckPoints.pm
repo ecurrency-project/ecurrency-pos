@@ -2,10 +2,11 @@ package QBitcoin::CheckPoints;
 use warnings;
 use strict;
 
+use QBitcoin::Const;
 use QBitcoin::Config;
 
 use Exporter qw(import);
-our @EXPORT_OK = qw(checkpoint_hash max_checkpoint_height prev_checkpoint_height upgrade_finished);
+our @EXPORT_OK = qw(checkpoint_hash max_checkpoint_height prev_checkpoint_height upgrade_finished slashing_start);
 
 use constant CHECKPOINTS => {
     # height => pack('H*', "block_hash_hex"),
@@ -52,6 +53,10 @@ sub prev_checkpoint_height {
 
 sub upgrade_finished {
     return $config->{regtest} ? 0 : $config->{testnet} ? UPGRADE_FINISHED_TESTNET : UPGRADE_FINISHED;
+}
+
+sub slashing_start {
+    return $config->{regtest} ? 0 : $config->{testnet} ? SLASHING_START_TESTNET : SLASHING_START;
 }
 
 1;

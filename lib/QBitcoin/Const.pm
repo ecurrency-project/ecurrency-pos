@@ -8,7 +8,7 @@ use constant GENESIS_BLOCK_HASH => "219a2e1a17d6aaab10d2d16db3a7fe32b0292ed51631
 use constant GENESIS_BLOCK_HASH_TESTNET => "bee62fcd5231d448c17972ef59a08b66f1f7fc047422635ac59491df21eb2350";
 use constant QBT_BURN_HASH      => pack("H*", "d800a80216f6e59ec294bffcb5887bc4a5dd0fc9"); # Ecr2Ecr2Ecr2Ecr2Ecr2Ecr2Ecr29CQmx3
 use constant QBT_BURN_SCRIPT    => OP_DUP . OP_HASH160 . pack("C", length(QBT_BURN_HASH)) . QBT_BURN_HASH . OP_EQUALVERIFY . OP_CHECKSIG;
-use constant VERSION            => "0.3";
+use constant VERSION            => "0.4";
 
 use constant QBITCOIN_CONST => {
     VERSION                 => VERSION,
@@ -80,6 +80,8 @@ use constant QBITCOIN_CONST => {
     UPGRADE_FEE             => 0.01, # 1%
     UPGRADE_MAX_BLOCKS      => 4200000, # March 2026
     UPGRADE_MAX_VALUE       => 333_000_000 * 100_000_000, # 333M ECR - stop conversion when upgraded reaches this
+    SLASHING_START          => 1785542400, # 2026-08-01
+    SLASHING_START_TESTNET  => 1784073600, # 2026-07-15
     STATIC_REWARD           => 0, # No reward fee after upgrade
     REWARD_HALVING          => 10_000_000,  # blocks, halving every ~ 3 years
     COINBASE_CONFIRM_TIME   => 900,     # 15 minutes

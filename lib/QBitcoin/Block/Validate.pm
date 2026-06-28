@@ -13,7 +13,7 @@ use List::Util qw(sum0);
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::ProtocolState qw(skip_scripts);
-use QBitcoin::CheckPoints qw(checkpoint_hash);
+use QBitcoin::CheckPoints qw(checkpoint_hash slashing_start);
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::Log;
 use QBitcoin::Transaction;
@@ -132,6 +132,9 @@ sub validate {
                 return "Stake transaction " . $transaction->hash_str . " is equivocated (slashed); block invalid";
             }
             $stake_reward = -$transaction->fee; # fee is negative for stake transactions
+        }
+        elsif ($transaction->is_slashing && $block->time < slashing_start) {
+            return "Slashing transaction " . $transaction->hash_str . " is not allowed before slashing time";
         }
         else {
             return "Transaction " . $transaction->hash_str . " is not a coinbase, stake or standard transaction";

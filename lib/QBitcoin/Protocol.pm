@@ -50,7 +50,7 @@ use QBitcoin::Config;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer last_qbt_data_time);
-use QBitcoin::CheckPoints qw(upgrade_finished);
+use QBitcoin::CheckPoints qw(upgrade_finished slashing_start);
 use QBitcoin::Block;
 use QBitcoin::Transaction;
 use QBitcoin::TXO;
@@ -64,7 +64,7 @@ with 'QBitcoin::Protocol::BTC' if UPGRADE_POW;
 use constant {
     MAGIC             => "QECR",
     MAGIC_TESTNET     => "QECT",
-    PROTOCOL_VERSION  => 2,
+    PROTOCOL_VERSION  => 3,
     PROTOCOL_FEATURES => 0,
 };
 
@@ -148,6 +148,11 @@ sub cmd_version {
         }
     }
     if ($self->check_duplicate_connection($nonce) != 0) {
+        return -1;
+    }
+    if ($protocol_version < 3 && time() >= slashing_start) {
+        Warningf("Peer %s protocol version %u is too old, closing", $self->peer->id, $protocol_version);
+        $self->abort("old_protocol");
         return -1;
     }
     $self->remote_nonce = $nonce;
@@ -952,6 +957,11 @@ sub cmd_pong {
         $self->drop_pending();
     }
     $self->last_cmd_ping = undef;
+    if ($self->protocol_version < 3 && time() >= slashing_start) {
+        # Protocol v2 peer, but slashing time is reached, so we should disconnect it
+        $self->abort("protocol_version");
+        return -1;
+    }
     return 0;
 }
 

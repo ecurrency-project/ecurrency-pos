@@ -23,7 +23,7 @@ use QBitcoin::ConnectionList;
 use QBitcoin::Notify;
 use QBitcoin::ProtocolState qw(skip_scripts blockchain_synced);
 use QBitcoin::Generate::Control;
-use QBitcoin::CheckPoints qw(upgrade_finished);
+use QBitcoin::CheckPoints qw(upgrade_finished slashing_start);
 use QBitcoin::Coins;
 use Bitcoin::Serialized;
 
@@ -1092,6 +1092,10 @@ sub validate {
     }
     if ($self->is_slashing) {
         return 0 if skip_scripts();
+        if (time() < slashing_start) {
+            Warningf("Slashing transaction %s rejected: slashing not started yet", $self->hash_str);
+            return -1;
+        }
         return $self->validate_slashing;
     }
     # Transaction must contains at least one output (can't spend all inputs as fee)

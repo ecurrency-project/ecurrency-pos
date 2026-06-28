@@ -8,7 +8,7 @@ use QBitcoin::Log;
 use QBitcoin::Config;
 use QBitcoin::TXO;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced skip_scripts);
-use QBitcoin::CheckPoints qw(checkpoint_hash max_checkpoint_height prev_checkpoint_height);
+use QBitcoin::CheckPoints qw(checkpoint_hash max_checkpoint_height prev_checkpoint_height slashing_start);
 use QBitcoin::Transaction;
 use QBitcoin::ConnectionList;
 use QBitcoin::Generate::Control;
@@ -156,7 +156,13 @@ sub receive {
     if (blockchain_synced() && @{$self->transactions} && $self->transactions->[0]->is_stake) {
         my $stake = $self->transactions->[0];
         if (my $other = QBitcoin::Slashing->observe($stake, timeslot($self->time))) {
-            QBitcoin::Slashing->report_equivocation($stake, $other);
+            if ($self->time < slashing_start) {
+                Warningf("Equivocation detected for stake %s vs %s in block %s height %u, but slashing is not yet active",
+                    $stake->hash_str, $other->hash_str, $self->hash_str, $self->height);
+            }
+            else {
+                QBitcoin::Slashing->report_equivocation($stake, $other);
+            }
         }
     }
 
