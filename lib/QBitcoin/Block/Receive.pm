@@ -477,7 +477,9 @@ sub free {
 
     Debugf("Free block %s height %u from memory cache", $block->hash_str, $block->height);
     if ($block->prev_block) {
-        $block->prev_block->next_block(undef);
+        if ($block->prev_block->next_block && $block->prev_block->next_block->hash eq $block->hash) {
+            $block->prev_block->next_block(undef);
+        }
         $block->prev_block(undef);
     }
     $block->next_block(undef);
