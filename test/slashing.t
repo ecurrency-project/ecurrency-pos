@@ -119,13 +119,13 @@ is($slashP->validate, 0, "partial-overlap slashing validates");
 
 # persistence: evidence survives a store/load round-trip and rebuilds the same tx.
 # Insert the row in isolation (no parent transaction row here), so drop the FK check.
-my $blob = $slash->slashing->serialize;
 dbh->do("PRAGMA foreign_keys = OFF");
-QBitcoin::Slashing::Stored->create({ tx_id => 1, evidence => $blob });
+QBitcoin::Slashing::Stored->create({ tx_id => 1, %{$slash->slashing->stored_fields} });
 my ($row) = QBitcoin::Slashing::Stored->find(tx_id => 1);
 ok($row, "stored evidence row found");
-is(unpack("H*", $row->evidence), unpack("H*", $blob), "stored evidence bytes match");
-my $ev = QBitcoin::Slashing->deserialize(Bitcoin::Serialized->new($row->evidence));
+is($row->timeslot, $slash->slashing->proofs->[0]{timeslot}, "stored shared timeslot matches");
+is(unpack("H*", $row->raw1), unpack("H*", $slash->slashing->proofs->[0]{raw}), "stored proof-1 stake bytes match");
+my $ev = QBitcoin::Slashing->from_row($row);
 my $rebuilt = QBitcoin::Transaction->new(
     in       => $slash->in,
     out      => $slash->out,

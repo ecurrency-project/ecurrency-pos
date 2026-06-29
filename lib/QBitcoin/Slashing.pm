@@ -82,6 +82,27 @@ sub deserialize {
     return $class->new(proofs => \@proofs);
 }
 
+# Database persistence in expanded (column) form rather than one opaque blob. The two
+# proofs always share the same timeslot, so it is stored once.
+sub stored_fields {
+    my $self = shift;
+    my ($p1, $p2) = @{$self->proofs};
+    return {
+        timeslot   => $p1->{timeslot},
+        prev_hash1 => $p1->{prev_hash}, digest1 => $p1->{digest}, raw1 => $p1->{raw},
+        prev_hash2 => $p2->{prev_hash}, digest2 => $p2->{digest}, raw2 => $p2->{raw},
+    };
+}
+
+sub from_row {
+    my $class = shift;
+    my ($row) = @_;
+    return $class->new(proofs => [
+        { prev_hash => $row->prev_hash1, timeslot => $row->timeslot, digest => $row->digest1, raw => $row->raw1 },
+        { prev_hash => $row->prev_hash2, timeslot => $row->timeslot, digest => $row->digest2, raw => $row->raw2 },
+    ]);
+}
+
 # block_sign_data the stake signed, reassembled from a proof
 sub _block_sign_data {
     my ($p) = @_;

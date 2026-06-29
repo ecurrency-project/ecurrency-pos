@@ -501,8 +501,8 @@ sub store {
         # Persist the equivocation evidence so the transaction can be rebuilt (and its
         # hash re-verified) on load.
         QBitcoin::Slashing::Stored->create({
-            tx_id    => $self->id,
-            evidence => $self->slashing->serialize,
+            tx_id => $self->id,
+            %{$self->slashing->stored_fields},
         });
     }
     foreach my $in (@{$self->in}) {
@@ -1360,7 +1360,7 @@ sub pre_load {
                 Errf("No evidence for slashing transaction %s", unpack("H*", $attr->{hash}));
                 die "No evidence for slashing transaction " . unpack("H*", $attr->{hash}) . "\n";
             }
-            $attr->{slashing} = QBitcoin::Slashing->deserialize(Bitcoin::Serialized->new($s->evidence));
+            $attr->{slashing} = QBitcoin::Slashing->from_row($s);
         }
         if ($attr->{tx_type} == TX_TYPE_TOKENS) {
             my $token_hash;
