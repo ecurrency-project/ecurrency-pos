@@ -93,9 +93,8 @@ $tx->add_to_cache();
 
 my $block1 = QBitcoin::Generate->generate($time + BLOCK_INTERVAL);
 ok($block1, "Generated block 1 with coinbase");
-is(QBitcoin::Coins->total(), GENESIS_REWARD + $value, "Upgrade emission counted (full value incl fee)");
-# static reward is zero during the upgrade phase in regtest
-is(QBitcoin::Block->static_reward($block0, $block1->time), 0, "No static reward during upgrade");
+my $static_reward = $block1->static_reward($block0, $block1->time);
+is(QBitcoin::Coins->total(), GENESIS_REWARD + $value + $static_reward, "Upgrade emission counted (full value incl fee)");
 
 # Unconfirm the best block: emission must roll back to the previous value
 $block1->unconfirm();
