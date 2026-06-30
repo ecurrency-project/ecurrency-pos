@@ -197,13 +197,11 @@ sub static_reward {
     my $class = shift;
     my ($prev_block, $time) = @_;
     my $static_reward = 0;
-    if ($prev_block) {
+    state $reward_start = $config->{regtest} ? 0 : $config->{testnet} ? STATIC_REWARD_START_TESTNET : STATIC_REWARD_START;
+    if ($prev_block && $time >= $reward_start) {
         my $timeslot = timeslot($time);
-        if (!UPGRADE_POW || $prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped($timeslot)) {
-            state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
-            $static_reward = int(STATIC_REWARD / 2**int(($timeslot - $genesis_time) / BLOCK_INTERVAL / REWARD_HALVING));
-            $static_reward *= ($timeslot - $prev_block->time) / BLOCK_INTERVAL;
-        }
+        $static_reward = int(STATIC_REWARD / 2**int(($timeslot - $reward_start) / BLOCK_INTERVAL / REWARD_HALVING));
+        $static_reward *= ($timeslot - $prev_block->time) / BLOCK_INTERVAL;
     }
     return $static_reward;
 }
