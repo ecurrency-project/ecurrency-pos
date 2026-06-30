@@ -21,6 +21,7 @@ use constant MAINNET => {
     ECR_GENESIS        => scalar reverse(pack("H*", "90d5a026af1ce1f31fca0f0ae12f8ce74c73470b151fb0ecbd1b3a8ad0e0ccb9")),
     UPGRADE_FINISHED   => 1,
     SLASHING_START     => 1785542400, # 2026-08-01
+    STATIC_REWARD_START => 1785542400, # 2026-08-01
     CHECKPOINTS        => {
         # height => pack('H*', "block_hash_hex"),
         1000000 => pack("H*", "17f97cf4a7bda6c31379e185a314fc6e47d6c4987b0f7bc4816c69420537c668"),
@@ -44,6 +45,7 @@ use constant TESTNET => {
     ECR_GENESIS        => scalar reverse(pack("H*", "a02c0af2102947df4e31444f3b6d7f12df6e18d356830cb277610f42c4f57e85")),
     UPGRADE_FINISHED   => 0,
     SLASHING_START     => 1784073600, # 2026-07-15
+    STATIC_REWARD_START => 1784073600, # 2026-07-15
     CHECKPOINTS        => {
         150000 => pack("H*", "be4125eb25b4e527f3b87108245ddd6c18875c15b8b6451502b03d8f5eb54667"),
     },
@@ -63,7 +65,7 @@ use constant COMMON_CONST => {
     UPGRADE_FEE        => 0.01, # 1%
     UPGRADE_MAX_BLOCKS => 4200000, # March 2026
     UPGRADE_MAX_VALUE  => 333_000_000 * 100_000_000, # 333M ECR - stop conversion when upgraded reaches this
-    STATIC_REWARD      => 0, # No reward fee after upgrade
+    STATIC_REWARD      => 10000000,   # 0.1 ECR per block after hardfork 2026-08-01
     REWARD_HALVING     => 10_000_000, # blocks, halving every ~ 3 years and emit 4M QBTC total as block rewards
     STAKE_MATURITY     => 12*3600,    # 12 hours
 };
