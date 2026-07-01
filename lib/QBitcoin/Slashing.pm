@@ -229,7 +229,7 @@ sub _verify_stake {
         or return undef;
     $stake->{in} = \@in;
     delete $stake->{in_raw};
-    $stake->block_sign_data(_block_sign_data($p));
+    $stake->block_sign_data = _block_sign_data($p);
     $stake->check_input_script == 0
         or return undef;
     return $stake;
@@ -280,13 +280,9 @@ sub verify {
 # slots beyond the slashing window are pruned. Returns the conflicting stake or undef.
 sub observe {
     my $class = shift;
-    my ($stake) = @_;
+    my ($stake, $timeslot) = @_;
     $stake && $stake->is_stake
         or return undef;
-    my $bsd = $stake->block_sign_data;
-    defined($bsd) && length($bsd) == PROOF_HEAD_LEN
-        or return undef;
-    my $timeslot = unpack("N", substr($bsd, 32, 4));
     if ($timeslot > $MAX_SLOT) {
         $MAX_SLOT = $timeslot;
         my $cutoff = $MAX_SLOT - SLASHING_WINDOW * BLOCK_INTERVAL;
@@ -301,7 +297,7 @@ sub observe {
         my $prev = $slot->{$key};
         if ($prev) {
             # Same UTXO already staked this slot: equivocation iff it was a different block.
-            $conflict //= $prev if $prev->block_sign_data ne $bsd;
+            $conflict //= $prev if $prev->block_sign_data ne $stake->block_sign_data;
         }
         else {
             $slot->{$key} = $stake;
@@ -327,7 +323,7 @@ sub ban_from_tx {
     }
     my $cutoff = $MAX_SLOT - SLASHING_WINDOW * BLOCK_INTERVAL;
     foreach my $key (keys %BANNED) {
-        delete $BANNED{$key} if $BANNED{$key}{timeslot} < $cutoff;
+        delete $BANNED{$key} if $BANNED{$key}->{timeslot} < $cutoff;
     }
 }
 
@@ -353,7 +349,7 @@ sub banned_height_in_best {
     my $class = shift;
     my $min;
     foreach my $key (keys %BANNED) {
-        my $txo = $BANNED{$key}{txo}
+        my $txo = $BANNED{$key}->{txo}
             or next;
         my $out = $txo->tx_out
             or next; # not spent in the best branch (already dropped / never confirmed)

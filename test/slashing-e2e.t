@@ -72,8 +72,8 @@ is($slash->out->[0]->value, 900, "owner refunded value minus the 10% fine");
 
 # Detection choreography: observe both, then report builds + injects + bans.
 blockchain_synced(1);
-is(QBitcoin::Slashing->observe($stake1), undef, "first stake observed, no conflict");
-my $other = QBitcoin::Slashing->observe($stake2);
+is(QBitcoin::Slashing->observe($stake1, $timeslot), undef, "first stake observed, no conflict");
+my $other = QBitcoin::Slashing->observe($stake2, $timeslot);
 ok($other, "second stake observed -> equivocation detected");
 
 my $built = QBitcoin::Slashing->report_equivocation($stake2, $other);

@@ -155,7 +155,7 @@ sub receive {
     # (during sync we replay history, where equivocations are too deep to slash anyway).
     if (blockchain_synced() && @{$self->transactions} && $self->transactions->[0]->is_stake) {
         my $stake = $self->transactions->[0];
-        if (my $other = QBitcoin::Slashing->observe($stake)) {
+        if (my $other = QBitcoin::Slashing->observe($stake, timeslot($self->time))) {
             QBitcoin::Slashing->report_equivocation($stake, $other);
         }
     }

@@ -141,15 +141,15 @@ is(unpack("H*", $rebuilt->hash), unpack("H*", $slash->hash), "tx rebuilt from st
     my $c  = make_coin(pack("H*", "e1" x 32), 0, 1000);
     my $sA = make_stake([$c], "\x33" x 32, "\xc1" x 32);
     my $sB = make_stake([$c], "\x44" x 32, "\xc2" x 32); # same coin+slot, different block
-    is(QBitcoin::Slashing->observe($sA), undef, "first stake seen: no conflict");
-    my $conf = QBitcoin::Slashing->observe($sB);
+    is(QBitcoin::Slashing->observe($sA, $timeslot), undef, "first stake seen: no conflict");
+    my $conf = QBitcoin::Slashing->observe($sB, $timeslot);
     ok($conf, "conflicting stake detected on observe");
     is($conf->block_sign_data, $sA->block_sign_data, "reported conflict is the first stake");
-    is(QBitcoin::Slashing->observe($sA), undef, "re-seeing the same block is not a conflict");
+    is(QBitcoin::Slashing->observe($sA, $timeslot), undef, "re-seeing the same block is not a conflict");
     # a non-conflicting stake (different UTXO) is not reported
     my $c2 = make_coin(pack("H*", "e2" x 32), 0, 1000);
     my $sC = make_stake([$c2], "\x55" x 32, "\xc3" x 32);
-    is(QBitcoin::Slashing->observe($sC), undef, "unrelated stake: no conflict");
+    is(QBitcoin::Slashing->observe($sC, $timeslot), undef, "unrelated stake: no conflict");
 }
 
 # ban primitives: a valid slashing tx makes the equivocated stake invalid at its slot
