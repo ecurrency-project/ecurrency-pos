@@ -14,6 +14,8 @@ use QBitcoin::TXO;
 use QBitcoin::Coinbase;
 use QBitcoin::MyAddress qw(my_address stake_address);
 use QBitcoin::Transaction;
+use QBitcoin::Crypto qw(hash256);
+use QBitcoin::Slashing;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::Utils qw(get_address_utxo);
 use QBitcoin::Generate::Control;
@@ -53,6 +55,12 @@ sub load_address_utxo {
 sub generated_time {
     my $class = shift;
     return QBitcoin::Generate::Control->generated_time;
+}
+
+sub gen_time {
+    my $class = shift;
+    my ($timeslot) = @_;
+    return QBitcoin::Generate::Control->gen_time($timeslot);
 }
 
 sub txo_confirmed {
@@ -155,7 +163,13 @@ sub make_out_union {
 
 sub make_stake_tx {
     my ($reward, $block_sign_data, $timeslot) = @_;
-    my @my_txo = grep { txo_confirmed($_) } QBitcoin::TXO->staked_utxo();
+    # Exclude UTXOs we have already published a stake with in this timeslot: re-using
+    # them would self-equivocate. The free (still-unused) UTXOs remain available, so in
+    # "separate" reward mode a later call can build a second, independent stake with a
+    # different address in the same slot - as if it were another node (see generate()).
+    my @my_txo = grep {
+        txo_confirmed($_) && !QBitcoin::Generate::Control->is_utxo_published($timeslot, $_->key)
+    } QBitcoin::TXO->staked_utxo();
     my $reward_to = $config->{reward_to} // "union";
     my @out;
     if ($reward_to eq "join") {
@@ -194,6 +208,17 @@ sub genesis_time() {
     return $genesis_time;
 }
 
+# Is there an uncommitted, weight-increasing transaction in the mempool? Only such a
+# transaction (coinbase / burn / downgrade / slashing - not a plain fee) can make a
+# sibling block built with a smaller free stake address outweigh our already-published
+# block, so we build a sibling only when one is pending.
+sub _have_weight_tx {
+    foreach my $tx (QBitcoin::Transaction->mempool_list()) {
+        return 1 if $tx->is_coinbase || $tx->is_slashing;
+    }
+    return 0;
+}
+
 sub generate {
     my $class = shift;
     my ($time) = @_;
@@ -214,6 +239,24 @@ sub generate {
         # block to add) and returns true so we stop here.
         return if $class->contest_level($level, $timeslot);
     }
+    # Slashing: if the best branch rests on an equivocated (banned) stake we hold
+    # evidence for, that branch is invalid regardless of its weight. Drop the best
+    # branch down to the offending block; the normal generation below then rebuilds on
+    # the last valid block in the current slot, pulling the slashing tx from the mempool
+    # (its slashed UTXO is free again). Skip while we have already staked this slot - we
+    # would self-equivocate; the slashing tx waits in the mempool and we retry next slot.
+    if (!QBitcoin::Generate::Control->staked_slot($timeslot)) {
+        if (defined(my $banned_height = QBitcoin::Slashing->banned_height_in_best())) {
+            while (1) {
+                my $tip = QBitcoin::Block->blockchain_height;
+                last unless defined($tip) && $tip >= $banned_height;
+                my $bad = QBitcoin::Block->best_block($tip)
+                    or last;
+                Debugf("Drop equivocated best block %s height %u for slashing", $bad->hash_str, $tip);
+                $bad->unconfirm();
+            }
+        }
+    }
     my $prev_block;
     my $height = QBitcoin::Block->blockchain_height() // -1;
     if ($height >= 0) {
@@ -230,8 +273,26 @@ sub generate {
             }
             # If current best block is our with the same height than unconfirm it for use the same stake amount
             if (!$prev_block->received_from) {
-                Debugf("Unconfirming our block %s height %u for regenerating", $prev_block->hash_str, $height);
-                $prev_block->unconfirm();
+                if (QBitcoin::Generate::Control->staked_slot($timeslot)) {
+                    # Our block already occupies this slot (its stake is published).
+                    # Regenerating it would re-sign the same (slot, UTXO) => self-
+                    # equivocation, so we never unconfirm it. But if a new weight-
+                    # increasing transaction (coinbase/burn/downgrade/slashing) has
+                    # appeared, build a SIBLING competing block with a still-free stake
+                    # address (make_stake_tx skips published UTXOs) - like a second
+                    # independent validator - WITHOUT unconfirming the published block.
+                    if (!_have_weight_tx()) {
+                        Debugf("Keep our published block %s height %u for slot %u, nothing new to add",
+                            $prev_block->hash_str, $height, $timeslot);
+                        return;
+                    }
+                    Debugf("Slot %u already staked; build a sibling block with a free address", $timeslot);
+                    # fall through without unconfirm; make_stake_tx picks a free address
+                }
+                else {
+                    Debugf("Unconfirming our block %s height %u for regenerating", $prev_block->hash_str, $height);
+                    $prev_block->unconfirm();
+                }
             }
             $height--;
             $prev_block = QBitcoin::Block->best_block($height)
@@ -345,12 +406,30 @@ sub _generate {
                 @transactions = grep { !$_->is_coinbase } @transactions;
             }
         }
-        # Generate new stake_tx with correct output value
-        my $block_sign_data = $prev_block ? $prev_block->hash : ZERO_HASH;
-        $block_sign_data .= $_->hash foreach @transactions;
+        # Generate new stake_tx with correct output value. Must match Block::sign_data:
+        # prev_hash . timeslot . hash256(concat of non-stake tx hashes). @transactions
+        # here holds exactly the non-stake txs (the stake is unshifted to index 0 below).
+        my $tx_hashes = "";
+        $tx_hashes .= $_->hash foreach @transactions;
+        my $block_sign_data = ($prev_block ? $prev_block->hash : ZERO_HASH) . pack("N", $timeslot) . hash256($tx_hashes);
         $stake_tx = make_stake_tx($reward, $block_sign_data, $timeslot);
         Infof("Generated stake tx %s with input amount %lu, consume %lu fee", $stake_tx->hash_str,
             sum0(map { $_->{txo}->value } @{$stake_tx->in}), -$stake_tx->fee);
+        # Slashing self-guard (skip genesis / inputless stake): never (re)stake the
+        # startup slot or earlier, and never publish a second, different stake for a
+        # (slot, UTXO) we already committed - that would be self-equivocation.
+        if ($prev_block && @{$stake_tx->in}) {
+            if (!QBitcoin::Generate::Control->may_stake_slot($timeslot)) {
+                Debugf("Skip stake for slot %u: at or before the startup slot %u",
+                    $timeslot, QBitcoin::Generate::Control->start_slot // -1);
+                return;
+            }
+            if (QBitcoin::Generate::Control->stake_conflicts($timeslot, $stake_tx)) {
+                Warningf("Skip generating block: stake %s would equivocate an already-published stake for slot %u",
+                    $stake_tx->hash_str, $timeslot);
+                return;
+            }
+        }
         # It's possible that the $stake_tx has no my_txo, so it may be not unique, already received or pending
         # Ignore if already received or pending (pending means its output TXO is already in %TXO cache)
         if (QBitcoin::Transaction->check_by_hash($stake_tx->hash) ||
@@ -398,6 +477,12 @@ sub _generate {
     # Remove the block from cache (and free my utxo) if it was not added as best block
     if (QBitcoin::Block->best_block->hash ne $generated->hash) {
         $generated->free();
+    }
+    elsif (@{$generated->transactions} && $generated->transactions->[0]->is_stake
+           && @{$generated->transactions->[0]->in}) {
+        # Our block entered the best branch, so its stake signature may reach peers:
+        # record it so we never sign a conflicting stake for the same (slot, UTXO).
+        QBitcoin::Generate::Control->record_stake($timeslot, $generated->transactions->[0]);
     }
     return $generated;
 }

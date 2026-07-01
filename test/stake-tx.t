@@ -25,8 +25,9 @@ $generate_module->mock('stake_address', sub { $my_address });
 $generate_module->mock('txo_confirmed', sub { 1 });
 my $txo_module = Test::MockModule->new('QBitcoin::TXO');
 $txo_module->mock('is_staked', sub { 1 });
+my $timeslot = timeslot(time);
 my $transaction_module = Test::MockModule->new('QBitcoin::Transaction');
-$transaction_module->mock('txo_time', sub { $_[1]->tx_in =~ /age_\d+:(\d+)/ ? timeslot(time) - $1*10 : 0 });
+$transaction_module->mock('txo_time', sub { $_[1]->tx_in =~ /age_\d+:(\d+)/ ? $timeslot - $1*10 : 0 });
 $transaction_module->mock('sign_transaction',
     sub {
         foreach my $in (@{$_[0]->in}) {
@@ -66,13 +67,13 @@ generate_my_address();
 create_my_utxo();
 
 $config->{reward_to} = "join";
-my $tx = QBitcoin::Generate::make_stake_tx("10", "blocksign");
+my $tx = QBitcoin::Generate::make_stake_tx("10", "blocksign", $timeslot);
 is(scalar(@{$tx->out}), 1, "Stake tx has one output in join mode");
 is($tx->out->[0]->value, 3020, "Stake tx output value is correct");
 is(scalar(@{$tx->in}), 3, "Stake tx has three inputs in join mode");
 
 $config->{reward_to} = "union";
-$tx = QBitcoin::Generate::make_stake_tx("10", "blocksign");
+$tx = QBitcoin::Generate::make_stake_tx("10", "blocksign", $timeslot);
 is(scalar(@{$tx->out}), 2, "Stake tx has two outputs in union mode");
 is($tx->out->[0]->value, 2003, "First output value is correct");
 is($tx->out->[0]->scripthash, "scripthash_1", "First output scripthash is correct");
@@ -81,7 +82,7 @@ is($tx->out->[1]->scripthash, "scripthash_2", "Second output scripthash is corre
 is(scalar(@{$tx->in}), 2, "Stake tx has two inputs in union mode");
 
 $config->{reward_to} = "separate";
-$tx = QBitcoin::Generate::make_stake_tx("10", "blocksign");
+$tx = QBitcoin::Generate::make_stake_tx("10", "blocksign", $timeslot);
 is(scalar(@{$tx->out}), 1, "Stake tx has one output in separate mode");
 is($tx->out->[0]->value, 1010, "Output value is correct");
 is($tx->out->[0]->scripthash, "scripthash_2", "Output scripthash is correct");
