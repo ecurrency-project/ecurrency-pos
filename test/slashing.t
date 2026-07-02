@@ -152,6 +152,25 @@ is(unpack("H*", $rebuilt->hash), unpack("H*", $slash->hash), "tx rebuilt from st
     is(QBitcoin::Slashing->observe($sC, $timeslot), undef, "unrelated stake: no conflict");
 }
 
+# regression (log 2026-07-01): observing a stake must NOT pin its OUTPUT txo in the
+# global %TXO cache. If it does, re-receiving the (freed) block re-saves that output and
+# dies with "Attempt to override already loaded txo". The watch list retains only inputs.
+{
+    my $c   = make_coin(pack("H*", "f0" x 32), 0, 1000);
+    my $s   = make_stake([$c], "\x66" x 32, "\xd1" x 32);
+    my $key = { tx_out => $s->hash, num => 0 };
+    QBitcoin::TXO->save_all($s->hash, $s->out); # as Transaction::load_txo does on receive
+    ok(QBitcoin::TXO->get($key), "stake output registered in %TXO on receive");
+    QBitcoin::Slashing->observe($s, $timeslot + BLOCK_INTERVAL);
+    undef $s; # block reorged out and freed, stake dropped from mempool
+    is(QBitcoin::TXO->get($key), undef, "stake output released from %TXO after the block is freed");
+    # re-receiving the same block re-saves the output without dying
+    my $c2 = make_coin(pack("H*", "f0" x 32), 0, 1000);
+    my $s2 = make_stake([$c2], "\x66" x 32, "\xd1" x 32);
+    ok(eval { QBitcoin::TXO->save_all($s2->hash, $s2->out); 1 },
+        "re-receiving the freed block does not collide in %TXO");
+}
+
 # ban primitives: a valid slashing tx makes the equivocated stake invalid at its slot
 QBitcoin::Slashing->ban_from_tx($slash);
 my $T = $slash->slashing->proofs->[0]{timeslot};

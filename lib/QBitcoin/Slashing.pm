@@ -40,12 +40,18 @@ mk_accessors(ATTR);
 
 use constant PROOF_HEAD_LEN => 32 + 4 + 32; # prev_hash . timeslot . digest
 
-# Watched stakes for equivocation detection. Holding a reference here keeps a stake
-# alive past the moment its block is dropped, which is exactly the retention the user
-# asked for: stakes linger for SLASHING_WINDOW so a later conflicting stake can be
-# caught. Indexed by timeslot then stake-UTXO key; the stored stake carries the
-# block_sign_data it signed.
-my %SEEN;       # $timeslot => { $utxo_key => $stake_tx }
+# Watched stakes for equivocation detection. Retaining an entry here keeps the stake's
+# evidence alive past the moment its block is dropped, which is exactly the retention
+# the user asked for: stakes linger for SLASHING_WINDOW so a later conflicting stake can
+# be caught. We store a lightweight SeenStake SNAPSHOT (block_sign_data + serialized
+# bytes + shared input txos), NOT the live QBitcoin::Transaction: the transaction holds
+# its OUTPUT txo objects, which are registered (weakened) in the global %TXO cache, and
+# pinning them here would keep e.g. a00fcbaa:0 alive after the block is freed - so the
+# unconditional save in Transaction::load_txo collides ("Attempt to override already
+# loaded txo") when that block is later re-received (e.g. as an ancestor of a peer's
+# block). Inputs are safe to hold: re-receiving dedups them via TXO->get. Indexed by
+# timeslot then stake-UTXO key.
+my %SEEN;       # $timeslot => { $utxo_key => QBitcoin::Slashing::SeenStake }
 my $MAX_SLOT = 0;
 
 # Stakes proven equivocated (we hold a slashing tx for them). A block whose stake
@@ -292,6 +298,7 @@ sub observe {
     }
     my $slot = $SEEN{$timeslot} //= {};
     my $conflict;
+    my $snapshot;
     foreach my $in (@{$stake->in}) {
         my $key  = $in->{txo}->key;
         my $prev = $slot->{$key};
@@ -300,10 +307,35 @@ sub observe {
             $conflict //= $prev if $prev->block_sign_data ne $stake->block_sign_data;
         }
         else {
-            $slot->{$key} = $stake;
+            $slot->{$key} = $snapshot //= _snapshot_stake($stake);
         }
     }
     return $conflict;
+}
+
+# A retained copy of a stake for the %SEEN watch list. It is a genuine
+# QBitcoin::Transaction (so observe()/new_tx()/_proof_of_stake() keep dealing with a
+# single, uniform type), but with its OUTPUT txos rebuilt fresh via create_outputs and
+# never save()d - so they are absent from the global %TXO cache. That is the whole point:
+# retaining the snapshot for SLASHING_WINDOW must NOT pin the stake's outputs, otherwise
+# the unconditional save in Transaction::load_txo collides ("Attempt to override already
+# loaded txo") when the block is later re-received after being freed. The INPUT txos are
+# the real (chain) ones, reused with their siglists so serialize() reproduces the exact
+# stake bytes needed for the evidence; holding inputs is safe because re-receiving
+# resolves them via TXO->get rather than re-saving them.
+sub _snapshot_stake {
+    my ($stake) = @_;
+    return QBitcoin::Transaction->new(
+        tx_type         => $stake->tx_type,
+        block_sign_data => $stake->block_sign_data,
+        hash            => $stake->hash,
+        size            => $stake->size,
+        in              => [ map { +{ txo => $_->{txo}, siglist => $_->{siglist} } } @{$stake->in} ],
+        out             => QBitcoin::Transaction::create_outputs(
+            [ map { +{ value => $_->value, scripthash => $_->scripthash, data => $_->data } } @{$stake->out} ],
+            $stake->hash,
+        ),
+    );
 }
 
 # Mark the stake(s) punished by a (valid) slashing tx as equivocated. Called whenever a
