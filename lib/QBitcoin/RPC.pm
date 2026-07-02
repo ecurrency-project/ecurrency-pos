@@ -34,6 +34,18 @@ sub timeout {
     return $timeout;
 }
 
+# Commands are forked only if explicitly marked as read-only in QBitcoin::RPC::Commands
+sub request_is_read_only {
+    my $self = shift;
+    my ($http_request) = @_;
+    my $body = eval { $JSON->decode($http_request->decoded_content) }
+        or return 0;
+    $body = $body->[0] if ref($body) eq "ARRAY";
+    ref($body) eq "HASH" && $body->{method} && !ref($body->{method})
+        or return 0;
+    return $self->readonly($body->{method}) ? 1 : 0;
+}
+
 sub process_request {
     my $self = shift;
     my ($http_request) = @_;

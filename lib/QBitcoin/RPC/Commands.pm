@@ -30,10 +30,51 @@ use Bitcoin::Block;
 my %PARAMS;
 my %HELP;
 my %SENSITIVE; # commands whose params must not be logged in plaintext (e.g. passwords)
+my %READONLY;  # commands which do not modify in-memory or database state
 
 sub params    { $PARAMS{$_[1]}    }
 sub help      { $HELP{$_[1]}      }
 sub sensitive { $SENSITIVE{$_[1]} }
+sub readonly  { $READONLY{$_[1]}  }
+
+# Read-only commands may be processed in a forked child in parallel with the main
+# process (see QBitcoin::Fork). Do not mark a command here if it modifies mempool,
+# blockchain, wallet or any other in-memory state (sendrawtransaction, import*,
+# getnewaddress, stake/unstake, set*), or interacts with the wallet decryption
+# state (dumpprivkey) - such commands must be processed in the main process.
+$READONLY{$_} = 1 foreach qw(
+    ping
+    help
+    getblockchaininfo
+    getbestblockhash
+    getblockheader
+    getblockcount
+    getblock
+    getblockhash
+    getrawtransaction
+    createrawtransaction
+    signrawtransactionwithkey
+    decoderawtransaction
+    getmempoolinfo
+    getrawmempool
+    getmempoolentry
+    validateaddress
+    getnetworkinfo
+    getindexinfo
+    getchaintxstats
+    getblockstats
+    getpeerinfo
+    getaddressbalance
+    getreceivedbyaddress
+    listunspent
+    listtransactions
+    listmyaddresses
+    getbalance
+    estimatesmartfee
+    gettokensbalance
+    gettokensreceived
+    gettokensinfo
+);
 
 $PARAMS{ping} = "";
 $HELP{ping} = qq(

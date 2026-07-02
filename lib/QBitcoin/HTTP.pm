@@ -11,6 +11,7 @@ use QBitcoin::RPC::Const;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::Block;
+use QBitcoin::Fork;
 
 use constant ATTR => qw(
     ip
@@ -49,16 +50,31 @@ sub receive {
     my $length = $http_request->headers->content_length;
     return 0 if defined($length) && length($http_request->content) < $length;
     $self->connection->recvbuf = "";
+    if ($self->request_is_read_only($http_request)) {
+        my $child = QBitcoin::Fork->spawn($self->connection);
+        if (defined($child) && !$child) {
+            # Parent: the connection is detached, the forked child processes the request
+            return 0;
+        }
+        # $child is true: we are the forked child, process the request as usual and exit in finish()
+        # $child is undef: fork disabled or unavailable, process the request inline
+    }
     my $res = eval { $self->process_request($http_request) };
     if ($@) {
         my $error = "$@";
         $error =~ s/\s+$//s;
         Errf("process_http exception: %s", $error);
         $self->response_error("Internal error", ERR_INTERNAL_ERROR);
-        return -1;
+        $res = -1;
     }
+    QBitcoin::Fork->finish($self->connection) if QBitcoin::Fork->is_child;
     return $res;
 }
+
+# Requests which do not modify in-memory or database state may be processed
+# in a forked child in parallel with the main loop; see QBitcoin::Fork.
+# Overridden in QBitcoin::REST and QBitcoin::RPC.
+sub request_is_read_only { 0 }
 
 sub send {
     my $self = shift;

@@ -58,6 +58,13 @@ sub timeout {
     return $timeout;
 }
 
+# All GET endpoints only read state; POST (tx send, wallet operations) modifies it
+sub request_is_read_only {
+    my $self = shift;
+    my ($http_request) = @_;
+    return $http_request->method eq "GET";
+}
+
 sub process_request {
     my $self = shift;
     my ($http_request) = @_;

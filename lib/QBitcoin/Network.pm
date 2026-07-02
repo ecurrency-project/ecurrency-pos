@@ -21,6 +21,7 @@ use QBitcoin::Coins;
 use QBitcoin::Produce;
 use QBitcoin::RPC;
 use QBitcoin::REST;
+use QBitcoin::Fork;
 
 sub bind_addr {
     my $class = shift;
@@ -190,6 +191,7 @@ sub main_loop {
     my @listen_socket = @{$class->bind_addr};
     my @listen_rpc    = @{$class->bind_rpc_addr};
     my @listen_rest   = @{$class->bind_rest_addr};
+    QBitcoin::Fork->register_listen_socket(@listen_socket, @listen_rpc, @listen_rest);
 
     set_pinned_peers();
 
@@ -198,6 +200,7 @@ sub main_loop {
     $SIG{TERM} = $SIG{INT} = sub { $sig_killed = 1 };
 
     while () {
+        QBitcoin::Fork->reap();
         QBitcoin::Block->store_blocks();
         my $timeout = SELECT_TIMEOUT;
         if (!$config->{genesis} && !QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN)) {
@@ -272,6 +275,7 @@ sub main_loop {
         my $nfound = select($rin, $win, $ein, $timeout);
         last if $sig_killed;
         if ($nfound == -1) {
+            next if $!{EINTR}; # interrupted by a signal (e.g. SIGCHLD from a forked request handler)
             Errf("select error: %s", $!);
             last;
         }

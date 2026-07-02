@@ -76,6 +76,24 @@ sub disconnect {
     return 0;
 }
 
+# Give the connection away to a forked child which will process the request and reply.
+# Close only our copy of the descriptor: shutdown() would act on the file description
+# shared with the child and break the connection the child is about to write to.
+sub detach {
+    my $self = shift;
+    if ($self->socket) {
+        close($self->socket);
+        $self->socket = undef;
+        $self->socket_fileno = undef;
+    }
+    $self->state = STATE_DISCONNECTED;
+    $self->sendbuf = "";
+    $self->recvbuf = "";
+    $self->protocol = undef;
+    QBitcoin::ConnectionList->del($self);
+    return 0;
+}
+
 sub failed {
     my $self = shift;
 

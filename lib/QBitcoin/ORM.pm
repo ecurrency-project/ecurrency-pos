@@ -1,7 +1,6 @@
 package QBitcoin::ORM;
 use warnings;
 use strict;
-use feature "state";
 
 use DBI;
 use QBitcoin::Config;
@@ -35,8 +34,9 @@ use constant KEY_RE => qr/^[a-z][a-z0-9_]*\z/;
 
 use constant IGNORE => \undef; # { key => IGNORE } may be used to override default check for "key" column
 
+my $dbh;
+
 sub dbh {
-    state $dbh;
     return $dbh if $dbh;
     my $dbi = $config->{dbi} // "mysql";
     my $db_name = $config->{database} // DB_NAME;
@@ -56,8 +56,21 @@ sub dbh {
     $dbh = DBI->connect($dsn, $login, $password, DB_OPTS);
     if ($dbi eq "SQLite") {
         $dbh->do("PRAGMA foreign_keys = ON");
+        # WAL allows forked read-only request handlers to read while the main process writes
+        $dbh->do("PRAGMA journal_mode = WAL");
+        $dbh->do("PRAGMA busy_timeout = 5000");
     };
     return $dbh;
+}
+
+# Called in a forked child: the inherited handle shares the connection with the parent,
+# so it must not be used and must not send a disconnect on DESTROY; drop it and let
+# the next dbh() call open a fresh connection
+sub reset_dbh_after_fork {
+    if ($dbh) {
+        $dbh->{InactiveDestroy} = 1;
+        undef $dbh;
+    }
 }
 
 sub for_log {
