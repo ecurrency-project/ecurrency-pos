@@ -1,0 +1,19 @@
+.StakingToggle {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.label {
+    font-weight: 600;
+}
+
+.hint {
+    display: block;
+}

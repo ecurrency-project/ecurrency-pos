@@ -1,3 +1,11 @@
+export interface WalletStatus {
+    password_set: boolean;
+    keys_encrypted: boolean;
+    locked: boolean;
+    generate: boolean;
+    staking_active: boolean;
+}
+
 export interface ChainStatus {
     btc_scanned: number;
     btc_headers: number;
@@ -13,4 +21,5 @@ export interface ChainStatus {
     chain: string;
     mempool_bytes: number;
     initialblockdownload: boolean;
+    wallet?: WalletStatus;
 }

@@ -74,7 +74,8 @@ CREATE TABLE `tag` (
 
 CREATE TABLE `my_address` (
   address     varchar(255) NOT NULL PRIMARY KEY,
-  private_key blob(4096)   NOT NULL, -- TODO: encrypted
+  private_key blob(4096)   NOT NULL, -- WIF, or encrypted with the wallet master key (see QBitcoin::Wallet)
+  pubkey      blob(2048)   DEFAULT NULL,
   algo        int unsigned NOT NULL DEFAULT 1,
   staked      int unsigned NOT NULL DEFAULT 0,
   tag_id      integer DEFAULT NULL,

@@ -7,6 +7,7 @@ use List::Util qw(sum0 sum min max);
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
+use QBitcoin::Log;
 use QBitcoin::IP qw(ip_port_str);
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
@@ -19,8 +20,10 @@ use QBitcoin::TXO;
 use QBitcoin::Address qw(wif_to_pk scripthash_by_address address_by_pubkey wallet_import_format address_by_hash);
 use QBitcoin::MyAddress;
 use QBitcoin::Password;
+use QBitcoin::Wallet;
 use QBitcoin::Tag;
 use QBitcoin::Generate;
+use QBitcoin::Generate::Control;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
 use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info update_my_utxo create_txo estimate_fees);
@@ -31,11 +34,13 @@ my %PARAMS;
 my %HELP;
 my %SENSITIVE; # commands whose params must not be logged in plaintext (e.g. passwords)
 my %READONLY;  # commands which do not modify in-memory or database state
+my %REQUIRE_PASSWORD; # commands gated by the wallet password (when one is set), see QBitcoin::RPC::process_request
 
-sub params    { $PARAMS{$_[1]}    }
-sub help      { $HELP{$_[1]}      }
-sub sensitive { $SENSITIVE{$_[1]} }
-sub readonly  { $READONLY{$_[1]}  }
+sub params            { $PARAMS{$_[1]}           }
+sub help              { $HELP{$_[1]}             }
+sub sensitive         { $SENSITIVE{$_[1]}        }
+sub readonly          { $READONLY{$_[1]}         }
+sub requires_password { $REQUIRE_PASSWORD{$_[1]} }
 
 # Read-only commands may be processed in a forked child in parallel with the main
 # process (see QBitcoin::Fork). Do not mark a command here if it modifies mempool,
@@ -1131,6 +1136,10 @@ importprivkey "privkey" ( address_type )
 
 Adds a private key (as returned by dumpprivkey) to your wallet.
 
+When the wallet private keys are encrypted the wallet must be unlocked first
+(see walletunlock); the imported key is stored encrypted. Otherwise the key is
+stored in plaintext and the command warns about it.
+
 Arguments:
 1. privkey        (string, required) The private key (see dumpprivkey)
 2. address_type   (string, optional, default="ecdsa") The address type. Options are "ecdsa", "schnorr", "falcon".
@@ -1154,6 +1163,9 @@ As a JSON-RPC call
 );
 sub cmd_importprivkey {
     my $self = shift;
+    if (QBitcoin::Wallet->is_encrypted && !QBitcoin::Wallet->unlocked) {
+        return $self->response_error("The wallet is locked; unlock it with walletunlock first", ERR_WALLET_UNLOCK_NEEDED);
+    }
     my $private_key = wif_to_pk($self->args->[0]);
     my $pk_alg = $self->args->[1];
     if (!$pk_alg) {
@@ -1168,14 +1180,26 @@ sub cmd_importprivkey {
     if (grep { $address eq $_->address } QBitcoin::MyAddress->my_address()) {
         return $self->response_ok("Private key for address $address already imported");
     }
+    my $wif = wallet_import_format($private_key);
+    my $warning = "";
+    if (QBitcoin::Wallet->is_encrypted) {
+        $wif = QBitcoin::Wallet->encrypt_pk($wif, $address);
+    }
+    elsif (!QBitcoin::Password->is_set) {
+        $warning = "; WARNING: the key is stored unencrypted, set a wallet password with setwalletpassword to encrypt the wallet keys";
+    }
+    else {
+        $warning = "; WARNING: the key is stored unencrypted ('encrypted_private_keys' is disabled)";
+    }
     my $my_address = QBitcoin::MyAddress->create({
-        private_key => wallet_import_format($private_key),
+        private_key => $wif,
+        pubkey      => $pubkey,
         address     => $address,
         algo        => $pk_alg,
     });
     QBitcoin::Generate->load_address_utxo($my_address);
 
-    return $self->response_ok("Private key for address $address imported");
+    return $self->response_ok("Private key for address $address imported$warning");
 }
 
 $PARAMS{importaddress} = "address tag?";
@@ -1262,11 +1286,16 @@ sub cmd_setaddresstag {
 }
 
 $PARAMS{dumpprivkey} = "address";
+$REQUIRE_PASSWORD{dumpprivkey} = 1;
 $HELP{dumpprivkey} = qq(
 dumpprivkey "address"
 
 Reveals the private key corresponding to 'address'.
 Then the importprivkey can be used with this output
+
+If a wallet password is set the command requires it (qbitcoin-cli prompts for it
+and retries); an encrypted key is returned decrypted, whether or not the wallet
+is unlocked.
 
 Arguments:
 1. address    (string, required) The address for the private key
@@ -1277,7 +1306,7 @@ Result:
 Examples:
 > qbitcoin-cli dumpprivkey "myaddress"
 > qbitcoin-cli importprivkey "mykey"
-> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "dumpprivkey", "params": ["myaddress"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "dumpprivkey", "params": ["myaddress"], "password": "mysecret"}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_dumpprivkey {
     my $self = shift;
@@ -1287,7 +1316,17 @@ sub cmd_dumpprivkey {
         or return $self->response_error("The address is not correct", ERR_INVALID_ADDRESS_OR_KEY);
     my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash, 0)
         or return $self->response_error("Private key is unknown for this address", ERR_INVALID_ADDRESS_OR_KEY);
-    return $self->response_ok($my_address->private_key);
+    my $stored = $my_address->private_key;
+    QBitcoin::Wallet->is_encrypted_pk($stored)
+        or return $self->response_ok($stored);
+    my $master; # decrypt_pk defaults to the in-memory master key when unlocked
+    if (!QBitcoin::Wallet->unlocked) {
+        $master = QBitcoin::Wallet->master_key_with_password($self->auth_password // "")
+            or return $self->response_error("Cannot unlock the wallet master key with this password", ERR_WALLET_PASSWORD_INCORRECT);
+    }
+    my $wif = QBitcoin::Wallet->decrypt_pk($stored, $my_address->address, $master)
+        or return $self->response_error("Cannot decrypt the private key", ERR_INTERNAL_ERROR);
+    return $self->response_ok($wif);
 }
 
 $PARAMS{getpeerinfo} = "";
@@ -1894,7 +1933,10 @@ sub cmd_gettokensinfo {
 $PARAMS{setwalletpassword} = "password";
 $SENSITIVE{setwalletpassword} = 1;
 $HELP{setwalletpassword} = qq(
-Set the wallet password that protects the /admin/* and /wallet/* REST API.
+Set or change the wallet password. The password protects the /admin/* and
+/wallet/* REST API and, unless 'encrypted_private_keys' is disabled in the
+configuration file, encrypts the wallet private keys stored in the database
+(see walletunlock/walletlock/getwalletinfo).
 
 When no password is set yet this command works unconditionally, so it is the
 recommended way to protect the wallet right after installing the node.
@@ -1906,14 +1948,18 @@ process list or shell history):
     qbitcoin-cli setwalletpassword            # prompts on a terminal
     echo -n "mysecret" | qbitcoin-cli setwalletpassword
 
-If a password is already set, this command overwrites it (recovery from a
-forgotten password). For safety that case is disabled by default and must be
-explicitly enabled in the configuration file:
+Changing an already set password requires the current one (qbitcoin-cli prompts
+for it and retries the request with a top-level "password" field). Running the
+command with the current password also converges the key encryption state to the
+'encrypted_private_keys' policy, so it may be run with the same password to
+encrypt or decrypt the stored keys after changing that option.
+
+Resetting a FORGOTTEN password is possible only with 'allow_password_reset'
+enabled in the configuration file and PERMANENTLY DESTROYS all encrypted private
+keys (they cannot be decrypted without the old password; qbitcoin-cli asks for an
+explicit confirmation and retries with a top-level "force" field):
 
     allow_password_reset = 1
-
-Alternatively a forgotten password can be cleared by editing the database
-directly: DELETE FROM setting WHERE name = 'wallet_password';
 
 Arguments:
 1. password    (string, required) the new wallet password
@@ -1923,18 +1969,147 @@ null    (json null)
 
 Examples:
 > qbitcoin-cli setwalletpassword "mysecret"
-> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "setwalletpassword", "params": ["mysecret"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "setwalletpassword", "params": ["newsecret"], "password": "oldsecret"}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_setwalletpassword {
     my $self = shift;
-    my ($password) = @{$self->args};
-    if (QBitcoin::Password->is_set && !$config->{allow_password_reset}) {
-        return $self->response_error(
-            "Wallet password is already set; resetting a forgotten password requires 'allow_password_reset' in the configuration file (or clearing it directly in the database)",
-            ERR_MISC);
+    my ($new) = @{$self->args};
+    if (!QBitcoin::Password->is_set) {
+        if (defined(my $err = QBitcoin::Wallet->change_password(undef, $new))) {
+            return $self->response_error($err, ERR_MISC);
+        }
+        return $self->response_ok;
     }
-    QBitcoin::Password->set_password($password);
+    my $old = $self->auth_password;
+    if (!defined($old) && !$self->force) {
+        my $hint = $config->{allow_password_reset} ? "; leave the password input empty if it is forgotten" : "";
+        return $self->response_error("Changing the wallet password requires the current one$hint", ERR_WALLET_PASSWORD_REQUIRED);
+    }
+    if (defined($old) && QBitcoin::Password->check_password($old)) {
+        if (defined(my $err = QBitcoin::Wallet->change_password($old, $new))) {
+            return $self->response_error($err, ERR_MISC);
+        }
+        return $self->response_ok;
+    }
+    # The current password was not provided or does not match: forgotten-password reset
+    if (!$config->{allow_password_reset}) {
+        return $self->response_error(
+            "Incorrect wallet password; resetting a forgotten password requires 'allow_password_reset' in the configuration file",
+            ERR_WALLET_PASSWORD_INCORRECT);
+    }
+    if (!$self->force) {
+        my $count = QBitcoin::Wallet->encrypted_count;
+        my $warning = $count
+            ? "This will PERMANENTLY DESTROY $count encrypted private key(s): they cannot be decrypted without the old password."
+            : "The old password will be overwritten.";
+        return $self->response_error("Resetting the wallet password. $warning Continue?", ERR_CONFIRMATION_REQUIRED);
+    }
+    QBitcoin::Wallet->reset_destroy($new);
     return $self->response_ok;
+}
+
+$PARAMS{walletunlock} = "";
+$REQUIRE_PASSWORD{walletunlock} = 1;
+$HELP{walletunlock} = qq(
+Decrypt the wallet master key into the node process memory so the encrypted
+private keys can be used for signing; block generation (staking) resumes
+automatically if enabled. The wallet stays unlocked until walletlock or a node
+restart.
+
+Requires the wallet password: qbitcoin-cli prompts for it and retries the
+request with a top-level "password" field.
+
+Result:
+null    (json null)
+
+Examples:
+> qbitcoin-cli walletunlock
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "walletunlock", "params": [], "password": "mysecret"}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_walletunlock {
+    my $self = shift;
+    QBitcoin::Wallet->is_encrypted
+        or return $self->response_ok("Private keys are not encrypted, nothing to unlock");
+    QBitcoin::Wallet->unlocked
+        and return $self->response_ok("The wallet is already unlocked");
+    defined($self->auth_password)
+        or return $self->response_error("This command requires the wallet password", ERR_WALLET_PASSWORD_REQUIRED);
+    QBitcoin::Wallet->unlock($self->auth_password)
+        or return $self->response_error("Cannot unlock the wallet master key with this password", ERR_WALLET_PASSWORD_INCORRECT);
+    Noticef("Wallet unlocked via RPC");
+    return $self->response_ok;
+}
+
+$PARAMS{walletlock} = "";
+$HELP{walletlock} = qq(
+Remove the decrypted wallet master key from the node process memory. Signing
+with the encrypted private keys (including block generation) becomes impossible
+until walletunlock.
+
+Result:
+null    (json null)
+
+Examples:
+> qbitcoin-cli walletlock
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "walletlock", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_walletlock {
+    my $self = shift;
+    QBitcoin::Wallet->is_encrypted
+        or return $self->response_ok("Private keys are not encrypted, nothing to lock");
+    QBitcoin::Wallet->unlocked
+        or return $self->response_ok("The wallet is already locked");
+    QBitcoin::Wallet->lock;
+    Noticef("Wallet locked via RPC");
+    return $self->response_ok;
+}
+
+$PARAMS{getwalletinfo} = "";
+$HELP{getwalletinfo} = qq(
+Returns an object containing wallet state info.
+
+Result:
+{                             (json object)
+  "password_set" : true|false,     (boolean) a wallet password is set
+  "keys_encrypted" : true|false,   (boolean) the stored private keys are encrypted
+  "locked" : true|false,           (boolean) keys are encrypted and the wallet is not unlocked (signing impossible)
+  "generate" : true|false,         (boolean) block generation is enabled
+  "staking_active" : true|false,   (boolean) block generation is enabled and signing is possible
+  "addresses" : n,                 (numeric) number of addresses with a private key
+  "watchonly_addresses" : n,       (numeric) number of watch-only addresses
+  "staked_addresses" : n,          (numeric) number of staked addresses
+  "warning" : "str"                (string, optional) key storage state does not match the encrypted_private_keys option
+}
+
+Examples:
+> qbitcoin-cli getwalletinfo
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getwalletinfo", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_getwalletinfo {
+    my $self = shift;
+    my $encrypted = QBitcoin::Wallet->is_encrypted;
+    my $generate  = QBitcoin::Generate::Control->generate_enabled;
+    my @my_address = QBitcoin::MyAddress->my_address;
+    my $info = {
+        password_set        => QBitcoin::Password->is_set ? TRUE : FALSE,
+        keys_encrypted      => $encrypted ? TRUE : FALSE,
+        locked              => ($encrypted && !QBitcoin::Wallet->unlocked) ? TRUE : FALSE,
+        generate            => $generate ? TRUE : FALSE,
+        staking_active      => ($generate && QBitcoin::Wallet->signing_available) ? TRUE : FALSE,
+        addresses           => scalar(@my_address) + 0, # +0: encode as json number even for an empty list
+        watchonly_addresses => scalar(grep { $_->is_watchonly } QBitcoin::MyAddress->watched_address) + 0,
+        staked_addresses    => scalar(() = QBitcoin::MyAddress->stake_address) + 0,
+    };
+    if (QBitcoin::Password->is_set) {
+        my $policy = $config->{encrypted_private_keys} // 1;
+        if ($policy && !$encrypted && @my_address) {
+            $info->{warning} = "private keys are stored unencrypted; run setwalletpassword to encrypt them";
+        }
+        elsif (!$policy && $encrypted) {
+            $info->{warning} = "private keys are encrypted but 'encrypted_private_keys' is disabled; run setwalletpassword to decrypt them";
+        }
+    }
+    return $self->response_ok($info);
 }
 
 # signmessagewithprivkey

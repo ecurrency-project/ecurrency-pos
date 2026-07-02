@@ -4,8 +4,11 @@ import {
     DatabaseOutlined,
     FieldTimeOutlined,
     InboxOutlined,
+    KeyOutlined,
     LineChartOutlined,
+    LockOutlined,
     SafetyCertificateOutlined, SyncOutlined,
+    ThunderboltOutlined,
 } from '@ant-design/icons';
 import classNames from 'classnames';
 
@@ -137,6 +140,53 @@ export const ChainStatusInfo = memo(function ChainStatusInfo(props: ChainStatusI
                     </div>
                 </div>
             </Card>
+
+            {status.wallet && (
+                <Card className={cls.mainCard}>
+                    <div className={cls.row}>
+                        <div className={cls.col}>
+                            <Statistic
+                                title={(
+                                    <span className={cls.title}>
+                                        <ThunderboltOutlined className={cls.icon} />
+                                        Staking Active
+                                    </span>
+                                )}
+                                value={status.wallet.staking_active ? 'Yes' : 'No'}
+                                valueStyle={{ color: status.wallet.staking_active ? '#52c41a' : '#ff4d4f' }}
+                            />
+                        </div>
+                        <div className={cls.col}>
+                            <Statistic
+                                title={(
+                                    <span className={cls.title}>
+                                        <LockOutlined className={cls.icon} />
+                                        Wallet Locked
+                                    </span>
+                                )}
+                                value={
+                                    status.wallet.keys_encrypted
+                                        ? (status.wallet.locked ? 'Yes' : 'No')
+                                        : '—'
+                                }
+                                valueStyle={{ color: status.wallet.locked ? '#faad14' : '#52c41a' }}
+                            />
+                        </div>
+                        <div className={cls.col}>
+                            <Statistic
+                                title={(
+                                    <span className={cls.title}>
+                                        <KeyOutlined className={cls.icon} />
+                                        Keys Encrypted
+                                    </span>
+                                )}
+                                value={status.wallet.keys_encrypted ? 'Yes' : 'No'}
+                                valueStyle={{ color: status.wallet.keys_encrypted ? '#52c41a' : '#faad14' }}
+                            />
+                        </div>
+                    </div>
+                </Card>
+            )}
         </div>
     );
 });

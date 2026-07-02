@@ -20,12 +20,14 @@ use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(address_by_hash address_by_pubkey wallet_import_format wif_to_pk);
 use QBitcoin::MyAddress;
 use QBitcoin::Password;
+use QBitcoin::Wallet;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::TXO;
 use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info update_my_utxo create_txo estimate_fees);
 use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Generate;
+use QBitcoin::Generate::Control;
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
 use QBitcoin::Coins;
 use QBitcoin::ConnectionList;
@@ -295,7 +297,7 @@ sub process_request {
         shift @path; # remove "admin"
         return $self->http_response(404, "Unknown request") unless @path;
         if ($path[0] eq "status") {
-            return $self->http_ok(node_status());
+            return $self->http_ok({ %{node_status()}, wallet => wallet_status() });
         }
         elsif ($path[0] eq "peers") {
             return $self->http_ok(peer_info());
@@ -307,6 +309,11 @@ sub process_request {
                 return $self->set_wallet_password($http_request);
             }
             return $self->http_ok({ password_set => QBitcoin::Password->is_set ? TRUE : FALSE });
+        }
+        elsif ($path[0] eq "generate") {
+            @path == 1 && $http_request->method eq "POST"
+                or return $self->http_response(404, "Unknown request");
+            return $self->set_generate($http_request);
         }
         else {
             return $self->http_response(404, "Unknown request");
@@ -362,13 +369,33 @@ sub process_request {
                         }
                     }
                     $pk_alg or return $self->http_response(400, "Private key does not match the address");
+                    my $store = wallet_import_format($private_key);
+                    my $warning;
+                    if (QBitcoin::Wallet->is_encrypted) {
+                        my $master; # in-memory master key when unlocked
+                        if (!QBitcoin::Wallet->unlocked) {
+                            # The Basic-auth password of this request is the wallet
+                            # password, so a locked wallet can still encrypt the key
+                            $master = defined($self->{auth_password})
+                                ? QBitcoin::Wallet->master_key_with_password($self->{auth_password}) : undef
+                                or return $self->http_response(409, "The wallet is locked and the master key cannot be unwrapped with the request password");
+                        }
+                        $store = QBitcoin::Wallet->encrypt_pk($store, $content->{address}, $master);
+                    }
+                    elsif (!QBitcoin::Password->is_set) {
+                        $warning = "the key is stored unencrypted; set a wallet password to encrypt the wallet keys";
+                    }
+                    else {
+                        $warning = "the key is stored unencrypted ('encrypted_private_keys' is disabled)";
+                    }
                     my $my_address = QBitcoin::MyAddress->create({
-                        private_key => wallet_import_format($private_key),
+                        private_key => $store,
+                        pubkey      => $pubkey,
                         address     => $content->{address},
                         algo        => $pk_alg,
                     });
                     QBitcoin::Generate->load_address_utxo($my_address);
-                    return $self->http_ok({ address => $my_address->address });
+                    return $self->http_ok({ address => $my_address->address, $warning ? (warning => $warning) : () });
                 }
                 else {
                     return $self->http_response(404, "Unknown request");
@@ -464,6 +491,9 @@ sub wallet_tx_create {
     if ($tx->input_pending || $tx->input_detached) {
         return $self->http_response(400, "Some inputs unknown");
     }
+
+    QBitcoin::Wallet->signing_available
+        or return $self->http_response(409, "The wallet is locked; unlock it with walletunlock or enable staking in the web admin interface");
 
     # Verify all inputs are ours and sign
     my $input_amount = 0;
@@ -968,7 +998,13 @@ sub check_access {
             my $decoded = eval { decode_base64($1) };
             if (defined($decoded)) {
                 my (undef, $password) = split(/:/, $decoded, 2);
-                return undef if defined($password) && QBitcoin::Password->check_password($password);
+                if (defined($password) && QBitcoin::Password->check_password($password)) {
+                    # Keep the verified plaintext password for handlers that need
+                    # it as the wallet password (unlock via the staking toggle,
+                    # key encryption on import, password change)
+                    $self->{auth_password} = $password;
+                    return undef;
+                }
             }
         }
         return $self->http_auth_required;
@@ -1000,8 +1036,50 @@ sub set_wallet_password {
         or return $self->http_response(400, "Password must not be empty");
     length($password) <= QBitcoin::Password::MAX_LEN()
         or return $self->http_response(400, "Password too long");
-    QBitcoin::Password->set_password($password);
+    # The old password (when one is set) has already been verified by check_access
+    # via HTTP Basic auth; there is no forgotten-password reset over REST
+    if (defined(my $err = QBitcoin::Wallet->change_password($self->{auth_password}, $password))) {
+        return $self->http_response(400, $err);
+    }
     return $self->http_ok({});
+}
+
+sub wallet_status {
+    my $encrypted = QBitcoin::Wallet->is_encrypted;
+    my $generate  = QBitcoin::Generate::Control->generate_enabled;
+    return {
+        password_set   => QBitcoin::Password->is_set ? TRUE : FALSE,
+        keys_encrypted => $encrypted ? TRUE : FALSE,
+        locked         => ($encrypted && !QBitcoin::Wallet->unlocked) ? TRUE : FALSE,
+        generate       => $generate ? TRUE : FALSE,
+        staking_active => ($generate && QBitcoin::Wallet->signing_available) ? TRUE : FALSE,
+    };
+}
+
+# POST /admin/generate: the staking toggle of the web admin interface.
+# Enabling generation on a locked wallet also unlocks it: the Basic-auth password
+# of the request is the wallet password.
+sub set_generate {
+    my $self = shift;
+    my ($http_request) = @_;
+    my $content = eval { $JSON->decode($http_request->decoded_content) };
+    ref($content) eq "HASH" && defined($content->{generate})
+        or return $self->http_response(400, "Invalid request body");
+    if ($content->{generate}) {
+        if (QBitcoin::Wallet->is_encrypted && !QBitcoin::Wallet->unlocked) {
+            defined($self->{auth_password}) && QBitcoin::Wallet->unlock($self->{auth_password})
+                or return $self->http_response(409, "Cannot unlock the wallet master key with the request password");
+            Noticef("Wallet unlocked via web admin interface");
+        }
+        QBitcoin::Generate::Control->generate_enabled(1);
+        Noticef("Block generation enabled via web admin interface");
+    }
+    else {
+        # Only stops generation; the keys stay unlocked (locking is walletlock's job)
+        QBitcoin::Generate::Control->generate_enabled(0);
+        Noticef("Block generation disabled via web admin interface");
+    }
+    return $self->http_ok(wallet_status());
 }
 
 1;

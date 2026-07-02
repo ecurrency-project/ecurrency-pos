@@ -19,6 +19,9 @@ use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Generate;
 use QBitcoin::Coins;
 use QBitcoin::Produce;
+use QBitcoin::MyAddress;
+use QBitcoin::Password;
+use QBitcoin::Wallet;
 use QBitcoin::RPC;
 use QBitcoin::REST;
 use QBitcoin::Fork;
@@ -165,6 +168,9 @@ sub main_loop {
         Debugf("Loaded block height %u", $block->height);
         last;
     }
+    # Fill the pubkey column for wallet rows created before it existed (needs the
+    # plaintext keys, so it only covers unencrypted rows)
+    QBitcoin::MyAddress->backfill_pubkeys();
     # Load my UTXO for generate or rpc getbalance
     QBitcoin::Generate->load_utxo();
     # Compute the base of the emitted coins counter; afterwards it is maintained
@@ -175,11 +181,27 @@ sub main_loop {
     $generate //= 1 if $config->{genesis};
     # By default validate blocks if there are any my staked coins
     $generate //= !!QBitcoin::TXO->staked_utxo;
+    QBitcoin::Generate::Control->generate_enabled($generate);
 
     # Slashing self-guard: remember the slot we start in. Until the in-memory registry of
     # published stakes is repopulated, we must not (re)stake this slot or any earlier one
     # (we may have already published a stake for them in a previous run before a restart).
-    QBitcoin::Generate::Control->start_slot(timeslot(time())) if $generate;
+    # Set unconditionally: generation may also be enabled later at runtime (walletunlock,
+    # web admin staking toggle), and those slots must stay closed for it too.
+    QBitcoin::Generate::Control->start_slot(timeslot(time()));
+
+    if ($generate && QBitcoin::Wallet->is_encrypted && !QBitcoin::Wallet->unlocked && QBitcoin::MyAddress->stake_address) {
+        Warningf('Wallet private keys are encrypted; block generation is paused until the wallet is unlocked with "qbitcoin-cli walletunlock" or staking is enabled in the web admin interface');
+    }
+    if (QBitcoin::Password->is_set) {
+        my $policy = $config->{encrypted_private_keys} // 1;
+        if ($policy && !QBitcoin::Wallet->is_encrypted && QBitcoin::MyAddress->my_address) {
+            Noticef("Wallet private keys are stored unencrypted; run setwalletpassword to encrypt them");
+        }
+        elsif (!$policy && QBitcoin::Wallet->is_encrypted) {
+            Noticef("Wallet private keys are encrypted but 'encrypted_private_keys' is disabled; run setwalletpassword to decrypt them");
+        }
+    }
 
     if ($config->{genesis} && !QBitcoin::Block->blockchain_time) {
         my $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
@@ -212,7 +234,7 @@ sub main_loop {
         }
         if (mempool_synced() && blockchain_synced()) {
             QBitcoin::Produce->produce() if $config->{produce};
-            if ($generate) {
+            if (QBitcoin::Generate::Control->generate_enabled && QBitcoin::Wallet->signing_available) {
                 my $time = time();
                 my $timeslot = timeslot($time);
                 my $generated_time = QBitcoin::Generate->generated_time;

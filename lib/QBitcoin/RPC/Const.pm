@@ -14,6 +14,15 @@ use constant ERR_CODES => {
     ERR_INVALID_ADDRESS_OR_KEY  => -5,
     ERR_DESERIALIZATION_ERROR   => -22,
     ERR_VERIFY_ALREADY_IN_CHAIN => -27,
+
+    # Wallet password flow. qbitcoin-cli reacts to these codes: on
+    # ERR_WALLET_PASSWORD_REQUIRED it prompts for the password and retries the
+    # request with a top-level "password" field; on ERR_CONFIRMATION_REQUIRED it
+    # shows the error message, asks for confirmation and retries with "force".
+    ERR_WALLET_UNLOCK_NEEDED      => -13,
+    ERR_WALLET_PASSWORD_INCORRECT => -14,
+    ERR_WALLET_PASSWORD_REQUIRED  => -17,
+    ERR_CONFIRMATION_REQUIRED     => -18,
 };
 
 use constant ERR_CODES;

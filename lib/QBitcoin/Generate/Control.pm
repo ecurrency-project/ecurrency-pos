@@ -6,6 +6,7 @@ use QBitcoin::Const;
 
 my $GENERATED_TIME;
 my $GENERATE_LEVEL;
+my $GENERATE_ENABLED;  # runtime block-generation flag; initialized from the config at startup, togglable via RPC/REST
 my ($GEN_SLOT, $GEN_AT); # memoized randomized in-slot generation moment
 my $START_SLOT;        # timeslot the node started generating in; never (re)stake it or earlier
 my %PUBLISHED_STAKE;   # $timeslot => { $utxo_key => $stake_tx_hash } — stakes we have committed/published
@@ -28,6 +29,15 @@ sub generate_level {
 sub generate_new {
     my $class = shift;
     undef $GENERATED_TIME;
+}
+
+# Whether block generation (staking) is enabled. Note that generation also needs
+# the wallet keys available for signing: the main loop checks
+# generate_enabled && QBitcoin::Wallet->signing_available.
+sub generate_enabled {
+    my $class = shift;
+    $GENERATE_ENABLED = $_[0] ? 1 : 0 if @_;
+    return $GENERATE_ENABLED;
 }
 
 # The wall-clock moment within $timeslot at which we should produce our block. A fresh

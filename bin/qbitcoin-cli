@@ -6,6 +6,7 @@ use Getopt::Long qw(:config bundling no_ignore_case no_auto_abbrev require_order
 use HTTP::Tiny;
 use JSON::XS;
 use QBitcoin::Const;
+use QBitcoin::RPC::Const;
 use QBitcoin::Config qw($config read_config);
 
 my $JSON = JSON::XS->new;
@@ -39,21 +40,25 @@ sub main {
     return call_rpc($command, @ARGV);
 }
 
-# Read a secret from stdin. On a terminal echo is disabled and the value is asked
-# twice for confirmation; on a pipe a single line is read.
+# Read a secret from stdin. On a terminal echo is disabled and, unless
+# $no_confirm is set, the value is asked twice for confirmation; on a pipe a
+# single line is read (so several secrets may be piped one per line).
 sub read_password {
-    my ($prompt) = @_;
+    my ($prompt, $no_confirm) = @_;
     if (-t STDIN) { ## no critic (InputOutput::ProhibitInteractiveTest)
         local $| = 1;
         my $echo_off = system("stty", "-echo") == 0;
         my $pass = _prompt_line($prompt, $echo_off);
         if ($echo_off) {
-            my $confirm = _prompt_line("Confirm password: ", $echo_off);
-            system("stty", "echo");
-            if ($pass ne $confirm) {
-                print STDERR "Passwords do not match\n";
-                exit 1;
+            if (!$no_confirm) {
+                my $confirm = _prompt_line("Confirm password: ", $echo_off);
+                if ($pass ne $confirm) {
+                    system("stty", "echo");
+                    print STDERR "Passwords do not match\n";
+                    exit 1;
+                }
             }
+            system("stty", "echo");
         }
         return $pass;
     }
@@ -62,6 +67,15 @@ sub read_password {
         or do { print STDERR "No password provided on stdin\n"; exit 1; };
     $line =~ s/\r?\n?\z//;
     return $line;
+}
+
+# Show the server message and ask the user to confirm the operation
+sub confirm {
+    my ($message) = @_;
+    print STDERR "$message\n";
+    print STDERR "Continue? [y/N] ";
+    my $line = <STDIN>;
+    return defined($line) && $line =~ /^\s*y(?:es)?\s*\z/i ? 1 : 0;
 }
 
 sub _prompt_line {
@@ -95,16 +109,39 @@ sub call_rpc {
     $address = RPC_ADDR if $address eq '*';
     my $url = "http://$address:$port";
     my $ua = HTTP::Tiny->new;
-    my $response = $ua->post($url, {
-        headers => { 'Content-Type' => 'application/json' },
-        content => $JSON->encode({
-            jsonrpc => 2.0,
-            id      => 1,
-            method  => $method,
-            params  => \@params,
-        }),
-    });
-    my $result = eval { $JSON->decode($response->{content}) };
+    # Top-level request fields added on a retry after the server asked for the
+    # wallet password or for an explicit confirmation. The retry logic is fully
+    # generic: which commands need what is decided by the server.
+    my %extra;
+    my %asked;
+    my ($response, $result);
+    while (1) {
+        $response = $ua->post($url, {
+            headers => { 'Content-Type' => 'application/json' },
+            content => $JSON->encode({
+                jsonrpc => 2.0,
+                id      => 1,
+                method  => $method,
+                params  => \@params,
+                %extra,
+            }),
+        });
+        $result = eval { $JSON->decode($response->{content}) };
+        my $error = ref($result) eq 'HASH' && ref($result->{error}) eq 'HASH' ? $result->{error} : undef;
+        my $code = $error ? $error->{code} : undef;
+        if (defined($code) && $code == ERR_WALLET_PASSWORD_REQUIRED && !$asked{password}++) {
+            print STDERR "$error->{message}\n" if defined($error->{message}) && $error->{message} ne '';
+            $extra{password} = read_password("Wallet password: ", 1);
+            next;
+        }
+        if (defined($code) && $code == ERR_CONFIRMATION_REQUIRED && !$asked{force}++) {
+            confirm($error->{message} // "The operation requires confirmation.")
+                or do { print STDERR "Aborted\n"; return 1 };
+            $extra{force} = JSON::XS::true;
+            next;
+        }
+        last;
+    }
     if (!$result || (ref($result) eq 'HASH' && $result->{error})) {
         select STDERR;
         my $error = ref($result) eq 'HASH' ? $result->{error} : undef;

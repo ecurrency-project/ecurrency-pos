@@ -6,10 +6,11 @@ use QBitcoin::Config;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors new);
 use QBitcoin::Const;
-use QBitcoin::ORM qw(find update :types);
+use QBitcoin::ORM qw(find update delete :types);
 use QBitcoin::Crypto qw(hash160 hash256 pk_import pk_alg);
 use QBitcoin::Address qw(wif_to_pk address_by_pubkey script_by_pubkey script_by_pubkeyhash addresses_by_pubkey scripthash_by_address);
 use QBitcoin::Tag;
+use QBitcoin::Wallet::Crypt qw(is_encrypted_pk decrypt_pk unlocked);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(my_address stake_address watched_address);
@@ -19,6 +20,7 @@ use constant TABLE => 'my_address';
 use constant FIELDS => {
     address     => STRING,
     private_key => STRING,
+    pubkey      => BINARY,
     staked      => NUMERIC,
     algo        => NUMERIC,
     tag_id      => NUMERIC,
@@ -82,19 +84,36 @@ sub tag {
 
 sub pubkey {
     my $self = shift;
-    return $self->{pubkey} if $self->{pubkey};
+    if (@_) { # setter, called by update(pubkey => ...)
+        return $self->{pubkey} = $_[0];
+    }
+    return $self->{pubkey} if $self->{pubkey}; # stored in the database or already derived
     my $pk_alg = $self->_pk_alg
         or return undef;
     my $pk = $self->privkey($pk_alg);
     return $self->{pubkey} = $pk->pubkey_by_privkey;
 }
 
+# Plaintext WIF for this address; undef for watch-only.
+# Dies when the key is encrypted and the wallet is locked.
+sub wif {
+    my $self = shift;
+    my $private_key = $self->private_key
+        or return undef;
+    is_encrypted_pk($private_key)
+        or return $private_key;
+    unlocked()
+        or die "Wallet is locked\n";
+    return decrypt_pk($private_key, $self->{address})
+        // die "Cannot decrypt private key for address $self->{address}\n";
+}
+
 sub privkey {
     my $self = shift;
     my ($algo) = @_;
-    my $private_key = $self->private_key
+    $self->private_key
         or return undef;
-    return $self->{privkey}->[$algo] //= pk_import(wif_to_pk($private_key), $algo);
+    return $self->{privkey}->[$algo] //= pk_import(wif_to_pk($self->wif), $algo);
 }
 
 # Primary algorithm for this address (scalar)
@@ -104,7 +123,7 @@ sub _pk_alg {
     return $self->{algo} if $self->{algo};
     # Determine from private key: try all matching algorithms,
     # pick the one whose pubkey matches the stored address
-    my $private_key = $self->private_key
+    my $private_key = $self->wif
         or return undef;
     my @algos = pk_alg(wif_to_pk($private_key));
     return undef unless @algos;
@@ -128,7 +147,7 @@ sub _pk_alg {
 # All matching algorithms for this private key (list)
 sub algo_list {
     my $self = shift;
-    my $private_key = $self->private_key
+    my $private_key = $self->wif
         or return ();
     return @{$self->{algo_list} //= [ pk_alg(wif_to_pk($private_key)) ]};
 }
@@ -151,7 +170,11 @@ sub create {
             }
             else {
                 Infof("Updating watch-only address %s with private key", $attr->{address});
-                $address->update(private_key => $attr->{private_key});
+                $class->_derive_pubkey($attr);
+                $address->update(
+                    private_key => $attr->{private_key},
+                    $attr->{pubkey} ? (pubkey => $attr->{pubkey}) : (),
+                );
                 push @$MY_ADDRESS, $address if $MY_ADDRESS;
                 if ($attr->{staked}) {
                     $address->update(staked => 1);
@@ -170,6 +193,7 @@ sub create {
         Errf("Cannot create watch-only address %s with staked flag", $attr->{address});
         return undef;
     }
+    $class->_derive_pubkey($attr) if $attr->{private_key};
     my $self = QBitcoin::ORM::create($class, $attr);
     if ($self) {
         Infof("Created my address %s", $self->address);
@@ -194,6 +218,71 @@ sub create {
         # Do not forget to load utxo for this address by QBitcoin::Generate->load_address_utxo()
     }
     return $self;
+}
+
+# Fill $attr->{pubkey} from a plaintext private key (callers storing an encrypted
+# key must pass the pubkey explicitly)
+sub _derive_pubkey {
+    my $class = shift;
+    my ($attr) = @_;
+    return if $attr->{pubkey} || is_encrypted_pk($attr->{private_key});
+    my $tmp = $class->new({
+        private_key => $attr->{private_key},
+        address     => $attr->{address},
+        $attr->{algo} ? (algo => $attr->{algo}) : (),
+    });
+    $attr->{pubkey} = $tmp->pubkey;
+    return;
+}
+
+# Fill the pubkey column for rows created before it existed. Needs the plaintext
+# key, so it covers unencrypted rows only; encrypt_all() stores the pubkey for
+# the rows it encrypts, so an encrypted row without pubkey is a broken one.
+sub backfill_pubkeys {
+    my $class = shift // __PACKAGE__;
+    foreach my $address ($class->watched_address) {
+        my $private_key = $address->private_key;
+        next if $address->{pubkey} || !$private_key;
+        if (is_encrypted_pk($private_key)) {
+            Warningf("Address %s has encrypted private key but no stored pubkey; it is unusable while the wallet is locked", $address->address);
+            next;
+        }
+        my $pubkey = $address->pubkey
+            or next;
+        $address->update(pubkey => $pubkey);
+        Infof("Stored public key for address %s", $address->address);
+    }
+}
+
+# Delete the address from the database and all in-memory caches, including its
+# entries in the my-UTXO set (used by the forgotten-password reset)
+sub remove {
+    my $self = shift;
+    # A row without a stored pubkey cannot derive its hashes while locked; it never
+    # populated any caches either, so removing just the DB row is enough for it
+    my %scripthash = map { $_ => 1 } eval { $self->scripthash };
+    my %pubkeyhash;
+    if (my $pubkey = eval { $self->pubkey }) {
+        %pubkeyhash = (hash160($pubkey) => 1, hash256($pubkey) => 1);
+    }
+    require QBitcoin::TXO;
+    foreach my $utxo (QBitcoin::TXO->my_utxo) {
+        if ($scripthash{$utxo->scripthash} || $pubkeyhash{substr($utxo->data // "", 0, 32)}) {
+            $utxo->del_my_utxo;
+        }
+    }
+    $self->delete;
+    @$WATCHED_ADDRESS = grep { $_ != $self } @$WATCHED_ADDRESS if $WATCHED_ADDRESS;
+    @$MY_ADDRESS      = grep { $_ != $self } @$MY_ADDRESS      if $MY_ADDRESS;
+    @$STAKE_ADDRESS   = grep { $_ != $self } @$STAKE_ADDRESS   if $STAKE_ADDRESS;
+    if ($MY_HASHES) {
+        foreach my $hash (keys %scripthash) {
+            delete $MY_HASHES->{$hash};
+            delete $WATCH_HASHES->{$hash};
+        }
+    }
+    Warningf("Removed my address %s", $self->address);
+    return;
 }
 
 sub is_watchonly {

@@ -10,13 +10,14 @@ use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
+use QBitcoin::Password;
 use parent qw(QBitcoin::HTTP);
 
 use Role::Tiny::With;
 with 'QBitcoin::RPC::Validate';
 with 'QBitcoin::RPC::Commands';
 
-mk_accessors(qw( cmd args ));
+mk_accessors(qw( cmd args auth_password force ));
 
 my $JSON = JSON::XS->new;
 
@@ -82,6 +83,21 @@ sub process_request {
         $self->connection->ip, $self->connection->port);
     $self->args = $body->{params};
     $self->cmd  = $body->{method};
+    # Optional top-level request fields (never logged), set by qbitcoin-cli on a
+    # retry after ERR_WALLET_PASSWORD_REQUIRED / ERR_CONFIRMATION_REQUIRED
+    $self->auth_password = ref($body->{password}) ? undef : $body->{password};
+    $self->force         = $body->{force} ? 1 : 0;
+    # Commands listed in %REQUIRE_PASSWORD are gated by the wallet password when
+    # one is set; commands with more complex flows (setwalletpassword) verify the
+    # password themselves
+    if ($self->requires_password($self->cmd) && QBitcoin::Password->is_set) {
+        if (!defined $self->auth_password) {
+            return $self->response_error("This command requires the wallet password", ERR_WALLET_PASSWORD_REQUIRED);
+        }
+        if (!QBitcoin::Password->check_password($self->auth_password)) {
+            return $self->response_error("Incorrect wallet password", ERR_WALLET_PASSWORD_INCORRECT);
+        }
+    }
     $self->validate_args == 0
         or return -1;
     return $self->$func(@{$self->{params}});
