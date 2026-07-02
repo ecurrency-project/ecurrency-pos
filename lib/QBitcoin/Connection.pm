@@ -2,8 +2,8 @@ package QBitcoin::Connection;
 use warnings;
 use strict;
 
-use Socket qw(inet_ntoa);
 use POSIX qw(:errno_h);
+use QBitcoin::IP qw(ip_str);
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
@@ -28,7 +28,7 @@ sub new {
     my $attr = @_ == 1 ? $_[0] : { @_ };
     my $self = bless $attr, $class;
     $attr->{type_id} //= $attr->{peer}->type_id if $attr->{peer};
-    $attr->{ip} //= inet_ntoa($attr->{peer}->ipv4) if $attr->{peer} && $attr->{peer}->ipv4;
+    $attr->{ip} //= ip_str($attr->{peer}->ip) if $attr->{peer} && $attr->{peer}->ip;
     my $protocol_module = MODULE_BY_TYPE->{$attr->{type_id}}
         or die "Unknown connection type [$attr->{type_id}]";
     $self->protocol = $protocol_module->new(connection => $self);

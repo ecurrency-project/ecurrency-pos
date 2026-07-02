@@ -4,12 +4,13 @@ use strict;
 use feature 'state';
 
 use Time::HiRes;
-use Socket;
+use Socket qw(:DEFAULT inet_pton pack_sockaddr_in6 AF_INET6 PF_INET6 IPPROTO_IPV6 IPV6_V6ONLY);
 use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
 use List::Util qw(min);
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::Log;
+use QBitcoin::IP qw(ip_str ip_port_str parse_addr_port sockaddr_to_ip_port pack_sockaddr_by_ip);
 use QBitcoin::Peer;
 use QBitcoin::Connection;
 use QBitcoin::ConnectionList;
@@ -24,53 +25,91 @@ use QBitcoin::REST;
 sub bind_addr {
     my $class = shift;
 
-    my ($address) = split(/:/, $config->{bind} // BIND_ADDR);
+    my ($address) = parse_addr_port($config->{bind} // BIND_ADDR);
     # the same port is advertised to peers in the "version" message
-    return listen_socket($address, QBitcoin::Protocol::listen_port());
+    return [ listen_sockets($address, QBitcoin::Protocol::listen_port()) ];
 }
 
 sub bind_rpc_addr {
     my $class = shift;
 
-    my ($address, $port) = split(/:/, $config->{rpc} // RPC_ADDR);
+    my ($address, $port) = parse_addr_port($config->{rpc} // RPC_ADDR);
     $port //= $config->{rpc_port} // ($config->{testnet} ? RPC_PORT_TESTNET : RPC_PORT);
-    return listen_socket($address, $port);
+    return [ listen_sockets($address, $port) ];
 }
 
 sub bind_rest_addr {
     my $class = shift;
 
-    $config->{rest} or return undef;
-    my ($address, $port) = split(/:/, $config->{rest});
+    $config->{rest} or return [];
+    my ($address, $port) = parse_addr_port($config->{rest});
     $port //= $config->{rest_port} // ($config->{testnet} ? REST_PORT_TESTNET : REST_PORT);
-    return listen_socket($address, $port);
+    return [ listen_sockets($address, $port) ];
+}
+
+# Listening socket(s) for the given address; "*" means all addresses of both
+# families, i.e. separate IPv4 and IPv6 sockets (IPv6 one is skipped with a
+# warning on a host without IPv6 support)
+sub listen_sockets {
+    my ($address, $port) = @_;
+    $address eq '*'
+        or return listen_socket($address, $port);
+    my @sockets = ( listen_socket("0.0.0.0", $port) );
+    if (my $socket6 = eval { listen_socket("::", $port) }) {
+        push @sockets, $socket6;
+    }
+    else {
+        Warningf("Cannot listen on [::]:%u: %s", $port, $@ =~ s/\n\z//r);
+    }
+    return @sockets;
 }
 
 sub listen_socket {
     my ($address, $port) = @_;
-    my $bind_addr = pack_sockaddr_in($port, inet_aton($address eq '*' ? "0.0.0.0" : $address));
+    my ($family, $bind_addr);
+    if (defined(my $addr6 = inet_pton(AF_INET6, $address))) {
+        $family = PF_INET6;
+        $bind_addr = pack_sockaddr_in6($port, $addr6);
+    }
+    elsif (defined(my $addr4 = inet_pton(AF_INET, $address))) {
+        $family = PF_INET;
+        $bind_addr = pack_sockaddr_in($port, $addr4);
+    }
+    else {
+        die "Incorrect bind address $address\n";
+    }
     my $proto = getprotobyname('tcp');
-    socket(my $socket, PF_INET, SOCK_STREAM, $proto)
+    socket(my $socket, $family, SOCK_STREAM, $proto)
         or die "Error creating socket: $!\n";
     setsockopt($socket, SOL_SOCKET, SO_REUSEADDR, 1)
         or die "setsockopt error: $!\n";
+    if ($family == PF_INET6) {
+        # do not intercept IPv4-mapped connections, IPv4 is served by its own socket
+        setsockopt($socket, IPPROTO_IPV6, IPV6_V6ONLY, 1)
+            or die "setsockopt IPV6_V6ONLY error: $!\n";
+    }
+    my $addr_str = $family == PF_INET6 ? "[$address]:$port" : "$address:$port";
     bind($socket, $bind_addr)
-        or die "bind $address:$port error: $!\n";
+        or die "bind $addr_str error: $!\n";
     listen($socket, LISTEN_QUEUE)
         or die "Error listen: $!\n";
-    Infof("Accepting connections on %s:%s", $address, $port);
+    Infof("Accepting connections on %s", $addr_str);
     return $socket;
 }
 
 sub connect_to {
     my $peer = shift;
     my %opts = @_;
-    my $iaddr = $peer->ipv4
-        or die "No ipv4 address for peer " . $peer->id . "\n";
-    my $paddr = pack_sockaddr_in($peer->port, $iaddr);
+    my ($family, $paddr) = pack_sockaddr_by_ip($peer->port, $peer->ip);
     my $proto = getprotobyname('tcp');
-    socket(my $socket, PF_INET, SOCK_STREAM, $proto)
-        or die "Error creating socket: $!\n";
+    my $socket;
+    unless (socket($socket, $family, SOCK_STREAM, $proto)) {
+        # typically EAFNOSUPPORT: an IPv6 peer on a host without IPv6 support;
+        # count as a failed connect so the backoff prevents retrying every loop
+        Warningf("Error creating socket for peer %s: %s", $peer->id, $!);
+        $peer->failed_connect();
+        return undef;
+    }
     my $flags = fcntl($socket, F_GETFL, 0)
         or die "socket get fcntl error: $!\n";
     fcntl($socket, F_SETFL, $flags | O_NONBLOCK)
@@ -148,9 +187,9 @@ sub main_loop {
         QBitcoin::Generate->generate($genesis_time);
     }
 
-    my $listen_socket = $class->bind_addr;
-    my $listen_rpc    = $class->bind_rpc_addr;
-    my $listen_rest   = $class->bind_rest_addr;
+    my @listen_socket = @{$class->bind_addr};
+    my @listen_rpc    = @{$class->bind_rpc_addr};
+    my @listen_rest   = @{$class->bind_rest_addr};
 
     set_pinned_peers();
 
@@ -214,9 +253,7 @@ sub main_loop {
             # Debugf("Have blockchain height %d, last block time %s, weight %d", QBitcoin::Block->blockchain_height // -1, defined(QBitcoin::Block->blockchain_height) ? scalar(localtime QBitcoin::Block->blockchain_time) : "undef", QBitcoin::Block->best_weight);
         }
         $rin = $win = $ein = '';
-        vec($rin, fileno($listen_socket), 1) = 1 if $listen_socket;
-        vec($rin, fileno($listen_rpc),    1) = 1 if $listen_rpc;
-        vec($rin, fileno($listen_rest),   1) = 1 if $listen_rest;
+        vec($rin, fileno($_), 1) = 1 foreach @listen_socket, @listen_rpc, @listen_rest;
 
         call_qbt_peers();
         call_btc_peers();
@@ -240,16 +277,16 @@ sub main_loop {
         }
         my $time = time();
 
-        if ($listen_socket && vec($rin, fileno($listen_socket), 1) == 1) {
+        foreach my $listen_socket (grep { vec($rin, fileno($_), 1) == 1 } @listen_socket) {
             my $peerinfo = accept(my $new_socket, $listen_socket);
-            my ($remote_port, $peer_addr) = unpack_sockaddr_in($peerinfo);
-            my $peer_ip = inet_ntoa($peer_addr);
+            my ($remote_port, $peer_addr) = sockaddr_to_ip_port($peerinfo);
+            my $peer_ip = ip_str($peer_addr);
             # Do not reject a duplicate IP here: several nodes behind one NAT address may connect
             # from the same IP. Duplicate connections with the same node are detected by the session
             # nonce from the "version" message (see QBitcoin::Protocol::check_duplicate_connection),
             # here we only limit the number of incoming connections per IP.
             my $in_from_ip = grep { $_->direction == DIR_IN }
-                QBitcoin::ConnectionList->find_ip(PROTOCOL_QBITCOIN, IPV6_V4_PREFIX . $peer_addr);
+                QBitcoin::ConnectionList->find_ip(PROTOCOL_QBITCOIN, $peer_addr);
             if ($in_from_ip >= ($config->{max_in_connections_per_ip} // MAX_IN_CONNECTIONS_PER_IP)) {
                 Warningf("Too many incoming connections from %s (%u), reject", $peer_ip, $in_from_ip);
                 close($new_socket);
@@ -257,13 +294,13 @@ sub main_loop {
             else {
                 Infof("Incoming connection from %s", $peer_ip);
                 my $peer = QBitcoin::Peer->get_or_create(
-                    ipv4      => $peer_addr,
+                    ip        => $peer_addr,
                     type_id   => PROTOCOL_QBITCOIN,
                     transient => 1, # persisted only after a successful greeting, see QBitcoin::Peer::persist
                 );
                 # TODO: drop connection from peers with too low reputation (banned)
-                my ($my_port, $my_addr) = unpack_sockaddr_in(getsockname($new_socket));
-                my $my_ip = inet_ntoa($my_addr);
+                my ($my_port, $my_addr) = sockaddr_to_ip_port(getsockname($new_socket));
+                my $my_ip = ip_str($my_addr);
                 my $in_count = grep { $_->type_id == PROTOCOL_QBITCOIN && $_->direction == DIR_IN }
                                QBitcoin::ConnectionList->list();
                 my $connection = QBitcoin::Connection->new(
@@ -274,7 +311,7 @@ sub main_loop {
                     port       => $remote_port,
                     my_ip      => $my_ip,
                     my_port    => $my_port,
-                    my_addr    => IPV6_V4_PREFIX . $my_addr,
+                    my_addr    => $my_addr,
                     direction  => DIR_IN,
                     bytes_sent => 0,
                     bytes_recv => 0,
@@ -291,10 +328,10 @@ sub main_loop {
                 push @connections, $connection;
             }
         }
-        if ($listen_rpc && vec($rin, fileno($listen_rpc), 1) == 1) {
+        foreach my $listen_rpc (grep { vec($rin, fileno($_), 1) == 1 } @listen_rpc) {
             my $peerinfo = accept(my $new_socket, $listen_rpc);
-            my ($remote_port, $peer_addr) = unpack_sockaddr_in($peerinfo);
-            my $peer_ip = inet_ntoa($peer_addr);
+            my ($remote_port, $peer_addr) = sockaddr_to_ip_port($peerinfo);
+            my $peer_ip = ip_str($peer_addr);
             my @rpc_connections = grep { $_->type_id == PROTOCOL_RPC } QBitcoin::ConnectionList->list();
             if (@rpc_connections >= ($config->{max_rpc_connections} // MAX_RPC_CONNECTIONS)) {
                 Warningf("Too many RPC connections (%u), reject from %s", scalar(@rpc_connections), $peer_ip);
@@ -302,8 +339,8 @@ sub main_loop {
             }
             else {
                 # Debugf("Incoming RPC connection from %s:%u", $peer_ip, $remote_port);
-                my ($my_port, $my_addr) = unpack_sockaddr_in(getsockname($new_socket));
-                my $my_ip = inet_ntoa($my_addr);
+                my ($my_port, $my_addr) = sockaddr_to_ip_port(getsockname($new_socket));
+                my $my_ip = ip_str($my_addr);
                 my $connection = QBitcoin::Connection->new(
                     type_id    => PROTOCOL_RPC,
                     socket     => $new_socket,
@@ -315,17 +352,17 @@ sub main_loop {
                     port       => $remote_port,
                     my_ip      => $my_ip,
                     my_port    => $my_port,
-                    my_addr    => IPV6_V4_PREFIX . $my_addr,
+                    my_addr    => $my_addr,
                     direction  => DIR_IN,
                 );
                 $connection->protocol->startup();
                 push @connections, $connection;
             }
         }
-        if ($listen_rest && vec($rin, fileno($listen_rest), 1) == 1) {
+        foreach my $listen_rest (grep { vec($rin, fileno($_), 1) == 1 } @listen_rest) {
             my $peerinfo = accept(my $new_socket, $listen_rest);
-            my ($remote_port, $peer_addr) = unpack_sockaddr_in($peerinfo);
-            my $peer_ip = inet_ntoa($peer_addr);
+            my ($remote_port, $peer_addr) = sockaddr_to_ip_port($peerinfo);
+            my $peer_ip = ip_str($peer_addr);
             my @rest_connections = grep { $_->type_id == PROTOCOL_REST } QBitcoin::ConnectionList->list();
             if (@rest_connections >= ($config->{max_rest_connections} // MAX_REST_CONNECTIONS)) {
                 Warningf("Too many REST connections (%u), reject from %s", scalar(@rest_connections), $peer_ip);
@@ -333,8 +370,8 @@ sub main_loop {
             }
             else {
                 # Debugf("Incoming REST connection from %s:%u", $peer_ip, $remote_port);
-                my ($my_port, $my_addr) = unpack_sockaddr_in(getsockname($new_socket));
-                my $my_ip = inet_ntoa($my_addr);
+                my ($my_port, $my_addr) = sockaddr_to_ip_port(getsockname($new_socket));
+                my $my_ip = ip_str($my_addr);
                 my $connection = QBitcoin::Connection->new(
                     type_id    => PROTOCOL_REST,
                     socket     => $new_socket,
@@ -346,7 +383,7 @@ sub main_loop {
                     port       => $remote_port,
                     my_ip      => $my_ip,
                     my_port    => $my_port,
-                    my_addr    => IPV6_V4_PREFIX . $my_addr,
+                    my_addr    => $my_addr,
                     direction  => DIR_IN,
                 );
                 $connection->protocol->startup();
@@ -407,10 +444,10 @@ sub main_loop {
                     }
                     $connection->state = STATE_CONNECTED;
                     $connection->state_time = time();
-                    my ($my_port, $my_addr) = unpack_sockaddr_in(getsockname($connection->socket));
-                    $connection->my_ip = inet_ntoa($my_addr);
+                    my ($my_port, $my_addr) = sockaddr_to_ip_port(getsockname($connection->socket));
+                    $connection->my_ip = ip_str($my_addr);
                     $connection->my_port = $my_port;
-                    $connection->my_addr = IPV6_V4_PREFIX . $my_addr,
+                    $connection->my_addr = $my_addr;
                     Infof("Connected to %s peer %s", $connection->type, $connection->ip);
                     $connection->protocol->startup();
                     next;
@@ -653,7 +690,6 @@ sub call_qbt_peers {
                 $peer->reputation <= $worst_reputation) {
                 last;
             }
-            next unless $peer->ipv4; # TODO
             if (connect_to($peer)) {
                 $connect_out++;
             }

@@ -14,6 +14,7 @@ use HTTP::Response;
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::Log;
+use QBitcoin::IP qw(ip_port_str);
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Address qw(address_by_hash address_by_pubkey wallet_import_format wif_to_pk);
@@ -924,12 +925,12 @@ sub peer_info {
     foreach my $connection (QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN, PROTOCOL_BITCOIN)) {
         my $peer = $connection->peer;
         push @peers, {
-            addr        => $connection->ip . ":" . $connection->port,
-            addrlocal   => $connection->my_ip . ":" . $connection->my_port,
+            addr        => ip_port_str($connection->addr, $connection->port),
+            addrlocal   => ip_port_str($connection->my_addr, $connection->my_port),
             inbound     => $connection->direction == DIR_IN ? TRUE : FALSE,
             protocol    => $connection->type,
             software    => $peer->software // "",
-            network     => "ipv4",
+            network     => $peer->ipv4 ? "ipv4" : "ipv6",
             createtime  => $connection->state_time,
             bytessent   => $connection->bytes_sent,
             bytesrecv   => $connection->bytes_recv,

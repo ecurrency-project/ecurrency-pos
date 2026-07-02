@@ -7,6 +7,7 @@ use List::Util qw(sum0 sum min max);
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
+use QBitcoin::IP qw(ip_port_str);
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Block;
@@ -865,6 +866,9 @@ sub cmd_getnetworkinfo {
         networks        => [{
             name      => "ipv4",
             reachable => TRUE,
+        }, {
+            name      => "ipv6",
+            reachable => TRUE,
         }],
     });
 }
@@ -1278,12 +1282,12 @@ sub cmd_getpeerinfo {
     foreach my $connection (QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN, PROTOCOL_BITCOIN)) {
         my $peer = $connection->peer;
         push @peers, {
-            addr        => $connection->ip . ":" . $connection->port,
-            addrlocal   => $connection->my_ip . ":" . $connection->my_port,
+            addr        => ip_port_str($connection->addr, $connection->port),
+            addrlocal   => ip_port_str($connection->my_addr, $connection->my_port),
             inbound     => $connection->direction == DIR_IN ? TRUE : FALSE,
             protocol    => $connection->type,
             software    => $peer->software // "",
-            network     => "ipv4",
+            network     => $peer->ipv4 ? "ipv4" : "ipv6",
             createtime  => $connection->state_time,
             bytessent   => $connection->bytes_sent,
             bytesrecv   => $connection->bytes_recv,

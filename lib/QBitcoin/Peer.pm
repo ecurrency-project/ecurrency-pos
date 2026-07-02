@@ -2,7 +2,8 @@ package QBitcoin::Peer;
 use warnings;
 use strict;
 
-use Socket qw(inet_ntoa getaddrinfo unpack_sockaddr_in AF_INET SOCK_STREAM);
+use Socket qw(getaddrinfo unpack_sockaddr_in unpack_sockaddr_in6 AF_INET6 SOCK_STREAM);
+use QBitcoin::IP qw(ip_str parse_addr_port);
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::Log;
@@ -69,13 +70,17 @@ sub get_or_create {
         @ip = ( $args->{ip} );
     }
     elsif ($args->{host}) {
-        my ($addr, $port) = split(/:/, $args->{host});
-        my ($err, @res) = getaddrinfo($addr, undef, { socktype => SOCK_STREAM, family => AF_INET });
+        my ($addr, $port) = parse_addr_port($args->{host});
+        my ($err, @res) = getaddrinfo($addr, undef, { socktype => SOCK_STREAM });
         if ($err) {
             Errf("getaddrinfo for %s: %s", $addr, $err);
             return ();
         }
-        @ip = map { IPV6_V4_PREFIX . unpack_sockaddr_in($_->{addr}) } @res;
+        my %seen;
+        @ip = grep { !$seen{$_}++ }
+            map { $_->{family} == AF_INET6 ?
+                (unpack_sockaddr_in6($_->{addr}))[1] :
+                IPV6_V4_PREFIX . (unpack_sockaddr_in($_->{addr}))[1] } @res;
         $args->{port} = $port;
     }
     else {
@@ -172,7 +177,7 @@ sub get_all {
 
 sub id {
     my $self = shift;
-    return $self->{id} //= $self->ipv4 ? inet_ntoa($self->ipv4) : unpack("H*", $self->ip); # TODO: ipv6
+    return $self->{id} //= ip_str($self->ip) // unpack("H*", $self->ip);
 }
 
 sub ipv4 {
@@ -301,7 +306,6 @@ sub is_announceable {
 sub need_probe {
     my $self = shift;
     my ($now) = @_;
-    return 0 unless $self->ipv4; # TODO: ipv6
     return 0 unless $self->is_connect_allowed;
     return !defined($self->last_success_time) || $self->last_success_time < $now - PEER_REVERIFY_PERIOD;
 }
