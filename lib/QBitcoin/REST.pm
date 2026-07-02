@@ -379,7 +379,7 @@ sub process_request {
                 if (($my_address->staked && !$content->{staked}) || (!$my_address->staked && $content->{staked})) {
                     $my_address->private_key || !$content->{staked}
                         or return $self->http_response(400, "Cannot set watch-only address as staked");
-                    $my_address->set_staked($content->{staked} ? 1 : 0);
+                    $my_address->set_stake($content->{staked} ? 1 : 0);
                 }
                 return $self->http_ok({});
             }
