@@ -122,28 +122,7 @@ sub load {
     my $class = shift;
     my (@in) = @_;
     # TODO: move this to QBitcoin::ORM
-    my $sql = "SELECT value, num, tx_in.hash AS tx_in, tx_out.hash AS tx_out, siglist, s.hash as scripthash, s.script as redeem_script, data";
-    $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
-    $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
-    $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_out ON (tx_out.id = t.tx_out)";
-    $sql .= " WHERE (tx_in.hash, num) IN (" . (dbh->get_info(17) eq "SQLite" ? "VALUES" : "") . join(",",("(UNHEX(?),?)")x@in) . ")";
-    DEBUG_ORM && Debugf("sql: [%s] values [%s]", $sql, join(',', map { "X'" . unpack("H*", $_->{tx_out}) . "'", $_->{num} } @in));
-    my $sth = dbh->prepare($sql);
-    $sth->execute(map { unpack("H*", $_->{tx_out}), $_->{num} } @in);
-    my @txo;
-    while (my $hash = $sth->fetchrow_hashref()) {
-        push @txo, $class->new_saved($hash);
-    }
-    DEBUG_ORM && Debugf("found %u entries", scalar(@txo));
-    return @txo;
-}
-
-# For new tokens transaction load list of its input txo
-sub load_tokens {
-    my $class = shift;
-    my (@in) = @_;
-    # TODO: move this to QBitcoin::ORM
-    my $sql = "SELECT value, num, tx_in.hash AS tx_in, tx_out.hash AS tx_out, IFNULL(tx_token.hash, tx_in.hash) as token_hash, siglist, s.hash as scripthash, s.script as redeem_script, data";
+    my $sql = "SELECT value, num, tx_in.hash AS tx_in, tx_out.hash AS tx_out, IF(tx_in.tx_type = " . TX_TYPE_TOKENS . ", IFNULL(tx_token.hash, tx_in.hash), NULL) as token_hash, siglist, s.hash as scripthash, s.script as redeem_script, data";
     $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
     $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
     $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_out ON (tx_out.id = t.tx_out)";

@@ -950,7 +950,7 @@ sub load_inputs {
 
     if (@need_load_txo) {
         # var @txo here needed to prevent free txo objects as unused just after load
-        my @txo = $self->is_tokens ? QBitcoin::TXO->load_tokens(@need_load_txo) : QBitcoin::TXO->load(@need_load_txo);
+        my @txo = QBitcoin::TXO->load(@need_load_txo);
         my $class = ref $self;
         foreach my $in (@need_load_txo) {
             if (my $txo = QBitcoin::TXO->get($in)) {
