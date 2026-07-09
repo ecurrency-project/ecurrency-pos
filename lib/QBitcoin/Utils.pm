@@ -20,6 +20,7 @@ our @EXPORT_OK = qw(
     update_my_utxo
     create_txo
     estimate_fees
+    check_tx_tokens_balance
 );
 
 use List::Util qw(sum0);
@@ -955,6 +956,64 @@ sub create_txo {
         $txo[0]->{data} = $token_data;
     }
     return ([ map { QBitcoin::TXO->new_txo($_) } @txo ], $token_id);
+}
+
+sub check_tx_tokens_balance {
+    my ($tx) = @_;
+
+    my $in_value = 0;
+    my $permissions = 0;
+    foreach my $txo (map { $_->{txo} } grep { defined($_->{txo}->token_hash) && length($_->{txo}->data // "") > 0 } @{$tx->in}) {
+        if (!$txo->token_hash || !$tx->is_tokens || $txo->token_hash ne $tx->token_hash) {
+            return "Input " . $txo->tx_in_str . ":" . $txo->num . " burns tokens";
+        }
+        my $txo_type = substr($txo->data, 0, 1);
+        if ($txo_type eq TOKEN_TXO_TYPE_TRANSFER) {
+            length($txo->data) == 9 or next;
+            my $transfer_value = unpack("Q<", substr($txo->data, 1, 8));
+            if ($transfer_value > MAX_UINT64 - $in_value) {
+                return "Input " . $txo->tx_in_str . ":" . $txo->num . " causes integer overflow";
+            }
+            $in_value += $transfer_value;
+        }
+        elsif ($txo_type eq TOKEN_TXO_TYPE_PERMISSIONS) {
+            if (length($txo->data) >= 2) {
+                my $in_permissions = unpack("C", substr($txo->data, 1, 1));
+                $permissions |= $in_permissions;
+            }
+        }
+    }
+    return undef unless $tx->is_tokens;
+    return undef unless $tx->token_hash;
+    my $out_value = 0;
+    foreach my $out (grep { length($_->data // "") > 0 } @{$tx->out}) {
+        my $txo_type = substr($out->data, 0, 1);
+        if ($txo_type eq TOKEN_TXO_TYPE_TRANSFER) {
+            length($out->data) == 9 or return "Incorrect data length in token transfer output";
+            my $transfer_value = unpack("Q<", substr($out->data, 1, 8));
+            if ($transfer_value > MAX_UINT64 - $out_value) {
+                return "Output causes integer overflow";
+            }
+            $out_value += $transfer_value;
+        }
+        else {
+            my $data = $tx->unpack_token_info($out->data)
+                or return "Incorrect data in token output";
+            if ($data->{permissions} && ($data->{permissions} & ~$permissions)) {
+                return "Attempt to gain token permission";
+            }
+            if ($data->{decimals} || $data->{symbol} || $data->{name}) {
+                return "Attempt to change token attributes";
+            }
+        }
+    }
+    if ($in_value < $out_value && !($permissions & TOKEN_PERMISSION_MINT)) {
+        return "Attempt to mint tokens without permission";
+    }
+    if ($in_value > $out_value) {
+        return "Burn tokens not allowed";
+    }
+    return undef;
 }
 
 # estimate_fees(@targets) - estimate fee rates for given confirmation targets

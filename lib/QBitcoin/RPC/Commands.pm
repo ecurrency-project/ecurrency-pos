@@ -26,7 +26,7 @@ use QBitcoin::Generate;
 use QBitcoin::Generate::Control;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info update_my_utxo create_txo estimate_fees);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info update_my_utxo create_txo estimate_fees check_tx_tokens_balance);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
@@ -702,6 +702,10 @@ sub cmd_signrawtransactionwithkey {
     my $max_fee_per_kb = $self->max_fee_per_kb;
     if ($max_fee_per_kb && $fee_per_kb > $max_fee_per_kb) {
         return $self->response_error("Transaction fee too high: " . $fee_per_kb / DENOMINATOR . " > " . $max_fee_per_kb / DENOMINATOR . " BTC/kb", ERR_INVALID_REQUEST);
+    }
+
+    if (my $err = check_tx_tokens_balance($tx)) {
+        return $self->response_error("Tokens balance check failed: $err", ERR_INVALID_REQUEST);
     }
 
     return $self->response_ok({
