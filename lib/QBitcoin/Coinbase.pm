@@ -274,8 +274,7 @@ sub get_scripthash {
     # OK, make scripthash by first input of this transaction
     my $in = $tx->in->[0]
         or return undef;
-    # Witness (P2WPKH) input address is not proofable by SPV, so we cannot use it for coinbase upgrade.
-    # That's because we request blocks by MSG_BLOCK (not by MSG_WITNESS_BLOCK), so the transaction cannot contain witness data.
+    # Witness (P2WPKH) input address is not proofable by SPV, so we cannot use it for coinbase upgrade
     my $input_script = $in->{script};
     if ($input_script eq "") {
         Warningf("Upgrade from empty script in tx %s", $tx->hash_str);

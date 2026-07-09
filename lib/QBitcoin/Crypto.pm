@@ -52,9 +52,11 @@ sub check_sig {
     my $crypto_module = _crypto_module($sig_alg);
     if (!$crypto_module) {
         Debugf("Unsupported signature type %u", $sig_alg);
-        # Is pubkey valid?
-        # If not, assume it is unsupported algorithm and return true for possible future compatibility,
+        # Assume invalid pubkey is unsupported algorithm and return true for possible future compatibility,
         # adding new algorithms with soft-fork.
+        # This is safe because the pubkey hash is checked, and allowing pubkey with unsupported algorithm
+        # in output script is the same as creating wide-open output script (that can be spent by anyone),
+        # which is not a security issue and is not worse than creating unspendable output.
         foreach my $algo (sort { $a <=> $b } keys %{&CRYPTO_MODULE}) {
             my $module = _crypto_module($algo);
             return undef if $module->is_valid_pubkey($pubkey);
