@@ -1099,7 +1099,7 @@ sub validate {
         return -1;
     }
     # Transaction must contains at least one input
-    if (!@{$self->in} && !$self->is_coinbase && !$self->is_stake) {
+    if (!@{$self->in} && !$self->is_stake) {
         Warningf("No inputs in transaction %s", $self->hash_str);
         return -1;
     }
