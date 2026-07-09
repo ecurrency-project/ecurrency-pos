@@ -126,11 +126,11 @@ sub check_tokens_tx {
                         next;
                     }
                     $correct_input = 1;
-                    $in_value += $transfer_value;
-                    if ($in_value < $transfer_value) {
+                    if ($transfer_value > MAX_UINT64 - $in_value) {
                         Warningf("Overflow in token transfer value in transaction %s token %s", $self->hash_str, $self->token_hash_str);
                         return -1;
                     }
+                    $in_value += $transfer_value;
                 }
                 else {
                     # Allow but ignore incorrect token transfer inputs
@@ -159,11 +159,11 @@ sub check_tokens_tx {
         if ($txo_type eq TOKEN_TXO_TYPE_TRANSFER) {
             if (length($out->data) == 1+8) {
                 my $transfer_value = unpack("Q<", substr($out->data, 1, 8));
-                $out_value += $transfer_value;
-                if ($out_value < $transfer_value) {
+                if ($transfer_value > MAX_UINT64 - $out_value) {
                     Warningf("Overflow in token transfer value in transaction %s token %s", $self->hash_str, $self->token_hash_str);
                     return -1;
                 }
+                $out_value += $transfer_value;
             }
             else {
                 Warningf("Incorect data length for token transfer output in transaction %s token %s", $self->hash_str, $self->token_hash_str);
