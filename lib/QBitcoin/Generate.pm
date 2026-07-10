@@ -12,6 +12,7 @@ use QBitcoin::Block;
 use QBitcoin::RedeemScript;
 use QBitcoin::TXO;
 use QBitcoin::Coinbase;
+use QBitcoin::Address qw(scripthash_by_address);
 use QBitcoin::MyAddress qw(my_address stake_address);
 use QBitcoin::Transaction;
 use QBitcoin::Crypto qw(hash256);
@@ -70,6 +71,11 @@ sub txo_confirmed {
     return $block_height >= 0;
 }
 
+sub reward_addr {
+    state $reward_addr = $config->{reward_addr} ? scripthash_by_address($config->{reward_addr}) : undef;
+    return $reward_addr;
+}
+
 sub make_out_join {
     my ($reward, $my_txo) = @_;
 
@@ -88,11 +94,24 @@ sub make_out_join {
     $my_address //= (stake_address())[0]
         or return ();
     my $my_amount = sum0 map { $_->value } @$my_txo;
-    my $out = QBitcoin::TXO->new_txo(
-        value      => $my_amount + $reward,
-        scripthash => scalar($my_address->scripthash),
-    );
-    return $out;
+    if (reward_addr) {
+        return (
+            QBitcoin::TXO->new_txo(
+                value      => $my_amount,
+                scripthash => scalar($my_address->scripthash),
+            ),
+            QBitcoin::TXO->new_txo(
+                value      => $reward,
+                scripthash => reward_addr,
+            ),
+        );
+    }
+    else {
+        return QBitcoin::TXO->new_txo(
+            value      => $my_amount + $reward,
+            scripthash => scalar($my_address->scripthash),
+        );
+    }
 }
 
 sub my_txo_by_address {
@@ -121,10 +140,24 @@ sub make_out_separate {
     @$my_txo or return make_out_join($reward, $my_txo);
     my ($my_best) = my_txo_by_address($my_txo, $timeslot);
     @$my_txo = grep { $_->scripthash eq $my_best->[0] } @$my_txo;
-    return QBitcoin::TXO->new_txo(
-        value      => $my_best->[1] + $reward,
-        scripthash => $my_best->[0],
-    );
+    if (reward_addr) {
+        return (
+            QBitcoin::TXO->new_txo(
+                value      => $my_best->[1],
+                scripthash => $my_best->[0],
+            ),
+            QBitcoin::TXO->new_txo(
+                value      => $reward,
+                scripthash => reward_addr,
+            ),
+        );
+    }
+    else {
+        return QBitcoin::TXO->new_txo(
+            value      => $my_best->[1] + $reward,
+            scripthash => $my_best->[0],
+        );
+    }
 }
 
 sub make_out_union {
@@ -137,26 +170,40 @@ sub make_out_union {
     else {
         @my = my_txo_by_address($my_txo, $timeslot);
     }
-    my $total_weight = sum0 map { $_->[2] } @my;
     my @out;
-    my $reward_remain = $reward;
-    my %remove_scripthash;
-    for (my $i = $#my; $i >= 0; $i--) {
-        my $reward_part = $i > 0 ? int($reward * $my[$i]->[2] / $total_weight + 0.5) : $reward_remain;
-        if ($reward > 0 && $reward_part == 0) {
-            # Remove utxo related to this address from the @$my_txo list
-            $remove_scripthash{$my[$i]->[0]} = 1;
-            next;
-        }
-        $reward_remain -= $reward_part;
+    if (reward_addr) {
+        @out = map {
+            QBitcoin::TXO->new_txo(
+                value      => $_->[1],
+                scripthash => $_->[0],
+            )
+        } @my;
         push @out, QBitcoin::TXO->new_txo(
-            value      => $my[$i]->[1] + $reward_part,
-            scripthash => $my[$i]->[0],
+            value      => $reward,
+            scripthash => reward_addr,
         );
     }
-    if (%remove_scripthash) {
-        # Remove utxo related to this address from the @$my_txo list
-        @$my_txo = grep { !$remove_scripthash{$_->scripthash} } @$my_txo;
+    else {
+        my $total_weight = sum0 map { $_->[2] } @my;
+        my $reward_remain = $reward;
+        my %remove_scripthash;
+        for (my $i = $#my; $i >= 0; $i--) {
+            my $reward_part = $i > 0 ? int($reward * $my[$i]->[2] / $total_weight + 0.5) : $reward_remain;
+            if ($reward > 0 && $reward_part == 0) {
+                # Remove utxo related to this address from the @$my_txo list
+                $remove_scripthash{$my[$i]->[0]} = 1;
+                next;
+            }
+            $reward_remain -= $reward_part;
+            push @out, QBitcoin::TXO->new_txo(
+                value      => $my[$i]->[1] + $reward_part,
+                scripthash => $my[$i]->[0],
+            );
+        }
+        if (%remove_scripthash) {
+            # Remove utxo related to this address from the @$my_txo list
+            @$my_txo = grep { !$remove_scripthash{$_->scripthash} } @$my_txo;
+        }
     }
     return @out;
 }
