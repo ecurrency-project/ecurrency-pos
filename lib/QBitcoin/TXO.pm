@@ -122,7 +122,7 @@ sub load {
     my $class = shift;
     my (@in) = @_;
     # TODO: move this to QBitcoin::ORM
-    my $sql = "SELECT value, num, tx_in.hash AS tx_in, tx_out.hash AS tx_out, IF(tx_in.tx_type = " . TX_TYPE_TOKENS . ", IFNULL(tx_token.hash, tx_in.hash), NULL) as token_hash, siglist, s.hash as scripthash, s.script as redeem_script, data";
+    my $sql = "SELECT value, num, tx_in.hash AS tx_in, tx_out.hash AS tx_out, CASE WHEN tx_in.tx_type = " . TX_TYPE_TOKENS . " THEN IFNULL(tx_token.hash, tx_in.hash) ELSE NULL END as token_hash, siglist, s.hash as scripthash, s.script as redeem_script, data";
     $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
     $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
     $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_out ON (tx_out.id = t.tx_out)";
