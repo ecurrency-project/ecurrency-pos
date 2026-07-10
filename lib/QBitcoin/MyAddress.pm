@@ -90,7 +90,8 @@ sub pubkey {
     return $self->{pubkey} if $self->{pubkey}; # stored in the database or already derived
     my $pk_alg = $self->_pk_alg
         or return undef;
-    my $pk = $self->privkey($pk_alg);
+    my $pk = $self->privkey($pk_alg)
+        or return undef;
     return $self->{pubkey} = $pk->pubkey_by_privkey;
 }
 
