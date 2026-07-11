@@ -161,6 +161,7 @@ sub validate_outputs {
     foreach my $out (@$outputs) {
         ref($out) eq "HASH" or return 0;
         my $address_count = 0;
+        my $data_count = 0;
         my ($token_id, $token_amount, $token_control);
         foreach my $key (keys %$out) {
             if ($key eq "token_id") {
@@ -202,6 +203,21 @@ sub validate_outputs {
                 }
                 $token_control = 1;
             }
+            elsif ($key eq "data") {
+                (defined($out->{$key}) && !ref($out->{$key})
+                    && $out->{$key} =~ /^(?:[0-9a-fA-F][0-9a-fA-F])*\z/
+                    && length($out->{$key}) <= 2 * MAX_TXO_DATA_SIZE)
+                    or return 0;
+                $data_count++;
+                next;
+            }
+            elsif ($key eq "tag") {
+                (defined($out->{$key}) && !ref($out->{$key})
+                    && $out->{$key} =~ /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}\z/)
+                    or return 0;
+                $data_count++;
+                next;
+            }
             elsif (validate_address($key)) {
                 (defined($out->{$key}) && !ref($out->{$key}) && is_amount($out->{$key}))
                     or return 0;
@@ -215,6 +231,10 @@ sub validate_outputs {
         return 0 if ($token_amount || $token_control) && !defined($token_id);
         return 0 if $token_amount && $token_control; # must be either amount or control, not both
         return 0 if $token_control && $token_id;     # control allowed only for new tokens
+        # data/tag labels a single regular output; token data and the freeze output
+        # structure are generated, not user-supplied
+        return 0 if $data_count > 1;
+        return 0 if $data_count && ($address_count != 1 || defined($token_id));
     }
     $_[0] = $outputs;
     return 1;

@@ -59,6 +59,7 @@ use constant QBITCOIN_CONST => {
     GENESIS_REWARD          => 50 * 100000000, # 50 QBTC
     GENESIS_COINBASE        => 0,
     GENESIS_COINBASE_TESTNET=> 0,
+    TXO_DATA_TAG            => "T",
     REWARD_DIVIDER          => 500, # reward for block is 1/500 of the reward fund
     MAX_BLOCK_SIZE          => 8*1024*1024,
     MAX_TX_IN_BLOCK         => 65535,

@@ -905,6 +905,7 @@ sub create_txo {
     my $token_id;
     my $token_data;
     my @token_attr;
+    my $data;
     foreach my $key (keys %$out) {
         if ($key eq "token_id") {
             $token_id = pack("H*", $out->{$key});
@@ -935,6 +936,21 @@ sub create_txo {
         elsif ($key eq "token_symbol") {
             $token_attr[unpack("C", TOKEN_TXO_TYPE_SYMBOL)] = pack("C", length($out->{$key})) . $out->{$key};
         }
+        elsif ($key eq "data") {
+            # Raw data payload for a regular output, hex-encoded
+            return undef if defined($data);
+            $out->{$key} =~ /^(?:[0-9a-fA-F][0-9a-fA-F])*\z/
+                or return undef;
+            $data = pack("H*", $out->{$key});
+        }
+        elsif ($key eq "tag") {
+            # Tag string label for a regular output (see TXO_DATA_TAG); used to
+            # partition the genesis-reward UTXOs between validator nodes
+            return undef if defined($data);
+            length($out->{$key})
+                or return undef;
+            $data = TXO_DATA_TAG . $out->{$key};
+        }
         elsif (my $scripthash = eval { scripthash_by_address($key) }) {
             my $value = int($out->{$key} * DENOMINATOR + 0.5);
             push @txo, { scripthash => $scripthash, value => $value };
@@ -942,6 +958,15 @@ sub create_txo {
         else {
             return undef;
         }
+    }
+    if (defined($data)) {
+        # data/tag labels exactly one regular address output
+        return undef if defined($token_id);
+        @txo == 1 && !defined($txo[0]->{data})
+            or return undef;
+        length($data) <= MAX_TXO_DATA_SIZE
+            or return undef;
+        $txo[0]->{data} = $data;
     }
     if (defined($token_id)) {
         @txo == 1 or return undef;
