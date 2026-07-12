@@ -12,6 +12,7 @@ use QBitcoin::Test::BlockSerialize qw(block_hash);
 use QBitcoin::Test::Send qw(send_tx send_block $last_tx);
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::Generate;

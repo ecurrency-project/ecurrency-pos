@@ -8,6 +8,7 @@ use strict;
 # but transactions with high fee will be confirmed immediately
 
 use QBitcoin::Const;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::ValueUpgraded qw(level_by_total);
 use QBitcoin::MinFee qw(min_fee);

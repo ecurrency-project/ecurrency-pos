@@ -4,6 +4,7 @@ use strict;
 use feature 'state';
 
 use QBitcoin::Const;
+use QBitcoin::BlockchainParams;
 use QBitcoin::ORM qw(:types);
 use QBitcoin::Accessors qw(mk_accessors new);
 use QBitcoin::Config;
@@ -93,8 +94,7 @@ sub self_weight {
         else {
             $self->{self_weight} = 0;
         }
-        state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
-        if (defined($self->{self_weight}) && (timeslot($self->time) - $genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS == 0) {
+        if (defined($self->{self_weight}) && (timeslot($self->time) - GENESIS_TIME) / BLOCK_INTERVAL % FORCE_BLOCKS == 0) {
             $self->{self_weight} += 1;
         }
     }
@@ -192,8 +192,7 @@ sub static_reward {
     if ($prev_block) {
         my $timeslot = timeslot($time);
         if (!UPGRADE_POW || $prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped($timeslot)) {
-            state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
-            $static_reward = int(STATIC_REWARD / 2**int(($timeslot - $genesis_time) / BLOCK_INTERVAL / REWARD_HALVING));
+            $static_reward = int(STATIC_REWARD / 2**int(($timeslot - GENESIS_TIME) / BLOCK_INTERVAL / REWARD_HALVING));
             $static_reward *= ($timeslot - $prev_block->time) / BLOCK_INTERVAL;
         }
     }

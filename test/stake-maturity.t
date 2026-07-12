@@ -15,6 +15,7 @@ use QBitcoin::Test::ORM;
 use QBitcoin::Test::BlockSerialize;
 use QBitcoin::Test::Send qw(send_tx send_block);
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Protocol;
 use QBitcoin::Block;
 use QBitcoin::Transaction;

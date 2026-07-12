@@ -5,12 +5,13 @@ use strict;
 use JSON::XS;
 use Test::MockModule;
 use QBitcoin::Const;
+use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 BEGIN {
     no warnings 'redefine';
-    *QBitcoin::Const::UPGRADE_POW = sub () { 0 };
-    *QBitcoin::Const::GENESIS_TIME = sub () { 1767220000 };
+    *QBitcoin::BlockchainParams::UPGRADE_POW  = sub () { 0 };
+    *QBitcoin::BlockchainParams::GENESIS_TIME = sub () { 1767220000 };
 };
-use QBitcoin::Config;
 use QBitcoin::Block;
 use Bitcoin::Serialized;
 

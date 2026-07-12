@@ -10,6 +10,7 @@ use Test::MockModule;
 use QBitcoin::Test::ORM qw(dbh);
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Crypto qw(hash160 hash256);
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 use QBitcoin::Script qw(op_pushdata);

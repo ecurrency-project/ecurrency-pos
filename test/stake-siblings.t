@@ -14,6 +14,7 @@ use Test::More;
 use QBitcoin::Test::ORM;
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Crypto qw(generate_keypair);
 use QBitcoin::Address qw(wallet_import_format addresses_by_pubkey);
 use QBitcoin::MyAddress;

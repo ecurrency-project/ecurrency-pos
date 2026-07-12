@@ -12,6 +12,7 @@ use Time::HiRes;
 use List::Util qw(sum0);
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::ProtocolState qw(skip_scripts);
 use QBitcoin::CheckPoints qw(checkpoint_hash);
 use QBitcoin::ValueUpgraded qw(level_by_total);
@@ -45,23 +46,22 @@ sub validate {
             $block->reward_fund = 0;
             $block->size = sum0(map { $_->size } @{$block->transactions});
             $block->min_fee = 0;
-            if (my $genesis_hash = $config->{testnet} ? GENESIS_HASH_TESTNET : GENESIS_HASH) {
-                $block->hash eq $genesis_hash
-                    or return "Incorrect genesis block hash " . unpack("H*", $block->hash) . ", must be " . unpack("H*", $genesis_hash);
+            if (GENESIS_HASH) {
+                $block->hash eq GENESIS_HASH
+                    or return "Incorrect genesis block hash " . unpack("H*", $block->hash) . ", must be " . unpack("H*", GENESIS_HASH);
                 return ""; # Not needed to validate genesis block with correct hash
             }
         }
     }
-    state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
     if ($block->prev_block) {
-        my $timeslot = int(($block->time - $genesis_time) / BLOCK_INTERVAL);
-        my $prev_timeslot = int(($block->prev_block->time - $genesis_time) / BLOCK_INTERVAL);
+        my $timeslot = int(($block->time - GENESIS_TIME) / BLOCK_INTERVAL);
+        my $prev_timeslot = int(($block->prev_block->time - GENESIS_TIME) / BLOCK_INTERVAL);
         $timeslot > $prev_timeslot
             or return "Block time " . $block->time . " is not after previous block time " . $block->prev_block->time;
         int($prev_timeslot / FORCE_BLOCKS) == int(($timeslot - 1) / FORCE_BLOCKS)
             or return "Forced block missed";
     }
-    if (!@{$block->transactions} && (timeslot($block->time) - $genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS) {
+    if (!@{$block->transactions} && (timeslot($block->time) - GENESIS_TIME) / BLOCK_INTERVAL % FORCE_BLOCKS) {
         return "Empty block";
     }
     if (@{$block->transactions} > MAX_TX_IN_BLOCK) {
@@ -137,7 +137,7 @@ sub validate {
     # so trust the stake reward in this case (until checkpoint)
     my $block_reward = skip_scripts() ? $stake_reward : (ref $block)->reward($block->prev_block, $fee, $block->time);
     # There are no block rewards for empty blocks
-    if ($empty_tx >= @{$block->transactions} - 1 && (timeslot($block->time) - $genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS) {
+    if ($empty_tx >= @{$block->transactions} - 1 && (timeslot($block->time) - GENESIS_TIME) / BLOCK_INTERVAL % FORCE_BLOCKS) {
         $block_reward = 0;
     }
     $stake_reward == $block_reward

@@ -47,10 +47,10 @@ use parent 'QBitcoin::Protocol::Common';
 use Time::HiRes;
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer last_qbt_data_time);
-use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Block;
 use QBitcoin::Transaction;
 use QBitcoin::TXO;
@@ -96,7 +96,7 @@ sub startup {
 # "version" message so they can dial us back; must match bind_addr() in QBitcoin::Network
 sub listen_port {
     my (undef, $port) = split(/:/, $config->{bind} // BIND_ADDR);
-    return $port // $config->{port} // getservbyname(SERVICE_NAME, 'tcp') // ($config->{testnet} ? PORT_TESTNET : PORT);
+    return $port // $config->{port} // getservbyname(SERVICE_NAME, 'tcp') // PORT;
 }
 
 sub pack_my_address {
@@ -183,9 +183,9 @@ sub cmd_version {
     if (defined($software) && ($self->peer->software // "") ne $software) {
         $self->peer->update(software => $software);
     }
-    $self->request_btc_blocks() if UPGRADE_POW && !upgrade_finished() && !btc_synced();
+    $self->request_btc_blocks() if UPGRADE_POW && !UPGRADE_FINISHED && !btc_synced();
     $self->request_mempool if blockchain_synced() && !mempool_synced() && (!UPGRADE_POW || btc_synced());
-    $self->announce_best_btc_block() if UPGRADE_POW && !upgrade_finished();
+    $self->announce_best_btc_block() if UPGRADE_POW && !UPGRADE_FINISHED;
     if (my $best_block = QBitcoin::Block->best_block) {
         $self->announce_block($best_block);
     }

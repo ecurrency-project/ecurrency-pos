@@ -7,6 +7,7 @@ use List::Util qw(sum0 sum min max);
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::IP qw(ip_port_str);
 use QBitcoin::ORM qw(dbh);

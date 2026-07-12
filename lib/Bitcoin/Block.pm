@@ -6,9 +6,9 @@ use QBitcoin::Log;
 use QBitcoin::Accessors qw(new mk_accessors);
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::ORM qw(:types fetch find create update delete);
 use QBitcoin::Crypto qw(hash256);
-use QBitcoin::CheckPoints qw(upgrade_finished);
 use Role::Tiny::With;
 with 'QBitcoin::Block::MerkleTree';
 
@@ -33,9 +33,7 @@ mk_accessors(qw(transactions));
 
 sub genesis_hash() {
     my $self = shift;
-    return $config->{regtest} ? undef : $config->{btc_testnet} ?
-        ( $self->can('BTC_GENESIS_TESTNET') ? BTC_GENESIS_TESTNET() : undef ) :
-        ( $self->can('BTC_GENESIS')         ? BTC_GENESIS()         : undef ) ;
+    return $config->{regtest} ? undef : BTC_GENESIS;
 }
 
 sub genesis_hash_hex {
@@ -137,7 +135,7 @@ my $upgrade_stopped_block;
 
 sub upgrade_stopped {
     my ($timeslot) = @_;
-    return 1 if upgrade_finished();
+    return 1 if UPGRADE_FINISHED;
     $upgrade_stopped_block //= __PACKAGE__->find(height => UPGRADE_MAX_BLOCKS + COINBASE_CONFIRM_BLOCKS) // 0;
     return 0 unless $upgrade_stopped_block;
     return $timeslot >= $upgrade_stopped_block->time + COINBASE_CONFIRM_TIME;

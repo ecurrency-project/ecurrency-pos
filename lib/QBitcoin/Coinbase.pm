@@ -8,11 +8,11 @@ use QBitcoin::Accessors qw(new mk_accessors);
 use QBitcoin::Log;
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::ORM qw(:types dbh find fetch delete_by for_log DEBUG_ORM);
 use QBitcoin::Crypto qw(hash160 hash256);
 use QBitcoin::Address qw(script_by_pubkey);
 use QBitcoin::ProtocolState qw(btc_synced);
-use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 use QBitcoin::RedeemScript;
 use QBitcoin::ValueUpgraded qw(upgrade_value);
@@ -41,9 +41,9 @@ my %COINBASE; # just short-live cache for recently produced entries
 
 sub ensure_btc_block {
     my $self = shift;
-    # When upgrade_finished, btc_block table may be empty.
+    # When upgrade finished, btc_block table may be empty.
     # Ensure a stub btc_block row exists for the FK constraint.
-    return unless upgrade_finished();
+    return unless UPGRADE_FINISHED;
     return if Bitcoin::Block->fetch(height => $self->btc_block_height);
     Bitcoin::Block->create({
         height      => $self->btc_block_height,
@@ -204,7 +204,7 @@ sub validate {
         Warningf("Incorrect coinbase transaction based on unexistent btc block %s", unpack("H*", $self->btc_block_hash));
         return -1;
     }
-    if ($btc_block->time < ($config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME)) {
+    if ($btc_block->time < GENESIS_TIME) {
         Warningf("Incorrect coinbase transaction based on early btc block %s time %u", $btc_block->hash_str, $btc_block->time);
         return -1;
     }

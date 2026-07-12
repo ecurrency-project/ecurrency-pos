@@ -2,29 +2,13 @@ package QBitcoin::Const;
 use warnings;
 use strict;
 
-use QBitcoin::Script::OpCodes qw(:OPCODES);
-
-use constant GENESIS_BLOCK_HASH => "";
-use constant GENESIS_BLOCK_HASH_TESTNET => "";
-use constant QBT_BURN_HASH      => pack("H*", "fe5205472fb87124923f4be64292ef289478b06d"); # 1QBitcoin1QBitcoin1QBitcoin1pSAg3e
-use constant QBT_BURN_SCRIPT    => OP_DUP . OP_HASH160 . pack("C", length(QBT_BURN_HASH)) . QBT_BURN_HASH . OP_EQUALVERIFY . OP_CHECKSIG;
 use constant VERSION            => "0.1";
 
 use constant QBITCOIN_CONST => {
     VERSION                 => VERSION,
     SOFTWARE                => "/QBitcoinCore:" . VERSION . "/",
     DB_VERSION              => 1,
-    ADDRESS_VER             => "\x80",
-    ADDR_MAGIC              => "\x13\x9d",
-    PRIVATE_KEY_RE          => qr/^[5KL][1-9A-HJ-NP-Za-km-z]{50,51}$/,
-    ADDRESS_RE              => qr/^(?:bq[1-9A-HJ-NP-Za-km-z]{33}|3u[H-K][1-9A-HJ-NP-Za-km-z]{49})$/,
-    ADDRESS_VER_TESTNET     => "\xEF",
-    ADDR_MAGIC_TESTNET      => "\x04\x73\x89",
-    PRIVATE_KEY_TESTNET_RE  => qr/^[9c][1-9A-HJ-NP-Za-km-z]{50,51}$/,
-    ADDRESS_TESTNET_RE      => qr/^(?:btq[1-9A-HJ-NP-Za-km-z]{33}|3ua[234][1-9A-HJ-NP-Za-km-z]{49})$/,
     BLOCK_INTERVAL          => 10, # sec
-    GENESIS_TIME            => 1635933000, # must be divided by BLOCK_INTERVAL*FORCE_BLOCKS
-    GENESIS_TIME_TESTNET    => 1635933000,
     FORCE_BLOCKS            => 100, # generate each 100th block even if empty
     INCORE_LEVELS           => 6,
     INCORE_TIME             => 60,
@@ -40,25 +24,10 @@ use constant QBITCOIN_CONST => {
     PEER_PING_PERIOD        => 60, # sec, ping period
     PEER_RECV_TIMEOUT       => 60, # sec, timeout for waiting for pong
     SYNC_PEER_TIMEOUT       => 8,  # sec, switch sync peer if no bytes received
-    PORT                    => 9555,
-    PORT_TESTNET            => 19555,
     BIND_ADDR               => '*',
-    RPC_PORT                => 9556, # JSON RPC API
-    RPC_PORT_TESTNET        => 19556,
     RPC_ADDR                => '127.0.0.1',
-    REST_PORT               => 9557, # Esplora REST API, https://github.com/blockstream/esplora/blob/master/API.md
-    REST_PORT_TESTNET       => 19557,
     LISTEN_QUEUE            => 5,
     PEER_RECONNECT_TIME     => 10,
-    BTC_PORT                => 8333,
-    BTC_PORT_TESTNET        => 18333,
-    SEED_PEER               => "seed.qbitcoin.net",
-    SEED_PEER_TESTNET       => "seed-testnet.qbitcoin.net",
-    GENESIS_HASH            => pack('H*', GENESIS_BLOCK_HASH),
-    GENESIS_HASH_TESTNET    => pack('H*', GENESIS_BLOCK_HASH_TESTNET),
-    GENESIS_REWARD          => 50 * 100000000, # 50 QBTC
-    GENESIS_COINBASE        => 0,
-    GENESIS_COINBASE_TESTNET=> 0,
     TXO_DATA_TAG            => "T",
     REWARD_DIVIDER          => 500, # reward for block is 1/500 of the reward fund
     MAX_BLOCK_SIZE          => 8*1024*1024,
@@ -77,16 +46,9 @@ use constant QBITCOIN_CONST => {
     MAX_EMPTY_TX_SIZE       => 32768, # Disable huge transactions with zero fee to prevent spam
     MAX_MEMPOOL_SIZE        => 100*1024*1024, # 100 MB total size of limited tx types in mempool
     MAX_MEMPOOL_ZERO_FEE_TX => 1024,          # max zero-fee txs in mempool
-    UPGRADE_POW             => 1,
-    UPGRADE_FEE             => 0.01, # 1%
-    UPGRADE_MAX_BLOCKS      => 1400000, # middle 2036
-    UPGRADE_MAX_VALUE       => 10_500_000 * 100_000_000, # 10.5M BTC - stop conversion when upgraded reaches this
-    STATIC_REWARD           => 20_000_000, # 0.2 QBTC/block after upgrade finished
-    REWARD_HALVING          => 10_000_000, # blocks, halving every ~ 3 years and emit 4M QBTC total as block rewards
     COINBASE_CONFIRM_TIME   => 2*3600,  # 2 hours
     COINBASE_CONFIRM_BLOCKS => 6,
     COINBASE_WEIGHT_TIME    => 365*24*3600, # 1 year
-    STAKE_MATURITY          => 12*3600, # 12 hours
     # Slashing: penalty for a validator that signs two conflicting blocks (same
     # stake UTXO, same timeslot). The fine is a consensus value (must be identical
     # on every node so the trustless slashing tx is byte-deterministic), NOT a
@@ -98,8 +60,6 @@ use constant QBITCOIN_CONST => {
     # equivocation. Beyond INCORE_LEVELS + FORCE_BLOCKS a reorg is penalized, so an
     # equivocation buried deeper can no longer be profitably slashed anyway.
     SLASHING_WINDOW         => 6 + 100, # INCORE_LEVELS + FORCE_BLOCKS
-    QBT_BURN_SCRIPT         => QBT_BURN_SCRIPT,
-    QBT_BURN_SCRIPT_LEN     => length(QBT_BURN_SCRIPT),
     CONFIG_DIR              => "/etc",
     CONFIG_NAME             => "qbitcoin.conf",
     ZERO_HASH               => "\x00" x 32,
@@ -115,8 +75,6 @@ use constant QBITCOIN_CONST => {
     PEER_PROBE_PERIOD       => 15, # sec, min interval between starting reachability probes of idle peers
     MAX_PROBE_CONNECTIONS   => 2,  # max simultaneous reachability-probe connections
     PEER_REVERIFY_PERIOD    => 6*3600, # sec, re-probe an already verified peer not contacted for this long
-    BTC_GENESIS             => scalar reverse(pack("H*", "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")),
-    BTC_GENESIS_TESTNET     => scalar reverse(pack("H*", "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943")),
     MAX_INT64               => unpack("Q>", pack("H*", "7fffffffffffffff")), # 2^63-1, prevent warning about non-portable
     MAX_UINT64              => unpack("Q>", pack("H*", "ffffffffffffffff")), # 2^64-1, prevent warning about non-portable
 };

@@ -10,6 +10,7 @@ use Test::MockModule;
 use QBitcoin::Test::ORM;
 use QBitcoin::Block;
 use QBitcoin::Const;
+use QBitcoin::BlockchainParams;
 
 my $block_module = Test::MockModule->new('QBitcoin::Block');
 $block_module->mock('validate', sub { 0 });

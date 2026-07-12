@@ -6,6 +6,7 @@ use feature 'state';
 use parent 'QBitcoin::Protocol::Common';
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::Produce;
 use QBitcoin::Coinbase;
@@ -40,11 +41,6 @@ use constant {
 };
 
 sub type_id() { PROTOCOL_BITCOIN }
-
-sub genesis_time() {
-    state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
-    return $genesis_time;
-}
 
 sub startup {
     my $self = shift;
@@ -201,7 +197,7 @@ sub cmd_headers {
             my $db_transaction = QBitcoin::ORM::Transaction->new;
             if ($self->process_btc_block($block)) {
                 $new_block = $block;
-                $block->scanned = $block->time >= genesis_time ? 0 : 1;
+                $block->scanned = $block->time >= GENESIS_TIME ? 0 : 1;
                 $block->create();
                 $self->have_block0(1);
                 $db_transaction->commit;
@@ -315,7 +311,7 @@ sub cmd_block {
             $db_transaction->rollback;
             return 0;
         }
-        $block->scanned = $block->time >= genesis_time ? 0 : 1;
+        $block->scanned = $block->time >= GENESIS_TIME ? 0 : 1;
         $block->create();
         $db_transaction->commit;
         $self->have_block0(1);

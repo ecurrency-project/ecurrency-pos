@@ -10,6 +10,7 @@ use Test::MockModule;
 use QBitcoin::Test::ORM;
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Crypto qw(hash160 generate_keypair);
 use QBitcoin::Coinbase;
 use QBitcoin::Coins;

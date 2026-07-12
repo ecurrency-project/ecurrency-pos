@@ -9,6 +9,7 @@ use Scalar::Util qw(refaddr);
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ORM qw(find fetch create delete :types);
 use QBitcoin::Crypto qw(hash160 hash256);
@@ -22,7 +23,6 @@ use QBitcoin::ConnectionList;
 use QBitcoin::Notify;
 use QBitcoin::ProtocolState qw(skip_scripts blockchain_synced);
 use QBitcoin::Generate::Control;
-use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Coins;
 use Bitcoin::Serialized;
 
@@ -1083,7 +1083,7 @@ sub validate {
 
     if ($self->is_coinbase) {
         return 0 if skip_scripts();
-        if (upgrade_finished()) {
+        if (UPGRADE_FINISHED) {
             Warningf("Coinbase transaction %s rejected: upgrade finished", $self->hash_str);
             return -1;
         }

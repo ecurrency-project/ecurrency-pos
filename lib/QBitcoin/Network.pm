@@ -9,13 +9,13 @@ use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
 use List::Util qw(min);
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::IP qw(ip_str ip_port_str parse_addr_port sockaddr_to_ip_port pack_sockaddr_by_ip);
 use QBitcoin::Peer;
 use QBitcoin::Connection;
 use QBitcoin::ConnectionList;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer last_qbt_data_time);
-use QBitcoin::CheckPoints qw(upgrade_finished);
 use QBitcoin::Generate;
 use QBitcoin::Coins;
 use QBitcoin::Produce;
@@ -38,7 +38,7 @@ sub bind_rpc_addr {
     my $class = shift;
 
     my ($address, $port) = parse_addr_port($config->{rpc} // RPC_ADDR);
-    $port //= $config->{rpc_port} // ($config->{testnet} ? RPC_PORT_TESTNET : RPC_PORT);
+    $port //= $config->{rpc_port} // RPC_PORT;
     return [ listen_sockets($address, $port) ];
 }
 
@@ -47,7 +47,7 @@ sub bind_rest_addr {
 
     $config->{rest} or return [];
     my ($address, $port) = parse_addr_port($config->{rest});
-    $port //= $config->{rest_port} // ($config->{testnet} ? REST_PORT_TESTNET : REST_PORT);
+    $port //= $config->{rest_port} // REST_PORT;
     return [ listen_sockets($address, $port) ];
 }
 
@@ -148,7 +148,7 @@ sub main_loop {
         blockchain_synced(1);
         last_qbt_data_time(time());
     }
-    if (upgrade_finished()) {
+    if (UPGRADE_FINISHED) {
         btc_synced(1);
     }
     # Load last block from database
@@ -204,10 +204,9 @@ sub main_loop {
     }
 
     if ($config->{genesis} && !QBitcoin::Block->blockchain_time) {
-        my $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
-        $genesis_time % BLOCK_INTERVAL == 0
-            or die "Genesis time $genesis_time is not a multiple of block interval " . BLOCK_INTERVAL;
-        QBitcoin::Generate->generate($genesis_time);
+        GENESIS_TIME % BLOCK_INTERVAL == 0
+            or die "Genesis time " . GENESIS_TIME . " is not a multiple of block interval " . BLOCK_INTERVAL;
+        QBitcoin::Generate->generate(GENESIS_TIME);
     }
 
     my @listen_socket = @{$class->bind_addr};
@@ -228,7 +227,7 @@ sub main_loop {
         if (!$config->{genesis} && !QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN)) {
             blockchain_synced(0);
             mempool_synced(0);
-            if (UPGRADE_POW && !upgrade_finished() && !QBitcoin::ConnectionList->connected(PROTOCOL_BITCOIN)) {
+            if (UPGRADE_POW && !UPGRADE_FINISHED && !QBitcoin::ConnectionList->connected(PROTOCOL_BITCOIN)) {
                 btc_synced(0);
             }
         }
@@ -241,8 +240,7 @@ sub main_loop {
                 my $blockchain_time = QBitcoin::Block->blockchain_time // 0;
                 my $defer_until; # wall-clock moment to wake for a delayed current-slot block
                 if (!$generated_time || $timeslot > timeslot($generated_time)) {
-                    state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
-                    my $next_forced = $blockchain_time - ($blockchain_time - $genesis_time) % (BLOCK_INTERVAL*FORCE_BLOCKS) + BLOCK_INTERVAL*FORCE_BLOCKS;
+                    my $next_forced = $blockchain_time - ($blockchain_time - GENESIS_TIME) % (BLOCK_INTERVAL*FORCE_BLOCKS) + BLOCK_INTERVAL*FORCE_BLOCKS;
                     if ($config->{genesis} && $timeslot > $next_forced) {
                         $timeslot = $next_forced;
                     }
@@ -560,7 +558,7 @@ sub set_pinned_peers {
     $_->update(pinned => 0) foreach values %pinned_qbtc;
     $_->update(hidden => 0) foreach values %hidden_qbtc;
 
-    if (!upgrade_finished()) {
+    if (!UPGRADE_FINISHED) {
         my %pinned_btc = map { $_->ip => $_ } grep { $_->pinned } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN);
         foreach my $peer_host ($config->get_all('btcnode')) {
             my @peers = QBitcoin::Peer->get_or_create(
@@ -632,7 +630,7 @@ sub check_sync_peer {
 }
 
 sub call_btc_peers {
-    return if upgrade_finished();
+    return if UPGRADE_FINISHED;
     my @peers = grep { $_->is_connect_allowed } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN)
         or return;
     foreach my $peer (@peers) {
@@ -677,8 +675,7 @@ sub call_qbt_peers {
     my @peers = grep { $_->is_connect_allowed } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
     if (!@peers) {
         my @fallback_peer = $config->get_all('fallback_peer');
-        my $seed_peer = $config->{testnet} ? SEED_PEER_TESTNET : SEED_PEER;
-        @fallback_peer = ($seed_peer) if $seed_peer && !@fallback_peer;
+        @fallback_peer = (SEED_PEER) if SEED_PEER && !@fallback_peer;
         foreach my $peer_host (@fallback_peer) {
             push @peers, grep { $_->is_connect_allowed } QBitcoin::Peer->get_or_create(
                 host       => $peer_host,

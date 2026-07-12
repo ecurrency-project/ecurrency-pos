@@ -12,6 +12,7 @@ use QBitcoin::Test::BlockSerialize;
 use QBitcoin::Test::Send qw(make_block send_block send_tx $connection $last_tx);
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Block;
 use QBitcoin::Revalidate qw(revalidate);
 

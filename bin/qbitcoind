@@ -8,6 +8,7 @@ use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::WarnWrapper;
 use QBitcoin::Config qw($config read_config);
+use QBitcoin::BlockchainParams;
 use QBitcoin::ORM;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
@@ -66,7 +67,6 @@ sub main {
     $config->set($_ => $opts{$_}) foreach grep { defined $opts{$_} } keys %opts;
     $config->set(peer    => @peer_hosts) if @peer_hosts;
     $config->set(btcnode => @btc_hosts)  if @btc_hosts;
-    $config->set(btc_testnet => 1) if $opts{testnet} && !defined $config->{btc_testnet};
     $config->set(fallback_peer => @fallback_peers) if @fallback_peers;
 
     if ($config->{daemonize}) {

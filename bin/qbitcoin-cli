@@ -8,6 +8,7 @@ use JSON::XS;
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config qw($config read_config);
+use QBitcoin::BlockchainParams;
 
 my $JSON = JSON::XS->new;
 
@@ -105,7 +106,7 @@ sub usage {
 sub call_rpc {
     my ($method, @params) = @_;
     my ($address, $port) = split(/:/, $config->{rpc} // RPC_ADDR);
-    $port //= $config->{rpc_port} // getservbyname(SERVICE_NAME, 'tcp') // ($config->{testnet} ? RPC_PORT_TESTNET : RPC_PORT);
+    $port //= $config->{rpc_port} // getservbyname(SERVICE_NAME, 'tcp') // RPC_PORT;
     $address = RPC_ADDR if $address eq '*';
     my $url = "http://$address:$port";
     my $ua = HTTP::Tiny->new;

@@ -49,7 +49,7 @@ sub send_blocks {
 
 blockchain_synced(1);
 
-send_block(0, "a0", undef, 10, send_tx());
+send_block(0, "a0",undef, 10, send_tx());
 send_block(1, "a1", "a0", 20, send_tx());
 send_block(2, "a2", "a1", 30, send_tx());
 send_block(3, "a3", "a2", 40, send_tx());

@@ -7,6 +7,7 @@ use List::Util qw(sum0);
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Mempool;
 use QBitcoin::Block;
 use QBitcoin::RedeemScript;
@@ -250,11 +251,6 @@ sub make_stake_tx {
     return $tx;
 }
 
-sub genesis_time() {
-    state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
-    return $genesis_time;
-}
-
 # Is there an uncommitted, weight-increasing transaction in the mempool? Only such a
 # transaction (coinbase / burn / downgrade / slashing - not a plain fee) can make a
 # sibling block built with a smaller free stake address outweigh our already-published
@@ -270,8 +266,8 @@ sub generate {
     my $class = shift;
     my ($time) = @_;
     my $timeslot = timeslot($time);
-    if ($timeslot < genesis_time) {
-        die "Genesis time " . genesis_time . " is in future\n";
+    if ($timeslot < GENESIS_TIME) {
+        die "Genesis time " . GENESIS_TIME . " is in future\n";
     }
     # A best-branch switch may have filled a slot that was empty before the current
     # timeslot with a block received from a peer (a weak validator can grab the smoothed
@@ -387,9 +383,8 @@ sub contest_level {
         # free (we pass the $contest flag) for the current-timeslot block generate() builds on
         # top after we return; otherwise our branch could end up without a current-slot block
         # while the contested branch gets one and so weighs more.
-        my $genesis = genesis_time();
-        my $max_slot = $genesis +
-            (int(($prev_block->time - $genesis) / BLOCK_INTERVAL / FORCE_BLOCKS) + 1) * FORCE_BLOCKS * BLOCK_INTERVAL;
+        my $max_slot = GENESIS_TIME +
+            (int(($prev_block->time - GENESIS_TIME) / BLOCK_INTERVAL / FORCE_BLOCKS) + 1) * FORCE_BLOCKS * BLOCK_INTERVAL;
         my $build_slot = $timeslot - BLOCK_INTERVAL;
         $build_slot = $max_slot if $build_slot > $max_slot;
         Debugf("Contest block %s height %u from past slot %u, build at slot %u",
@@ -423,14 +418,14 @@ sub _generate {
     my $size = $stake_tx ? $stake_tx->size : 0;
 
     my @transactions = QBitcoin::Mempool->choose_for_block($size, $timeslot, $prev_block, $stake_tx && $stake_tx->in, $contest);
-    if (!@transactions && ($timeslot - genesis_time) / BLOCK_INTERVAL % FORCE_BLOCKS != 0) {
+    if (!@transactions && ($timeslot - GENESIS_TIME) / BLOCK_INTERVAL % FORCE_BLOCKS != 0) {
         return;
     }
 
     my $fee = sum0 map { $_->fee } @transactions;
     my $reward_block = QBitcoin::Block->reward($prev_block, $fee, $timeslot);
     # Block reward if the block will be empty
-    my $reward_empty = ($timeslot - genesis_time) % (BLOCK_INTERVAL * FORCE_BLOCKS) ? 0 : $reward_block;
+    my $reward_empty = ($timeslot - GENESIS_TIME) % (BLOCK_INTERVAL * FORCE_BLOCKS) ? 0 : $reward_block;
     my $reward = $fee ? $reward_block : $reward_empty;
 
     if ($reward) {
@@ -443,11 +438,10 @@ sub _generate {
             }
         }
         if (UPGRADE_POW && $height == 0 && !$config->{regtest}) {
-            my $genesis_coinbase = $config->{testnet} ? GENESIS_COINBASE_TESTNET : GENESIS_COINBASE;
-            if ($genesis_coinbase) {
+            if (GENESIS_COINBASE) {
                 return unless btc_synced();
                 my $coinbase_value = sum0 map { $_->up->value } grep { $_->is_coinbase } @transactions;
-                next unless $coinbase_value >= $genesis_coinbase;
+                next unless $coinbase_value >= GENESIS_COINBASE;
             }
             else {
                 @transactions = grep { !$_->is_coinbase } @transactions;

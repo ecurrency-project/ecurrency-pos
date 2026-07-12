@@ -9,6 +9,7 @@ use Test::More;
 use QBitcoin::Test::ORM;
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Crypto qw(hash160);
 use QBitcoin::Coinbase;
 use QBitcoin::TXO;

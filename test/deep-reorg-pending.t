@@ -13,6 +13,7 @@ use QBitcoin::Test::ORM;
 use QBitcoin::Test::BlockSerialize;
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Peer;
 use QBitcoin::Connection;
 use QBitcoin::ProtocolState qw(blockchain_synced);

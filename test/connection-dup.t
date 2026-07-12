@@ -14,6 +14,7 @@ use lib ("$Bin/../lib", "$Bin/lib");
 use Test::More;
 use QBitcoin::Test::ORM; # in-memory sqlite, needed for peer persist() on incoming greeting
 use QBitcoin::Const;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Peer;
 use QBitcoin::Connection;
 use QBitcoin::ConnectionList;

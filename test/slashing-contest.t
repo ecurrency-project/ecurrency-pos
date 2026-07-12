@@ -11,6 +11,7 @@ use QBitcoin::Test::ORM;
 use QBitcoin::Test::BlockSerialize qw(block_hash);
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Peer;
 use QBitcoin::Connection;
 use QBitcoin::Block;

@@ -8,6 +8,7 @@ use Scalar::Util qw(looks_like_number);
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Address qw(wif_to_pk);
 use QBitcoin::Password;
 use QBitcoin::Accessors qw(mk_accessors);
@@ -109,7 +110,7 @@ sub validate_boolean {
 }
 
 sub validate_address {
-    $_[0] =~ ($config->{testnet} ? ADDRESS_TESTNET_RE : ADDRESS_RE);
+    $_[0] =~ ADDRESS_RE;
 }
 
 sub is_amount {

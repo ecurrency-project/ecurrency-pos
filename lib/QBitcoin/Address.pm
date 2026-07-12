@@ -8,6 +8,7 @@ use Math::GMPz;
 use Encode::Base58::GMP qw(encode_base58 decode_base58);
 use QBitcoin::Config;
 use QBitcoin::Const;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Crypto qw(hash160 hash256 checksum32);
 use QBitcoin::Script qw(op_pushdata);
 use QBitcoin::Script::OpCodes qw(:OPCODES);
@@ -28,15 +29,10 @@ our @EXPORT_OK = qw(
     scripthash_by_address
 );
 
-# https://en.bitcoin.it/wiki/Wallet_import_format
-sub address_version() {
-    return $config->{testnet} ? ADDRESS_VER_TESTNET : ADDRESS_VER;
-}
-
 sub wallet_import_format($) {
     my ($private_key) = @_;
 
-    my $data = address_version . $private_key;
+    my $data = ADDRESS_VER . $private_key;
     return encode_base58('0x' . unpack('H*', $data . checksum32($data)), 'bitcoin');
 }
 
@@ -47,16 +43,12 @@ sub wif_to_pk($) {
     my $crc = substr($bin, -CHECKSUM_LEN, CHECKSUM_LEN, "");
     checksum32($bin) eq $crc
         or die "Incorrect checksum";
-    substr($bin, 0, 1, "") eq address_version
+    substr($bin, 0, 1, "") eq ADDRESS_VER
         or die "Incorrect address version";
     return $bin;
 }
 
 # qbitcoin part, incompatible with bitcoin
-
-sub magic() {
-    return $config->{testnet} ? ADDR_MAGIC_TESTNET : ADDR_MAGIC;
-}
 
 sub script_by_pubkey {
     my ($public_key) = @_;
@@ -70,7 +62,7 @@ sub script_by_pubkeyhash {
 
 sub address_by_hash($) {
     my ($scripthash) = shift;
-    my $data = magic . $scripthash;
+    my $data = ADDR_MAGIC . $scripthash;
     return encode_base58("0x" . unpack("H*", $data . checksum32($data)), "bitcoin");
 }
 
@@ -98,8 +90,7 @@ sub validate_address($) {
     my ($address) = @_;
 
     return 0 unless $address;
-    my $re = $config->{testnet} ? ADDRESS_TESTNET_RE : ADDRESS_RE;
-    $address =~ $re
+    $address =~ ADDRESS_RE
         or return 0;
     my $gmpz_obj = eval { decode_base58($address, 'bitcoin') };
     return 0 if $@;
@@ -108,7 +99,7 @@ sub validate_address($) {
     my $crc = substr($bin, -CHECKSUM_LEN, CHECKSUM_LEN, "");
     checksum32($bin) eq $crc
         or return 0;
-    return substr($bin, 0, ADDR_MAGIC_LEN) eq magic;
+    return substr($bin, 0, ADDR_MAGIC_LEN) eq ADDR_MAGIC;
 }
 
 sub scripthash_by_address($) {
@@ -120,7 +111,7 @@ sub scripthash_by_address($) {
     my $crc = substr($bin, -CHECKSUM_LEN, CHECKSUM_LEN, "");
     checksum32($bin) eq $crc
         or die "Incorrect address checksum\n";
-    substr($bin, 0, ADDR_MAGIC_LEN, "") eq magic
+    substr($bin, 0, ADDR_MAGIC_LEN, "") eq ADDR_MAGIC
         or die "Incorrect address version\n";
     return $bin;
 }

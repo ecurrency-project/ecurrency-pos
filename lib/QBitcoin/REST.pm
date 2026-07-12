@@ -13,6 +13,7 @@ use HTTP::Headers;
 use HTTP::Response;
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::IP qw(ip_port_str);
 use QBitcoin::Accessors qw(mk_accessors);
@@ -633,7 +634,7 @@ sub response_error {
 }
 
 sub validate_address {
-    $_[0] =~ ($config->{testnet} ? ADDRESS_TESTNET_RE : ADDRESS_RE);
+    $_[0] =~ ADDRESS_RE;
 }
 
 sub validate_txid {
@@ -941,7 +942,7 @@ sub node_status {
         }
     }
     else {
-        $response->{genesistime} = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
+        $response->{genesistime} = GENESIS_TIME;
     }
     if (UPGRADE_POW) {
         my ($btc_block) = Bitcoin::Block->find(-sortby => 'height DESC', -limit => 1);

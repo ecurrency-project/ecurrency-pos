@@ -13,6 +13,7 @@ our @EXPORT_OK = qw(
 );
 
 use QBitcoin::Const;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Connection;
 use QBitcoin::Peer;
 use QBitcoin::Block;

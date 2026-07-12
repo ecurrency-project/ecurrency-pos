@@ -6,6 +6,7 @@ use Socket qw(getaddrinfo unpack_sockaddr_in unpack_sockaddr_in6 AF_INET6 SOCK_S
 use QBitcoin::IP qw(ip_str parse_addr_port);
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::Const;
 use QBitcoin::Accessors qw(mk_accessors);
@@ -89,9 +90,7 @@ sub get_or_create {
     }
     my $port = $args->{port} //
         getservbyname(lc PROTOCOL2NAME->{$args->{type_id}}, 'tcp') //
-        ($args->{type_id} == PROTOCOL_QBITCOIN ?
-            ($config->{testnet}     ? PORT_TESTNET     : PORT    ) :
-            ($config->{btc_testnet} ? BTC_PORT_TESTNET : BTC_PORT));
+        ($args->{type_id} == PROTOCOL_QBITCOIN ? PORT : BTC_PORT);
     $class->load();
     my @peers;
     foreach my $ip (@ip) {

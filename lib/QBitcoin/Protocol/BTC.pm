@@ -11,8 +11,8 @@ use feature 'state';
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
-use QBitcoin::CheckPoints qw(upgrade_finished);
 use Bitcoin::Block;
 use Bitcoin::Serialized;
 
@@ -24,21 +24,16 @@ use constant PROTOCOL_VERSION => 1;
 use constant MAX_BTC_HEADERS  => 2000;
 use constant MAX_BTC_LOCATORS => 101;
 
-sub genesis_time() {
-    state $genesis_time = $config->{testnet} ? GENESIS_TIME_TESTNET : GENESIS_TIME;
-    return $genesis_time;
-}
-
 sub announce_btc_block {
     my $self = shift;
-    return if upgrade_finished();
+    return if UPGRADE_FINISHED;
     my ($block) = @_;
     $self->send_message("btc_ihave", pack("a32", $block->hash));
 }
 
 sub announce_best_btc_block {
     my $self = shift;
-    return if upgrade_finished();
+    return if UPGRADE_FINISHED;
     my ($best_btc_block) = Bitcoin::Block->find(-sortby => 'height DESC', -limit => 1);
     if ($best_btc_block) {
         $self->announce_btc_block($best_btc_block);
@@ -47,7 +42,7 @@ sub announce_best_btc_block {
 
 sub cmd_btc_ihave {
     my $self = shift;
-    return 0 if upgrade_finished();
+    return 0 if UPGRADE_FINISHED;
     my ($data) = @_;
     if (length($data) != 32) {
         Errf("Incorrect params from peer %s command %s: length %u", $self->peer->id, $self->command, length($data));
@@ -65,7 +60,7 @@ sub cmd_btc_ihave {
 
 sub cmd_btcgetheader {
     my $self = shift;
-    return 0 if upgrade_finished();
+    return 0 if UPGRADE_FINISHED;
     my ($data) = @_;
     if (length($data) != 32) {
         Errf("Incorrect params from peer %s command %s: length %u", $self->peer->id, $self->command, length($data));
@@ -85,7 +80,7 @@ sub cmd_btcgetheader {
 
 sub cmd_btcblockhdr {
     my $self = shift;
-    return 0 if upgrade_finished();
+    return 0 if UPGRADE_FINISHED;
     my ($payload) = @_;
     my $data = Bitcoin::Serialized->new($payload);
     my $block = Bitcoin::Block->deserialize($data);
@@ -103,7 +98,7 @@ sub cmd_btcblockhdr {
     return 0 if Bitcoin::Block->find(hash => $block->hash);
     my $db_transaction = QBitcoin::ORM::Transaction->new;
     if ($self->process_btc_block($block)) {
-        $block->scanned = $block->time >= genesis_time ? 0 : 1;
+        $block->scanned = $block->time >= GENESIS_TIME ? 0 : 1;
         $block->create();
         $self->have_block0(1);
         $db_transaction->commit;
@@ -143,7 +138,7 @@ sub request_btc_blocks {
 
 sub cmd_btcgethdrs {
     my $self = shift;
-    return 0 if upgrade_finished();
+    return 0 if UPGRADE_FINISHED;
     my ($payload) = @_;
     if (length($payload) < 5) {
         Errf("Incorrect params from peer %s command %s: length %u", $self->peer->id, $self->command, length($payload));
@@ -169,7 +164,7 @@ sub cmd_btcgethdrs {
 
 sub cmd_btcheaders {
     my $self = shift;
-    return 0 if upgrade_finished();
+    return 0 if UPGRADE_FINISHED;
     my ($payload) = @_;
     if (length($payload) == 0) {
         Errf("Incorrect params from peer %s cmd %s data length %u", $self->peer->id, $self->command, length($payload));
@@ -208,7 +203,7 @@ sub cmd_btcheaders {
             my $db_transaction = QBitcoin::ORM::Transaction->new;
             if ($self->process_btc_block($block)) {
                 $new_block = $block;
-                $block->scanned = $block->time >= genesis_time ? 0 : 1;
+                $block->scanned = $block->time >= GENESIS_TIME ? 0 : 1;
                 $block->create();
                 $self->have_block0(1);
                 $db_transaction->commit;

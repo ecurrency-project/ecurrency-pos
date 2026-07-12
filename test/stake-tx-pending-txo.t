@@ -13,6 +13,7 @@ use QBitcoin::Test::Send qw($connection);
 use QBitcoin::Test::MakeTx;
 use QBitcoin::Const;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Transaction;
 use QBitcoin::Protocol;
 use QBitcoin::Generate;

@@ -13,6 +13,7 @@ use strict;
 # and the value stays accurate for blocks which are still in memory (not yet stored).
 
 use QBitcoin::Const;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Coinbase;
