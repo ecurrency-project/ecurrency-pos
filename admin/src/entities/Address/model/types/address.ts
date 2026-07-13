@@ -26,4 +26,7 @@ export interface UTXO {
     txid: string;
     vout: number;
     status: 'confirmed' | 'unconfirmed';
+    token_id?: string;
+    token_amount?: number;
+    token_permissions?: string[];
 }

@@ -4,7 +4,7 @@ import { useGetFeeEstimateQuery } from '@/entities/Transaction';
 
 import type { TransactionJSON, TransactionStatus } from '../types/types';
 import { useWalletUtxoData } from '../../lib/useWalletUtxoData';
-import type { SpendableUtxo } from '../../lib/processUtxos';
+import type { SpendableUtxo, TokenUtxoGroup } from '../../lib/processUtxos';
 import { getDefaultFeeRate, suggestFeeSat } from '../../lib/feeEstimation';
 import { createTransactionJSON as buildTransaction, type CreateTransactionJSONResult } from '../../lib/createTransactionJSON';
 
@@ -12,6 +12,7 @@ export interface AddressData {
     balance: number;
     balanceFormatted: string;
     utxos: SpendableUtxo[];
+    tokens: Record<string, TokenUtxoGroup>;
 }
 
 interface SendTransactionContextValue {

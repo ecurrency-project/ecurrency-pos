@@ -2,7 +2,7 @@ export { SendTransactionProvider, useSendTransaction } from './model/context/Sen
 export type { AddressData } from './model/context/SendTransactionContext';
 export { assessFee } from './lib/feeGuard';
 export type { FeeAssessment, FeeRisk } from './lib/feeGuard';
-export type { SpendableUtxo } from './lib/processUtxos';
+export type { SpendableUtxo, TokenUtxo, TokenUtxoGroup } from './lib/processUtxos';
 export type {
     SendTransactionFormState,
     SendTransactionFormActions,

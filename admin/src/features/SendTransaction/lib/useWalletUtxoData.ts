@@ -42,12 +42,13 @@ export const useWalletUtxoData = (): UseWalletUtxoDataResult => {
                 const map: Record<string, AddressData> = {};
 
                 results.forEach(({ address, utxos }) => {
-                    const { value, utxos: spendableUtxos } = processUtxos(utxos);
+                    const { value, utxos: spendableUtxos, tokens } = processUtxos(utxos);
 
                     map[address] = {
                         balance: value,
                         balanceFormatted: formatSat(value),
                         utxos: spendableUtxos,
+                        tokens,
                     };
                 });
 
