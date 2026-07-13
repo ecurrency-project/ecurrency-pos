@@ -16,7 +16,8 @@ use constant {
 };
 
 # 2 ** (i/256)
-# perl -e 'for (0..511) { printf "%.0f,", 2**($_/256)*10000; print "\n" unless ($_+1)%16 }'
+# perl -e 'for (0..512) { printf "%.0f,", 2**($_/256)*10000; print "\n" unless ($_+1)%16 }'
+# Index 512 is reachable: size delta may be exactly FEE_LINEAR_SIZE when prev_size == 0 (empty block)
 my @POWER2 = (
     10000,10027,10054,10082,10109,10136,10164,10191,10219,10247,10274,10302,10330,10358,10386,10415,
     10443,10471,10499,10528,10556,10585,10614,10643,10671,10700,10729,10758,10788,10817,10846,10876,
@@ -50,10 +51,11 @@ my @POWER2 = (
     35125,35220,35316,35412,35508,35604,35700,35797,35894,35992,36089,36187,36285,36383,36482,36581,
     36680,36780,36879,36979,37080,37180,37281,37382,37483,37585,37687,37789,37892,37994,38097,38201,
     38304,38408,38512,38617,38721,38826,38931,39037,39143,39249,39355,39462,39569,39676,39784,39892,
+    40000,
 );
 
-@POWER2 == int((FEE_LINEAR_SIZE + SIZE_FRACTION - 1) / SIZE_FRACTION)
-    or die "POWER2 array size is not correct: " . scalar(@POWER2) . " != " . int((FEE_LINEAR_SIZE + SIZE_FRACTION - 1) / SIZE_FRACTION);
+@POWER2 == int(FEE_LINEAR_SIZE / SIZE_FRACTION) + 1
+    or die "POWER2 array size is not correct: " . scalar(@POWER2) . " != " . (int(FEE_LINEAR_SIZE / SIZE_FRACTION) + 1);
 
 sub min_fee {
     my ($prev_block, $size) = @_;
