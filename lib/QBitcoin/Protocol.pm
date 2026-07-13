@@ -102,8 +102,11 @@ sub listen_port {
 sub pack_my_address {
     my $self = shift;
     # not connection->my_port: for outgoing connections it is the ephemeral port of the socket,
-    # the peer needs our listening port
-    return pack("Q<a16n", PROTOCOL_FEATURES, $self->connection->my_addr, listen_port());
+    # the peer needs our listening port.
+    # In pinned-only mode advertise port 0 ("does not accept incoming connections"): the remote
+    # then neither stores nor announces us (see cmd_version), keeping a hidden node unlisted.
+    my $port = $config->{pinned_only} ? 0 : listen_port();
+    return pack("Q<a16n", PROTOCOL_FEATURES, $self->connection->my_addr, $port);
 }
 
 sub peer_id {
@@ -189,22 +192,25 @@ sub cmd_version {
     if (my $best_block = QBitcoin::Block->best_block) {
         $self->announce_block($best_block);
     }
-    # Request peer addresses if we don't have enough peers
-    my @known_peers = grep { $_->reputation > 0 } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
-    if (@known_peers < MIN_CONNECTIONS * 2) {
-        $self->send_message("getaddr", "");
-    }
+    $self->request_peer_addresses;
     return 0;
 }
 
 sub cmd_verack {
     my $self = shift;
-    # Request peer addresses if we don't have enough peers
+    $self->request_peer_addresses;
+    return 0;
+}
+
+# Request peer addresses if we don't have enough peers;
+# useless in pinned-only mode where learned peers are never dialed
+sub request_peer_addresses {
+    my $self = shift;
+    return if $config->{pinned_only};
     my @known_peers = grep { $_->reputation > 0 } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
     if (@known_peers < MIN_CONNECTIONS * 2) {
         $self->send_message("getaddr", "");
     }
-    return 0;
 }
 
 # Drop duplicate connections with the same remote node: simultaneous mutual connects,
@@ -611,7 +617,8 @@ sub process_tx {
                 if ($recv_peer) {
                     $recv_peer->add_reputation($tx->up ? 200 : 2);
                 }
-                if ($tx->rcvd && $tx->rcvd ne "\x00"x16 && (!$recv_peer || $recv_peer->ip ne $tx->rcvd)) {
+                if ($tx->rcvd && $tx->rcvd ne "\x00"x16 && (!$recv_peer || $recv_peer->ip ne $tx->rcvd)
+                    && !$config->{pinned_only}) { # do not learn peers from the relayed origin in pinned-only mode
                     my $src_peer = QBitcoin::Peer->get_or_create(type_id => PROTOCOL_QBITCOIN, ip => $tx->rcvd);
                     $src_peer->add_reputation($tx->up ? 100 : 1) if $src_peer;
                 }
@@ -990,9 +997,11 @@ sub _parse_peer_list {
         $self->abort("incorrect_params");
         return -1;
     }
-    for (my $i = 0; $i < $count; $i++) {
-        my ($ip, $port) = unpack("a16n", substr($data, 1 + $i * 18, 18));
-        QBitcoin::Peer->get_or_create(type_id => PROTOCOL_QBITCOIN, ip => $ip, port => $port);
+    if (!$config->{pinned_only}) { # in pinned-only mode learned peers are never dialed, do not store them
+        for (my $i = 0; $i < $count; $i++) {
+            my ($ip, $port) = unpack("a16n", substr($data, 1 + $i * 18, 18));
+            QBitcoin::Peer->get_or_create(type_id => PROTOCOL_QBITCOIN, ip => $ip, port => $port);
+        }
     }
     return $count;
 }

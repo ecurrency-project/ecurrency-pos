@@ -533,6 +533,9 @@ sub main_loop {
 sub set_pinned_peers {
     my %pinned_qbtc = map { $_->ip => $_ } grep { $_->pinned } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
     my %hidden_qbtc = map { $_->ip => $_ } grep { $_->hidden } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
+    if ($config->{pinned_only} && !$config->get_all('peer')) {
+        Warning('"pinned-only" is enabled but no "peer" is configured; the node will not make any outgoing connections');
+    }
     foreach my $peer_host ($config->get_all('peer')) {
         my @peers = QBitcoin::Peer->get_or_create(
             host       => $peer_host,
@@ -654,6 +657,7 @@ my $last_probe_time = 0;
 # it is reachable. Confirmed peers then become announceable (see QBitcoin::Peer::is_announceable),
 # so a node can advertise its many idle peers instead of only the few it actively talks to.
 sub probe_peers {
+    return if $config->{pinned_only}; # a probe is an outgoing connection to an arbitrary learned peer
     blockchain_synced() # do not interfere with the initial synchronization
         or return;
     my $now = time();
@@ -673,6 +677,12 @@ sub probe_peers {
 
 sub call_qbt_peers {
     my @peers = grep { $_->is_connect_allowed } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN);
+    if ($config->{pinned_only}) {
+        # Dial only the peers explicitly configured ("peer"); no fallback/seed peers and
+        # no learned peers, so a hidden node never reveals itself to unknown nodes
+        connect_to($_) foreach grep { $_->pinned } @peers;
+        return;
+    }
     if (!@peers) {
         my @fallback_peer = $config->get_all('fallback_peer');
         @fallback_peer = (SEED_PEER) if SEED_PEER && !@fallback_peer;

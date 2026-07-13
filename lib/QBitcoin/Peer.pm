@@ -113,6 +113,7 @@ sub get_or_create {
                 failed_connects => 0,
                 reputation      => $args->{reputation} // 0,
                 hidden          => $args->{hidden} // 0,
+                pinned          => $args->{pinned} // 0,
                 in_db           => 0,
             );
         }
@@ -126,6 +127,7 @@ sub get_or_create {
                 failed_connects => 0,
                 reputation      => $args->{reputation} // 0,
                 hidden          => $args->{hidden} // 0,
+                pinned          => $args->{pinned} // 0,
             );
             $peer->{in_db} = 1;
             push @peers, $PEERS[$args->{type_id}]->{$ip} = $peer;
