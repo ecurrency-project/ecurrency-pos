@@ -50,7 +50,7 @@ export const WalletCard = (props: WalletCardProps) => {
     const [receiveOpen, setReceiveOpen] = useState(false);
 
     const address = myAddress.address;
-    const { data: addressInfo, isLoading: isInfoLoading } = useGetAddressQuery({ id: address }, {
+    const { data: addressInfo, isLoading: isInfoLoading, isError: isInfoError } = useGetAddressQuery({ id: address }, {
         pollingInterval: BALANCE_POLL_INTERVAL,
     });
 
@@ -152,6 +152,11 @@ export const WalletCard = (props: WalletCardProps) => {
                 <NativeCoinIcon className={cls.coin} />
                 {isInfoLoading ? (
                     <span className={cls.loading}>Loading...</span>
+                ) : isInfoError || !addressInfo ? (
+                    <div className={cls.balance}>
+                        <span className={cls.amount} translate="no">—</span>
+                        <span className={cls.loading}>balance unavailable</span>
+                    </div>
                 ) : (
                     <div className={cls.balance}>
                         <span className={cls.amount} translate="no">
@@ -163,7 +168,7 @@ export const WalletCard = (props: WalletCardProps) => {
                 )}
             </div>
 
-            <div className={cls.tokensBlock}>
+            {addressInfo && <div className={cls.tokensBlock}>
                 {tokens.length > 0 ? (
                     <>
                         <div className={cls.tokensHead}>
@@ -223,7 +228,7 @@ export const WalletCard = (props: WalletCardProps) => {
                         No tokens yet — assets you receive will appear here.
                     </span>
                 )}
-            </div>
+            </div>}
 
             <Modal
                 open={receiveOpen}

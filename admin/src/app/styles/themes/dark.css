@@ -44,6 +44,8 @@
   --dc-text-secondary: rgba(255, 255, 255, 0.65);
   --dc-text-tertiary: rgba(255, 255, 255, 0.45);
   --dc-text-quaternary: rgba(255, 255, 255, 0.25);
+  --dc-primary: #1677ff;
+  --dc-primary-hover: #4096ff;
   --dc-primary-bg: #111a2c;
   --dc-primary-border: #15325b;
   --dc-error: #dc4446;

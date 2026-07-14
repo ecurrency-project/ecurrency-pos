@@ -16,7 +16,7 @@ import cls from './TokenChip.module.css';
 
 interface TokenChipProps {
     tokenId: string;
-    amount: number;
+    amount: number | string;
     variant?: 'chip' | 'row';
     onSendToken?: (tokenId: string) => void;
     className?: string;

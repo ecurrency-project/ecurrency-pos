@@ -54,15 +54,17 @@ export const TokenTransfers = ({ address, tokenId, decimals, ticker }: TokenTran
                 <span>Amount</span>
             </div>
             {items.map(([txid, amount, height]) => {
-                const positive = amount >= 0;
+                const amountStr = String(amount);
+                const negative = amountStr.startsWith('-');
+                const absAmount = negative ? amountStr.slice(1) : amountStr;
                 return (
                     <div className={cls.row} key={`${txid}_${height}`}>
                         <div className={cls.left}>
                             <Link to={`/tx/${txid}`} className={cls.txid}>{txid.slice(0, 10)}…</Link>
                             <span className={cls.block}>{`Block ${formatTokenAmount(height, 0)}`}</span>
                         </div>
-                        <span className={positive ? cls.in : cls.out} translate="no">
-                            {positive ? '+' : '-'}{formatTokenAmount(Math.abs(amount), decimals)}{ticker ? ` ${ticker}` : ''}
+                        <span className={negative ? cls.out : cls.in} translate="no">
+                            {negative ? '-' : '+'}{formatTokenAmount(absAmount, decimals)}{ticker ? ` ${ticker}` : ''}
                         </span>
                     </div>
                 );

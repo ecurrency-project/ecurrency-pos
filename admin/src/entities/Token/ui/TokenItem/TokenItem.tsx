@@ -13,7 +13,7 @@ import cls from './TokenItem.module.css';
 
 interface TokenItemProps {
     tokenId: string;
-    amount: number;
+    amount: number | string;
     address?: string;
 }
 
@@ -68,7 +68,13 @@ export const TokenItem = ({ tokenId, amount, address }: TokenItemProps) => {
                 </div>
             </div>
             {address && expanded && (
-                <TokenTransfers address={address} tokenId={tokenId} decimals={data.decimals} ticker={ticker} />
+                <TokenTransfers
+                    key={`${address}_${tokenId}`}
+                    address={address}
+                    tokenId={tokenId}
+                    decimals={data.decimals}
+                    ticker={ticker}
+                />
             )}
         </div>
     );

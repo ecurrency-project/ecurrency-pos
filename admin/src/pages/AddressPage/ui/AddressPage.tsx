@@ -103,7 +103,7 @@ const AddressPage = (props: AddressPageProps) => {
                             tokenId={tokenId}
                             amount={amount as number}
                             address={id as string}
-                            key={tokenId}
+                            key={`${id}_${tokenId}`}
                         />
                     ))}
                 </VStack>
