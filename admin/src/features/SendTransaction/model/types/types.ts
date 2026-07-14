@@ -3,9 +3,17 @@ export interface TransactionInput {
     vout: number;
 }
 
+/**
+ * Output object for POST /wallet/transaction/create: `{"<addr>": <sat>}` for
+ * native. A token output additionally carries `token_id` and `token_amount`
+ * (base units, decimal string — uint64 may exceed 2^53) and holds exactly one
+ * address key.
+ */
+export type TransactionOutput = Record<string, number | string>;
+
 export interface TransactionJSON {
     inputs: TransactionInput[];
-    outputs: Record<string, number>[];
+    outputs: TransactionOutput[];
 }
 
 export type TransactionStatus = 'process' | 'finish' | 'error';
@@ -29,7 +37,7 @@ export interface SendTransactionFormActions {
     setTransactionStatus: (value: TransactionStatus) => void;
 }
 
-export interface CreateTransactionRequest extends TransactionJSON {}
+export type CreateTransactionRequest = TransactionJSON;
 
 export interface CreateTransactionResponse {
     hex: string;
