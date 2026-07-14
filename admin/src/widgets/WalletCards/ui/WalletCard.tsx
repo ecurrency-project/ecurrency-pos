@@ -9,6 +9,7 @@ import type { IMyAddress } from '@/entities/MyAddress';
 import { Button } from '@/shared/ui/Button';
 import { QrCode } from '@/shared/ui/QrCode';
 import { Clipboard } from '@/shared/ui/Clipboard';
+import { NativeCoinIcon } from '@/shared/ui/NativeCoinIcon';
 import { VStack } from '@/shared/ui/Stack';
 import { formatNumber } from '@/shared/utils';
 import { sat2btc } from '@/shared/lib/fmtbtc';
@@ -148,7 +149,7 @@ export const WalletCard = (props: WalletCardProps) => {
             </div>
 
             <div className={cls.balanceRow}>
-                <span className={cls.coin} aria-hidden="true">{(brand.assetLabel[0] || '?').toUpperCase()}</span>
+                <NativeCoinIcon className={cls.coin} />
                 {isInfoLoading ? (
                     <span className={cls.loading}>Loading...</span>
                 ) : (

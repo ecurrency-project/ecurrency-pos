@@ -1,0 +1,15 @@
+.monogram {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-weight: var(--font-weight-b);
+    background: var(--dc-primary-bg);
+    color: var(--dc-primary);
+    border: 1px solid var(--dc-primary-border);
+    flex: none;
+}
+
+.svg {
+    flex: none;
+}

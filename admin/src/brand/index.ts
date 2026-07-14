@@ -1,3 +1,5 @@
+import type { ComponentType, SVGProps } from 'react';
+
 import { Logo } from './Logo';
 
 export interface BrandConfig {
@@ -6,6 +8,7 @@ export interface BrandConfig {
     assetName: string;
     addressMainnetRe: RegExp;
     addressTestnetRe: RegExp;
+    CoinIcon?: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
 // Generic base58 address regex as a stub.

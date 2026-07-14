@@ -1,0 +1,1 @@
+export { NativeCoinIcon } from './NativeCoinIcon';
