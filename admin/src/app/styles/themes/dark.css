@@ -30,5 +30,26 @@
 
   --border-color: #d6d6d6;
 
-    --abstract-linear-gradient: linear-gradient(135deg, #16283f 0%, #021023 100%)
+  --abstract-linear-gradient: linear-gradient(135deg, #16283f 0%, #021023 100%);
+
+  --dc-bg-layout: #000000;
+  --dc-bg-container: #141414;
+  --dc-bg-elevated: #1f1f1f;
+  --dc-fill-tertiary: rgba(255, 255, 255, 0.08);
+  --dc-fill-secondary: rgba(255, 255, 255, 0.12);
+  --dc-border: #434343;
+  --dc-border-secondary: #303030;
+  --dc-split: rgba(253, 253, 253, 0.12);
+  --dc-text: rgba(255, 255, 255, 0.85);
+  --dc-text-secondary: rgba(255, 255, 255, 0.65);
+  --dc-text-tertiary: rgba(255, 255, 255, 0.45);
+  --dc-text-quaternary: rgba(255, 255, 255, 0.25);
+  --dc-primary-bg: #111a2c;
+  --dc-primary-border: #15325b;
+  --dc-error: #dc4446;
+  --dc-warning: #d89614;
+  --dc-badge-bg-sl: 40% 20%;
+  --dc-badge-fg-sl: 70% 74%;
+  --dc-shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.24), 0 1px 6px -1px rgba(0, 0, 0, 0.16), 0 2px 4px 0 rgba(0, 0, 0, 0.16);
+  --dc-shadow-pop: 0 6px 16px 0 rgba(0, 0, 0, 0.4), 0 3px 6px -4px rgba(0, 0, 0, 0.5), 0 9px 28px 8px rgba(0, 0, 0, 0.28);
 }

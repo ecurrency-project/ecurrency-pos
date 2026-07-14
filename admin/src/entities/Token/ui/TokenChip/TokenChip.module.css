@@ -1,0 +1,201 @@
+.TokenChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px 6px 7px;
+    border: 1px solid var(--dc-border-secondary);
+    border-radius: 999px;
+    background: var(--dc-bg-container);
+    cursor: pointer;
+    max-width: 100%;
+    flex: none;
+}
+
+.TokenChip:hover {
+    border-color: var(--dc-border);
+}
+
+.mono,
+.rowMono,
+.menuMono {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: var(--font-weight-b);
+    text-transform: uppercase;
+    background: hsl(var(--chip-h) var(--dc-badge-bg-sl));
+    color: hsl(var(--chip-h) var(--dc-badge-fg-sl));
+    flex: none;
+}
+
+.mono {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    font-size: 11px;
+}
+
+.ticker {
+    font-size: var(--font-size-l);
+    font-weight: var(--font-weight-b);
+    color: var(--dc-text);
+    white-space: nowrap;
+}
+
+.amount {
+    font-size: var(--font-size-l);
+    font-weight: var(--font-weight-m);
+    font-variant-numeric: tabular-nums;
+    color: var(--dc-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.TokenRow {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 8px 9px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.TokenRow:hover {
+    background: var(--dc-fill-tertiary);
+}
+
+.rowMono {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: var(--font-size-s);
+}
+
+.rowMeta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.rowTicker {
+    font-size: 14.5px;
+    font-weight: var(--font-weight-b);
+    color: var(--dc-text);
+}
+
+.rowName {
+    font-size: var(--font-size-m);
+    font-weight: var(--font-weight-r);
+    color: var(--dc-text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rowAmount {
+    font-size: var(--font-size-l);
+    font-weight: var(--font-weight-m);
+    font-variant-numeric: tabular-nums;
+    color: var(--dc-text);
+    white-space: nowrap;
+}
+
+.rowMore {
+    width: 17px;
+    height: 17px;
+    color: var(--dc-text-tertiary);
+    flex: none;
+}
+
+.menuWrap {
+    min-width: 232px;
+    background: var(--dc-bg-elevated);
+    border: 1px solid var(--dc-border-secondary);
+    border-radius: 10px;
+    box-shadow: var(--dc-shadow-pop);
+    overflow: hidden;
+}
+
+.menuWrap :global(.ant-dropdown-menu) {
+    background: transparent;
+    box-shadow: none;
+    padding: 5px;
+}
+
+.menuWrap :global(.ant-dropdown-menu-item) {
+    font-size: 15px;
+    font-weight: var(--font-weight-m);
+    border-radius: 7px;
+    color: var(--dc-text);
+}
+
+.menuWrap :global(.ant-dropdown-menu-item:hover) {
+    background: var(--dc-fill-tertiary);
+}
+
+.menuIcon {
+    width: 17px;
+    height: 17px;
+    color: var(--dc-text-secondary);
+}
+
+.menuHeader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 11px 9px;
+    border-bottom: 1px solid var(--dc-split);
+}
+
+.menuMono {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    font-size: var(--font-size-s);
+}
+
+.menuMeta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.menuTicker {
+    font-size: 14.5px;
+    font-weight: var(--font-weight-b);
+    color: var(--dc-text);
+}
+
+.menuName {
+    font-size: var(--font-size-m);
+    font-weight: var(--font-weight-r);
+    color: var(--dc-text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 768px) {
+    .TokenChip {
+        gap: 6px;
+        padding: 5px 12px 5px 6px;
+    }
+
+    .mono {
+        width: 21px;
+        height: 21px;
+        border-radius: 6px;
+        font-size: var(--font-size-xs);
+    }
+
+    .ticker,
+    .amount {
+        font-size: var(--font-size-m);
+    }
+}

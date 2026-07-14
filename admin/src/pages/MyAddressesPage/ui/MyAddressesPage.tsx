@@ -1,17 +1,16 @@
 import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Card, Skeleton, Table, message } from 'antd';
+import { Skeleton, message } from 'antd';
 import { WalletOutlined, SendOutlined } from '@ant-design/icons';
 import classNames from 'classnames';
 
 import {
     useGetMyAddressesQuery,
     useEditAddressStakedMutation,
-    useMyAddressColumns,
-    MyAddressMobileCard,
 } from '@/entities/MyAddress';
 import { GenerateAddressButton } from '@/features/GenerateAddress';
 import { ImportAddressButton } from '@/features/ImportAddress';
+import { WalletCards } from '@/widgets/WalletCards';
 import { Button } from '@/shared/ui/Button';
 import { RouterPath, RoutersApp } from '@/shared/config/router/router';
 
@@ -41,8 +40,6 @@ const MyAddressesPage = () => {
         }
     }, [editStaked]);
 
-    const columns = useMyAddressColumns({ editingAddresses, onStakedChange: handleStakedChange });
-
     const header = (
         <div className={cls.header}>
             <div className={cls.headerLeft}>
@@ -62,43 +59,19 @@ const MyAddressesPage = () => {
         </div>
     );
 
-    if (isLoading) {
-        return (
-            <div className={classNames(cls.MyAddressesPage, 'container')}>
-                <Card className={cls.card}>
-                    {header}
-                    <Skeleton active paragraph={{ rows: 4 }}/>
-                </Card>
-            </div>
-        );
-    }
-
     return (
         <div className={classNames(cls.MyAddressesPage, 'container')}>
-            <Card className={cls.card}>
-                {header}
+            {header}
 
-                <div className={cls.desktopTable}>
-                    <Table
-                        dataSource={addresses}
-                        columns={columns}
-                        rowKey="address"
-                        size="small"
-                        pagination={false}
-                    />
-                </div>
-
-                <div className={cls.mobileList}>
-                    {addresses?.map((addr) => (
-                        <MyAddressMobileCard
-                            key={addr.address}
-                            address={addr}
-                            loading={editingAddresses.has(addr.address)}
-                            onStakedChange={handleStakedChange}
-                        />
-                    ))}
-                </div>
-            </Card>
+            {isLoading ? (
+                <Skeleton active paragraph={{ rows: 4 }}/>
+            ) : (
+                <WalletCards
+                    addresses={addresses}
+                    editingAddresses={editingAddresses}
+                    onStakedChange={handleStakedChange}
+                />
+            )}
         </div>
     );
 };
