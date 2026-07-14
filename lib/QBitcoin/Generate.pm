@@ -38,13 +38,14 @@ sub load_address_utxo {
     my $chain_utxo = get_address_utxo($my_address->address, 1000);
     foreach my $txid (keys %$chain_utxo) {
         for (my $vout = @{$chain_utxo->{$txid}}-1; $vout >= 0; $vout--) {
-            next unless defined $chain_utxo->{$txid}->[$vout];
+            my $utxo_data = $chain_utxo->{$txid}->[$vout] // next;
             my $utxo = QBitcoin::TXO->new_saved({
                 tx_in      => $txid,
                 num        => $vout,
-                value      => $chain_utxo->{$txid}->[$vout]->{value},
+                value      => $utxo_data->{value},
                 scripthash => $scripthash,
-                data       => $chain_utxo->{$txid}->[$vout]->{data} // "",
+                data       => $utxo_data->{data} // "",
+                defined($utxo_data->{token_id}) ? ( token_hash => $utxo_data->{token_id} ) : (),
             });
             $utxo->add_my_utxo();
             $count++;
