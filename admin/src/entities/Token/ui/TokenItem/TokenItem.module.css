@@ -1,22 +1,91 @@
 .TokenItem {
-    width: 100%;
     border-top: 1px solid var(--stats-border-color);
-    min-height: 52px;
-    font-size: 16px;
+    width: 100%;
 }
 
-.TokenItem span:last-child {
-    text-align: right;
+.TokenItem:first-child {
+    border-top: none;
 }
 
-.TokenItem a {
-    padding: 5px 0;
-    max-width: 75%;
-    word-break: break-word;
+.row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 0;
+}
+
+.meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.ticker {
+    font-size: 17px;
+    font-weight: 500;
     color: var(--link-color);
     text-decoration: none;
+    word-break: break-word;
 }
 
-.TokenItem .mono {
-    font-family: monospace;
+.hash {
+    font-size: 16px;
+    font-family: var(--font-family-secondary);
+    color: var(--link-color);
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.sub {
+    font-size: 13px;
+    color: var(--text-color-secondary);
+    margin-top: 3px;
+    word-break: break-all;
+}
+
+.right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.balance {
+    font-size: 17px;
+    font-weight: 500;
+}
+
+.unit {
+    color: var(--text-color-secondary);
+    font-weight: 400;
+}
+
+.toggle {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 1px solid var(--stats-border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-color-secondary);
+}
+
+.toggle:hover {
+    border-color: var(--link-color);
+    color: var(--link-color);
+}
+
+.chev {
+    width: 18px;
+    height: 18px;
+    transition: transform 0.15s ease;
+}
+
+.chevOpen {
+    transform: rotate(180deg);
 }

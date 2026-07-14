@@ -88,14 +88,14 @@ export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
             { vout.token_id &&
                 <div className={cls.voutBodyRow}>
                     <div>token id</div>
-                    <div className="mono">{vout.token_id}</div>
+                    <div className="mono"><Link to={`/token/${vout.token_id}`}>{vout.token_id}</Link></div>
                 </div>
             }
 
             { vout.token_amount !== undefined && vout.token_amount !== 0 &&
                 <div className={cls.voutBodyRow}>
                     <div>token amount</div>
-                    <div className="mono">{moveDecimalPoint(vout.token_amount, -vout.token_decimals)}</div>
+                    <div className="mono">{moveDecimalPoint(vout.token_amount, -(vout.token_decimals ?? 0))}</div>
                 </div>
             }
 

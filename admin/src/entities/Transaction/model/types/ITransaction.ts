@@ -69,10 +69,10 @@ export interface Vout {
     asset: string;
     assetcommitment: string;
     pegout?: Pegout;
-    token_id: string;
-    token_amount: number;
-    token_permissions: number;
-    token_decimals: number;
+    token_id?: string;
+    token_amount?: number;
+    token_permissions?: number;
+    token_decimals?: number;
 }
 
 export interface ITxStatus {

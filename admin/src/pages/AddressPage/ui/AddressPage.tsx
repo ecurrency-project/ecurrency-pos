@@ -102,6 +102,7 @@ const AddressPage = (props: AddressPageProps) => {
                         <TokenItem
                             tokenId={tokenId}
                             amount={amount as number}
+                            address={id as string}
                             key={tokenId}
                         />
                     ))}

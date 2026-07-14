@@ -1,0 +1,66 @@
+.TokenTransfers {
+    margin: 0 0 6px 8px;
+    padding: 2px 0 8px 14px;
+    border-left: 2px solid var(--link-color);
+}
+
+.head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-color-secondary);
+    padding: 6px 0;
+}
+
+.row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid var(--stats-border-color);
+    font-size: 16px;
+}
+
+.left {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.txid {
+    font-family: var(--font-family-secondary);
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+.block {
+    font-size: 13px;
+    color: var(--text-color-secondary);
+}
+
+.in {
+    color: #27a85f;
+    white-space: nowrap;
+    font-family: var(--font-family-secondary);
+}
+
+.out {
+    color: #d14343;
+    white-space: nowrap;
+    font-family: var(--font-family-secondary);
+}
+
+.more {
+    margin-top: 12px;
+}
+
+.empty {
+    padding: 8px 0;
+    color: var(--text-color-secondary);
+    font-size: 14px;
+}

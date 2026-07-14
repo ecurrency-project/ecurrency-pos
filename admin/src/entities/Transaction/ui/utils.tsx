@@ -1,6 +1,7 @@
 import {Link} from "react-router-dom";
 import { formatNumber } from "@/shared/utils";
 import { brand } from '@/brand';
+import { TokenValue } from '@/entities/Token';
 import type { Prevout, Vin, Vout } from '../model/types/ITransaction.ts';
 import { sat2btc } from '@/shared/lib/fmtbtc';
 
@@ -17,6 +18,15 @@ export const linkToAddr = (addr: string) =>
 
 export const formatOutAmount = (vout: Prevout | Vout) => {
     if (vout.value == null) return `Confidential`;
+
+    if (vout.token_amount != null && vout.token_id) {
+        return <TokenValue
+            tokenId={vout.token_id}
+            amount={vout.token_amount}
+            decimals={vout.token_decimals}
+            link
+        />
+    }
 
     if (isNativeOut(vout)) {
         return <span>

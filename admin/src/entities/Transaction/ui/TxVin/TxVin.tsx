@@ -154,7 +154,7 @@ export const TxVin = memo(function TxVin(props: TransactionVinProps) {
                 { vin.prevout.token_id &&
                     <div className={cls.vinBodyRow}>
                         <div>token id</div>
-                        <div className="mono">{vin.prevout.token_id}</div>
+                        <div className="mono"><Link to={`/token/${vin.prevout.token_id}`}>{vin.prevout.token_id}</Link></div>
                     </div>
                 }
 

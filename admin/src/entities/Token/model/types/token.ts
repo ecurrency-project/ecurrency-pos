@@ -1,8 +1,12 @@
 export interface ITokenInfo {
-    create_time: number;
-    decimals: number;
     token_id: string;
+    decimals: number;
     issuer: string;
-    symbol: string;
-    name: string;
+    name?: string;
+    symbol?: string;
+    create_time?: number;
+    total_supply?: number;
+    mint_allowed?: boolean;
 }
+
+export type TokenTransfer = [txid: string, amount: number, height: number];

@@ -6,6 +6,7 @@ import { BlockDetailsPage } from '@/pages/BlockDetailsPage';
 import { TransactionsPage } from '@/pages/TransactionsPage';
 import { TxDetailsPage } from '@/pages/TxDetailsPage';
 import { AddressPage } from '@/pages/AddressPage';
+import { TokenDetailsPage } from '@/pages/TokenDetailsPage';
 import { QrScannerPage } from '@/pages/QrScannerPage';
 import { MyAddressesPage } from '@/pages/MyAddressesPage';
 import { SendTransactionPage } from '@/pages/SendTransactionPage';
@@ -18,6 +19,7 @@ export const RoutersApp = {
     TX: 'tx',
     TX_DETAIL: 'tx_detail',
     ADDRESS: 'address',
+    TOKEN_DETAIL: 'token_detail',
     QR_SCANNER: 'qr_scanner',
     MY_ADDRESSES: 'my_addresses',
     SEND_TRANSACTION: 'send_transaction',
@@ -35,6 +37,7 @@ export const RouterPath: Record<RoutersApp, string> = {
     [RoutersApp.TX]: '/tx',
     [RoutersApp.TX_DETAIL]: '/tx/:id',
     [RoutersApp.ADDRESS]: '/address/:id',
+    [RoutersApp.TOKEN_DETAIL]: '/token/:id',
     [RoutersApp.QR_SCANNER]: '/qr-scanner',
     [RoutersApp.MY_ADDRESSES]: '/my-addresses',
     [RoutersApp.SEND_TRANSACTION]: '/send-transaction',
@@ -67,6 +70,10 @@ export const routerConfig: Record<RoutersApp, RouteProps> = {
     [RoutersApp.ADDRESS]: {
         path: RouterPath[RoutersApp.ADDRESS],
         element: <AddressPage/>
+    },
+    [RoutersApp.TOKEN_DETAIL]: {
+        path: RouterPath[RoutersApp.TOKEN_DETAIL],
+        element: <TokenDetailsPage/>
     },
 
     [RoutersApp.QR_SCANNER]: {

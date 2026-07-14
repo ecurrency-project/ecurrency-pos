@@ -99,7 +99,7 @@ const TxDetailsPage = (props: TxDetailsPageProps) => {
 
                 {transaction.token_id ? <HStack justify="space-between" className={cls.statsTableItem}>
                     <span>Token ID</span>
-                    <Link to={`/tx/${transaction.token_id}`} className="mono">{transaction.token_id}</Link>
+                    <Link to={`/token/${transaction.token_id}`} className="mono">{transaction.token_id}</Link>
                 </HStack> : null}
             </VStack>
 
