@@ -277,7 +277,8 @@ sub add_pending_tx {
     my $self = shift;
     my ($tx) = @_;
 
-    if ($self->{input_pending} && (my $tx_in = delete $self->{input_pending}->{$tx->hash})) {
+    my $tx_in;
+    if ($self->{input_pending} && ($tx_in = delete $self->{input_pending}->{$tx->hash})) {
         foreach my $in (grep { defined($_) } values %$tx_in) {
             my $txo = QBitcoin::TXO->get($in);
             if (!$txo) {
