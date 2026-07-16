@@ -1228,7 +1228,7 @@ sub validate_slashing {
         }
     }
     # Outputs must be the canonical, deterministic refund.
-    my @want = QBitcoin::Slashing->canonical_outputs([ map { $_->{txo} } @{$self->in} ]);
+    my @want = QBitcoin::Slashing->canonical_outputs($self->in);
     if (@want != @{$self->out}) {
         Warningf("Slashing transaction %s has %u outputs, expected %u canonical refunds",
             $self->hash_str, scalar @{$self->out}, scalar @want);
