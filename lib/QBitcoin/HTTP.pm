@@ -83,7 +83,7 @@ sub send {
     if ($self->connection->sendbuf eq '' && $self->connection->socket) {
         my $n = syswrite($self->connection->socket, $data);
         if (!defined($n)) {
-            Errf("Error write to socket: %s", $!);
+            Warningf("Error write to socket: %s", $!);
             return -1;
         }
         elsif ($n > 0) {
