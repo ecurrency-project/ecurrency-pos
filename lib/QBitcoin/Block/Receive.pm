@@ -461,7 +461,7 @@ sub cleanup_old_blocks {
         last if keys(%{$block_pool[$free_height]}) > 1;
         if ($best_block[$free_height]) {
             foreach my $descendant (grep { $_->is_pending } $best_block[$free_height]->descendants) {
-                $descendant->drop_pending();
+                $descendant->drop_pending() if want_cleanup_branch($descendant);
             }
             my @descendants = $best_block[$free_height]->descendants;
             if (@descendants > 1 || (@descendants == 1 && !$best_block[$free_height+1])) {

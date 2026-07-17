@@ -124,6 +124,12 @@ sub is_pending {
     return !!$PENDING_BLOCK{$_[0] // $self->hash};
 }
 
+sub pending_block {
+    my $class = shift;
+    my ($hash) = @_;
+    return $PENDING_BLOCK{$hash};
+}
+
 sub recv_pending_tx {
     my $class = shift;
     my ($tx) = @_;
@@ -182,13 +188,27 @@ sub drop_all_pending {
     my $class = shift;
     my ($connection) = @_;
 
-    my $requested = 0;
     foreach my $block_hash (keys %PENDING_BLOCK) {
         my $block = $PENDING_BLOCK{$block_hash}
             or next; # already dropped?
-        if ($block->received_from->peer->id eq $connection->peer->id) {
-            $block->drop_pending();
+        $block->received_from->peer->id eq $connection->peer->id
+            or next;
+        # Do not drop a block which has a pending ancestor (not necessarily direct)
+        # received from another peer: the block is part of a branch which is downloaded
+        # via that peer (this peer only received its new blocks announced meanwhile and
+        # stood down), so it will be processed when the branch connects. No leak here:
+        # if that ancestor is dropped, this block is dropped with it as a dependent.
+        my $foreign_ancestor;
+        for (my $ancestor = $block->prev_hash ? $PENDING_BLOCK{$block->prev_hash} : undef;
+            $ancestor;
+            $ancestor = $ancestor->prev_hash ? $PENDING_BLOCK{$ancestor->prev_hash} : undef)
+        {
+            if ($ancestor->received_from->peer->id ne $connection->peer->id) {
+                $foreign_ancestor = 1;
+                last;
+            }
         }
+        $block->drop_pending() unless $foreign_ancestor;
     }
 }
 
