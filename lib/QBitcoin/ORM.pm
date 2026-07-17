@@ -35,6 +35,7 @@ use constant KEY_RE => qr/^[a-z][a-z0-9_]*\z/;
 use constant IGNORE => \undef; # { key => IGNORE } may be used to override default check for "key" column
 
 my $dbh;
+my $dsn;
 
 sub dbh {
     return $dbh if $dbh;
@@ -49,8 +50,10 @@ sub dbh {
     elsif ($dbi eq "mysql") {
         $db_name .= ";mysql_read_default_file=$ENV{HOME}/my.cnf";
     }
-    my $dsn = $config->{"dsn"} // ("DBI:$dbi:$db_name" . ($location ? ":$location" : ""));
-    Debugf("dsn: %s", $dsn);
+    if (!$dsn) {
+        $dsn = $config->{"dsn"} // ("DBI:$dbi:$db_name" . ($location ? ":$location" : ""));
+        Debugf("dsn: %s", $dsn);
+    }
     my $login = $config->{"db.login"};
     my $password = $config->{"db.password"};
     $dbh = DBI->connect($dsn, $login, $password, DB_OPTS);
