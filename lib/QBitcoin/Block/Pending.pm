@@ -73,6 +73,7 @@ sub drop_pending {
 
 sub process_pending {
     my $self = shift;
+    my ($peer) = @_; # protocol which triggered the processing, the current driver of the branch
     no warnings 'recursion'; # recursion may be deeper than perl default 100 levels
 
     # change recursion to loop by chain of pending blocks to avoid too deep recursion
@@ -86,13 +87,24 @@ sub process_pending {
             my $pending_block = $PENDING_BLOCK{$hash};
             $pending_block->prev_block($block);
             $pending_block->add_as_descendant();
-            next if $pending_block->pending_tx;
+            if ($pending_block->pending_tx) {
+                if (!$pending_block->{pending_tx_requested}) {
+                    my $from = $peer && $peer->connection ? $peer
+                        : $pending_block->received_from && $pending_block->received_from->connection
+                            ? $pending_block->received_from : undef;
+                    if ($from) {
+                        $from->request_tx($pending_block->pending_tx);
+                        $pending_block->{pending_tx_requested} = 1;
+                    }
+                }
+                next;
+            }
             delete $PENDING_BLOCK{$hash};
             Debugf("Process block %s height %u pending for received %s", $pending_block->hash_str, $pending_block->height, $block->hash_str);
             $pending_block->compact_tx();
             if ($pending_block->receive() == 0) {
                 if ($block_next) {
-                    $pending_block->process_pending(); # recursve
+                    $pending_block->process_pending($peer); # recursve
                 }
                 else {
                     $block_next = $pending_block;
@@ -131,7 +143,7 @@ sub recv_pending_tx {
                 delete $PENDING_BLOCK{$block->hash};
                 $block->compact_tx();
                 if ($block->receive() == 0) {
-                    $block = $block->process_pending();
+                    $block = $block->process_pending($tx->received_from);
                     $height = $block->height if !defined($height) || $height < $block->height;
                 }
                 else {

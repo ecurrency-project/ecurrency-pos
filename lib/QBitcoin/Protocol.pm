@@ -390,7 +390,6 @@ sub cmd_block {
             Debugf("Received block %s has pending ancestor %s",
                 $block->hash_str, $block->hash_str($block->prev_hash));
             $block->load_transactions();
-            $self->request_tx($block->pending_tx);
             $block->add_pending_block();
             # TODO: request pending block or transaction
             return 0;
@@ -403,8 +402,8 @@ sub cmd_block {
                 $self->request_blocks(timeslot($block->time)-1);
             }
             else {
+                # do not request pending transactions of the block here, see above
                 $block->load_transactions();
-                $self->request_tx($block->pending_tx);
                 $self->send_message("sendblock", $block->prev_hash);
                 $block->add_pending_block();
             }
@@ -422,7 +421,7 @@ sub cmd_block {
         $self->syncing(0);
         $block->compact_tx();
         if ($block->receive() == 0) {
-            $block = $block->process_pending();
+            $block = $block->process_pending($self);
             $self->request_new_block();
             return 0;
         }
@@ -521,7 +520,7 @@ sub cmd_blocks {
         else {
             $block->compact_tx();
             if ($block->receive() == 0) {
-                my $last_block = $block->process_pending();
+                my $last_block = $block->process_pending($self);
                 $block = $last_block if $num == $num_blocks;
             }
             else {
