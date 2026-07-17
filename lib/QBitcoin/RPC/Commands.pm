@@ -324,7 +324,7 @@ sub cmd_getblock {
         height            => $block->height,
         time              => $block->time,
         confirmations     => $best_height - $block->height,
-        previousblockhash => unpack("H*", $block->prev_hash),
+        previousblockhash => unpack("H*", $block->prev_hash // ZERO_HASH),
         nextblockhash     => $next_block ? unpack("H*", $next_block->hash) : undef,
         merkleroot        => unpack("H*", $block->merkle_root),
         weight            => $block->weight,
