@@ -359,11 +359,8 @@ sub cmd_block {
         return 0;
     }
     if ($block->is_pending) {
-        Debugf("Received block %s already pending, skip", $block->hash_str);
-        # $self->syncing(0);
-        # TODO: request block if pending block; request tx if pending tx
-        # TODO: Request pending block or transaction by chain
-        # $self->request_new_block($block->prev_hash);
+        Debugf("Received block %s already pending, continue from the pending chain bottom", $block->hash_str);
+        $self->continue_pending_branch($block->hash);
         return 0;
     }
     if ($block->time < (QBitcoin::Block->blockchain_time // -1)) {
@@ -391,7 +388,8 @@ sub cmd_block {
                 $block->hash_str, $block->hash_str($block->prev_hash));
             $block->load_transactions();
             $block->add_pending_block();
-            # TODO: request pending block or transaction
+            # Continue requesting the branch from the bottom of the pending chain
+            $self->continue_pending_branch($block->prev_hash);
             return 0;
         }
         else {
@@ -636,6 +634,36 @@ sub process_tx {
         }
     }
     return 0;
+}
+
+sub continue_pending_branch {
+    my $self = shift;
+    my ($hash) = @_;
+
+    my $bottom = QBitcoin::Block->pending_block($hash)
+        or return;
+    while ($bottom->prev_hash) {
+        my $prev_pending = QBitcoin::Block->pending_block($bottom->prev_hash)
+            or last;
+        $bottom = $prev_pending;
+    }
+    my $owner = $bottom->received_from;
+    if ($owner && $owner != $self && $owner->connection && $owner->syncing) {
+        # The branch is being downloaded via another peer, do not duplicate its requests
+        $self->syncing(0);
+        return;
+    }
+    $bottom->prev_hash
+        or return;
+    if ($bottom->pending_tx
+        && (QBitcoin::Block->block_pool($bottom->prev_hash) || QBitcoin::Block->find(hash => $bottom->prev_hash))) {
+        # The ancestor is already known, the bottom block waits only for its transactions
+        $self->request_tx($bottom->pending_tx);
+    }
+    else {
+        $self->send_message("sendblock", $bottom->prev_hash);
+        $self->syncing(1);
+    }
 }
 
 sub request_new_block {
