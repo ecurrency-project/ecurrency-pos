@@ -13,8 +13,7 @@ use QBitcoin::Crypto qw(hash160 hash256 checksum32);
 use QBitcoin::Script qw(op_pushdata);
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 
-use constant ADDR_MAGIC_LEN => length(ADDR_MAGIC);
-use constant CHECKSUM_LEN   => 4;
+use constant CHECKSUM_LEN => 4;
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(
@@ -99,7 +98,7 @@ sub validate_address($) {
     my $crc = substr($bin, -CHECKSUM_LEN, CHECKSUM_LEN, "");
     checksum32($bin) eq $crc
         or return 0;
-    return substr($bin, 0, ADDR_MAGIC_LEN) eq ADDR_MAGIC;
+    return substr($bin, 0, length(ADDR_MAGIC)) eq ADDR_MAGIC;
 }
 
 sub scripthash_by_address($) {
@@ -111,7 +110,7 @@ sub scripthash_by_address($) {
     my $crc = substr($bin, -CHECKSUM_LEN, CHECKSUM_LEN, "");
     checksum32($bin) eq $crc
         or die "Incorrect address checksum\n";
-    substr($bin, 0, ADDR_MAGIC_LEN, "") eq ADDR_MAGIC
+    substr($bin, 0, length(ADDR_MAGIC), "") eq ADDR_MAGIC
         or die "Incorrect address version\n";
     return $bin;
 }
