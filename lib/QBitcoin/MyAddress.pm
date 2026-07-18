@@ -11,6 +11,7 @@ use QBitcoin::Crypto qw(hash160 hash256 pk_import pk_alg);
 use QBitcoin::Address qw(wif_to_pk address_by_pubkey script_by_pubkey script_by_pubkeyhash addresses_by_pubkey scripthash_by_address);
 use QBitcoin::Tag;
 use QBitcoin::Wallet::Crypt qw(is_encrypted_pk decrypt_pk unlocked);
+use QBitcoin::Utils qw(update_my_utxo);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(my_address stake_address watched_address);
