@@ -26,7 +26,7 @@ use constant {
     PROTOCOL_FEATURES   => 0x1,
     # https://en.bitcoin.it/wiki/Protocol_documentation#Message_structure
     MAGIC               => pack("V", 0xD9B4BEF9),
-    MAGIC_TESTNET       => pack("V", 0x0709110B ),
+    MAGIC_TESTNET       => pack("V", 0x283F161C ),
     MAX_BTC_HEADERS     => 2000,
     MAX_BTC_LOCATORS    => 101,
 };
