@@ -17,7 +17,6 @@ our @EXPORT_OK = qw(
     all_tokens_balance
     get_tokens_txs
     get_tokens_info
-    update_my_utxo
     create_txo
     estimate_fees
     check_tx_tokens_balance
@@ -887,16 +886,6 @@ sub get_tokens_info {
     }
     # TODO: add total_supply and mint_allowed attributes
     return $res;
-}
-
-# Change staked to unstaked or unstaked to staked for the given address
-sub update_my_utxo {
-    my $address = shift;
-    my %scripthash = map { $_ => 1 } $address->scripthash;
-    foreach my $utxo (grep { exists $scripthash{$_->scripthash} } QBitcoin::TXO->my_utxo()) {
-        $utxo->del_my_utxo;
-        $utxo->add_my_utxo;
-    }
 }
 
 sub create_txo {

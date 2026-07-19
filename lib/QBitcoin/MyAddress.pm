@@ -9,9 +9,9 @@ use QBitcoin::Const;
 use QBitcoin::ORM qw(find update delete :types);
 use QBitcoin::Crypto qw(hash160 hash256 pk_import pk_alg);
 use QBitcoin::Address qw(wif_to_pk address_by_pubkey script_by_pubkey script_by_pubkeyhash addresses_by_pubkey scripthash_by_address);
+use QBitcoin::TXO;
 use QBitcoin::Tag;
 use QBitcoin::Wallet::Crypt qw(is_encrypted_pk decrypt_pk unlocked);
-use QBitcoin::Utils qw(update_my_utxo);
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(my_address stake_address watched_address);
@@ -54,6 +54,16 @@ sub stake_address {
     my $class = shift // __PACKAGE__;
     $STAKE_ADDRESS //= [ grep { $_->staked } $class->my_address ];
     return wantarray ? @$STAKE_ADDRESS : $STAKE_ADDRESS->[0];
+}
+
+# Change staked to unstaked or unstaked to staked for the given address
+sub update_my_utxo {
+    my $address = shift;
+    my %scripthash = map { $_ => 1 } $address->scripthash;
+    foreach my $utxo (grep { exists $scripthash{$_->scripthash} } QBitcoin::TXO->my_utxo()) {
+        $utxo->del_my_utxo;
+        $utxo->add_my_utxo;
+    }
 }
 
 sub set_stake {

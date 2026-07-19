@@ -25,7 +25,7 @@ use QBitcoin::Wallet;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::TXO;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info update_my_utxo create_txo estimate_fees check_tx_tokens_balance);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info create_txo estimate_fees check_tx_tokens_balance);
 use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Generate;
 use QBitcoin::Generate::Control;
