@@ -165,6 +165,9 @@ sub call_rpc {
         elsif (defined($error) && !ref($error)) {
             print "$error\n";
         }
+        elsif (($response->{status} // 0) == 599) {
+            print "Error: $response->{content}\n";
+        }
         else {
             print "$response->{status} $response->{reason}\n";
         }
