@@ -35,11 +35,11 @@ use constant TESTNET => {
     PORT               => 19555,
     RPC_PORT           => 19556,
     REST_PORT          => 19557,
-    BTC_PORT           => 18333,
+    BTC_PORT           => 48333,
     SEED_PEER          => "seed-testnet.qbitcoin.net",
     GENESIS_COINBASE   => 0,
     GENESIS_REWARD     => 50 * 100000000, # 50 QBTC
-    BTC_GENESIS        => scalar reverse(pack("H*", "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943")),
+    BTC_GENESIS        => scalar reverse(pack("H*", "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043")),
     UPGRADE_FINISHED   => 0,
     CHECKPOINTS        => {},
 };
