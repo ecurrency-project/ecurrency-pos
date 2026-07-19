@@ -27,7 +27,7 @@ use QBitcoin::Generate;
 use QBitcoin::Generate::Control;
 use QBitcoin::Protocol;
 use QBitcoin::ConnectionList;
-use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info update_my_utxo create_txo estimate_fees check_tx_tokens_balance);
+use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info create_txo estimate_fees check_tx_tokens_balance);
 use Bitcoin::Serialized;
 use Bitcoin::Block;
 
