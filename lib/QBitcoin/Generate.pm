@@ -268,7 +268,12 @@ sub generate {
     my ($time) = @_;
     my $timeslot = timeslot($time);
     if ($timeslot < GENESIS_TIME) {
-        die "Genesis time " . GENESIS_TIME . " is in future\n";
+        Warningf("Genesis time " . GENESIS_TIME . " is in future");
+        return;
+    }
+    if ($timeslot > time) {
+        Warningf("Clock jump detected, skip generating block for timeslot %u", $timeslot);
+        return;
     }
     # A best-branch switch may have filled a slot that was empty before the current
     # timeslot with a block received from a peer (a weak validator can grab the smoothed
