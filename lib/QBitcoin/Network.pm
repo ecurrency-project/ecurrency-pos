@@ -239,7 +239,15 @@ sub main_loop {
                 my $generated_time = QBitcoin::Generate->generated_time;
                 my $blockchain_time = QBitcoin::Block->blockchain_time // 0;
                 my $defer_until; # wall-clock moment to wake for a delayed current-slot block
-                if (!$generated_time || $timeslot > timeslot($generated_time)) {
+                if (!$blockchain_time) {
+                    # No blocks yet, genesis is not enabled: produce the first block immediately
+                    if ($config->{genesis} && $timeslot >= timeslot(GENESIS_TIME)) {
+                        QBitcoin::Generate->generate(GENESIS_TIME);
+                        $blockchain_time = QBitcoin::Block->blockchain_time // 0;
+                        $defer_until = $blockchain_time;
+                    }
+                }
+                elsif (!$generated_time || $timeslot > timeslot($generated_time)) {
                     my $next_forced = $blockchain_time - ($blockchain_time - GENESIS_TIME) % (BLOCK_INTERVAL*FORCE_BLOCKS) + BLOCK_INTERVAL*FORCE_BLOCKS;
                     if ($config->{genesis} && $timeslot > $next_forced) {
                         $timeslot = $next_forced;
