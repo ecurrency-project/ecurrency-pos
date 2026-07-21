@@ -465,8 +465,15 @@ sub _generate {
         # Slashing self-guard (skip genesis / inputless stake): never (re)stake the
         # startup slot or earlier, and never publish a second, different stake for a
         # (slot, UTXO) we already committed - that would be self-equivocation.
+        # Exception: the genesis node may stake skipped forced slots, otherwise a
+        # restarted sole staker could never extend a stalled chain (the past-due forced
+        # slot stays at or before every future startup slot). The equivocation risk is
+        # minimal: if the network is alive these slots are already filled and our
+        # lighter catch-up stakes never spread; if it stalled, there is no competing
+        # stake to conflict with.
         if ($prev_block && @{$stake_tx->in}) {
-            if (!QBitcoin::Generate::Control->may_stake_slot($timeslot)) {
+            if (!QBitcoin::Generate::Control->may_stake_slot($timeslot)
+                && !($config->{genesis} && ($timeslot - GENESIS_TIME) % (BLOCK_INTERVAL * FORCE_BLOCKS) == 0)) {
                 Debugf("Skip stake for slot %u: at or before the startup slot %u",
                     $timeslot, QBitcoin::Generate::Control->start_slot // -1);
                 return;
