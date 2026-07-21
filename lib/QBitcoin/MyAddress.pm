@@ -9,7 +9,7 @@ use QBitcoin::Const;
 use QBitcoin::ORM qw(find update delete :types);
 use QBitcoin::Crypto qw(hash160 hash256 pk_import pk_alg);
 use QBitcoin::Address qw(wif_to_pk address_by_pubkey script_by_pubkey script_by_pubkeyhash addresses_by_pubkey scripthash_by_address);
-use QBitcoin::TXO;
+use QBitcoin::Wallet::UTXO qw(myutxo_add myutxo_del myutxo_list);
 use QBitcoin::Tag;
 use QBitcoin::Wallet::Crypt qw(is_encrypted_pk decrypt_pk unlocked);
 
@@ -60,9 +60,9 @@ sub stake_address {
 sub update_my_utxo {
     my $address = shift;
     my %scripthash = map { $_ => 1 } $address->scripthash;
-    foreach my $utxo (grep { exists $scripthash{$_->scripthash} } QBitcoin::TXO->my_utxo()) {
-        $utxo->del_my_utxo;
-        $utxo->add_my_utxo;
+    foreach my $utxo (grep { exists $scripthash{$_->scripthash} } myutxo_list()) {
+        myutxo_del($utxo);
+        myutxo_add($utxo, $address->staked);
     }
 }
 
@@ -277,10 +277,9 @@ sub remove {
     if (my $pubkey = eval { $self->pubkey }) {
         %pubkeyhash = (hash160($pubkey) => 1, hash256($pubkey) => 1);
     }
-    require QBitcoin::TXO;
-    foreach my $utxo (QBitcoin::TXO->my_utxo) {
+    foreach my $utxo (myutxo_list()) {
         if ($scripthash{$utxo->scripthash} || $pubkeyhash{substr($utxo->data // "", 0, 32)}) {
-            $utxo->del_my_utxo;
+            myutxo_del($utxo);
         }
     }
     $self->delete;
