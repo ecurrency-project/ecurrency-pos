@@ -371,12 +371,7 @@ sub get_address_utxo {
                 _add_token_data($utxo, $txo->[8]);
             }
             elsif (defined($txo->[8]) && length($txo->[8]) > 0) {
-                if (ord($txo->[8]) eq ord(TXO_DATA_TAG)) {
-                    $utxo->{tag} = substr($txo->[8], 1);
-                }
-                else {
-                    $utxo->{data} = $txo->[8];
-                }
+                $utxo->{data} = $txo->[8];
             }
             $txo_chain{$txo->[0]}->[$txo->[1]] = $utxo;
             $txo_cnt++;
