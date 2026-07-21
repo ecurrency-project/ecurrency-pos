@@ -493,8 +493,9 @@ sub wallet_tx_create {
         return $self->http_response(400, "Some inputs unknown");
     }
 
-    if (my $err = check_tx_tokens_balance($tx)) {
-        return $self->http_response(400, "Tokens balance check failed: $err");
+    my ($token_err, $token_warning) = check_tx_tokens_balance($tx);
+    if ($token_err) {
+        return $self->http_response(400, "Tokens balance check failed: $token_err");
     }
 
     QBitcoin::Wallet->signing_available
@@ -536,6 +537,7 @@ sub wallet_tx_create {
         hex  => unpack("H*", $tx_data),
         hash => unpack("H*", $tx->hash),
         fee  => $input_amount - $output_amount,
+        defined($token_warning) ? (warning => $token_warning) : (),
     });
 }
 

@@ -173,6 +173,9 @@ sub call_rpc {
         }
         return 1;
     }
+    if (ref($result) eq 'HASH' && defined($result->{warning}) && !ref($result->{warning}) && $result->{warning} ne '') {
+        print STDERR "warning: $result->{warning}\n";
+    }
     if (ref($result) eq 'HASH' && defined $result->{result}) {
         if (ref($result->{result})) {
             print $JSON->pretty->canonical->encode($result->{result});

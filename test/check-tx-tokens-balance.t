@@ -68,31 +68,44 @@ my $tx_ok = make_tx($token_a,
     [ in_txo($token_a, transfer_data(1000)), in_txo(undef, "", 500) ],
     [ out_txo(transfer_data(600)), out_txo(transfer_data(400)), out_txo("", 400) ],
 );
-is(check_tx_tokens_balance($tx_ok), undef, "Correct tokens transaction passes");
+my ($err_ok, $warn_ok) = check_tx_tokens_balance($tx_ok);
+is($err_ok, undef, "Correct tokens transaction passes");
+is($warn_ok, undef, "Correct tokens transaction has no warning");
 
-# Spend tokens with another token_id
-my $err_wrong_token = check_tx_tokens_balance(make_tx($token_a,
+# Spend tokens with another token_id: allowed, but warns about burning
+my ($err_wrong_token, $warn_wrong_token) = check_tx_tokens_balance(make_tx($token_a,
     [ in_txo($token_a, transfer_data(1000)), in_txo($token_b, transfer_data(1000)) ],
-    [ out_txo(transfer_data(2000)) ],
+    [ out_txo(transfer_data(1000)) ],
 ));
-like($err_wrong_token, qr/burns tokens/, "Spend tokens with another token_id rejected");
+is($err_wrong_token, undef, "Spend tokens with another token_id allowed");
+like($warn_wrong_token, qr/burns tokens/, "Spend tokens with another token_id warns");
 
-# Outputs less than inputs (burn)
-my $err_burn = check_tx_tokens_balance(make_tx($token_a,
+# Outputs less than inputs (burn): allowed, but warns
+my ($err_burn, $warn_burn) = check_tx_tokens_balance(make_tx($token_a,
     [ in_txo($token_a, transfer_data(1000)) ],
     [ out_txo(transfer_data(700)) ],
 ));
-like($err_burn, qr/Burn tokens not allowed/, "Outputs less than inputs rejected");
+is($err_burn, undef, "Outputs less than inputs allowed");
+like($warn_burn, qr/burns 300 token units/, "Outputs less than inputs warns with burned amount");
 
-# Spend tokens in standard transaction
-my $err_standard = check_tx_tokens_balance(make_tx(undef,
+# Spend tokens in standard transaction: allowed, but warns about burning
+my ($err_standard, $warn_standard) = check_tx_tokens_balance(make_tx(undef,
     [ in_txo($token_a, transfer_data(1000)) ],
     [ out_txo("", 100) ],
 ));
-like($err_standard, qr/burns tokens/, "Spend tokens in standard transaction rejected");
+is($err_standard, undef, "Spend tokens in standard transaction allowed");
+like($warn_standard, qr/burns tokens/, "Spend tokens in standard transaction warns");
+
+# Foreign token input and partial burn of own token produce combined warning
+my ($err_multi, $warn_multi) = check_tx_tokens_balance(make_tx($token_a,
+    [ in_txo($token_a, transfer_data(1000)), in_txo($token_b, transfer_data(500)) ],
+    [ out_txo(transfer_data(700)) ],
+));
+is($err_multi, undef, "Multiple burns allowed");
+like($warn_multi, qr/burns tokens; .*burns 300 token units/, "Multiple burns warn about both");
 
 # Outputs more than inputs without mint permission
-my $err_mint = check_tx_tokens_balance(make_tx($token_a,
+my ($err_mint) = check_tx_tokens_balance(make_tx($token_a,
     [ in_txo($token_a, transfer_data(1000)) ],
     [ out_txo(transfer_data(1500)) ],
 ));
@@ -104,10 +117,12 @@ my $tx_mint_ok = make_tx($token_a,
     [ in_txo($token_a, transfer_data(1000)), in_txo($token_a, $mint_data) ],
     [ out_txo(transfer_data(1500)), out_txo($mint_data) ],
 );
-is(check_tx_tokens_balance($tx_mint_ok), undef, "Mint with permission passes");
+my ($err_mint_ok, $warn_mint_ok) = check_tx_tokens_balance($tx_mint_ok);
+is($err_mint_ok, undef, "Mint with permission passes");
+is($warn_mint_ok, undef, "Mint with permission has no warning");
 
 # Gain permission without permission input
-my $err_permission = check_tx_tokens_balance(make_tx($token_a,
+my ($err_permission) = check_tx_tokens_balance(make_tx($token_a,
     [ in_txo($token_a, transfer_data(1000)) ],
     [ out_txo(transfer_data(1000)), out_txo($mint_data) ],
 ));

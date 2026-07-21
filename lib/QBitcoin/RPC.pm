@@ -125,8 +125,12 @@ sub response_error {
 
 sub response_ok {
     my $self = shift;
-    my ($result) = @_; # optional, undef by default
-    return $self->http_response(200, "OK", { result => $result, error => undef });
+    my ($result, $warning) = @_; # both optional, undef by default
+    return $self->http_response(200, "OK", {
+        result => $result,
+        error  => undef,
+        defined($warning) ? (warning => $warning) : (),
+    });
 }
 
 sub http_response {
