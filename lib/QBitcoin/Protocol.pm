@@ -355,7 +355,14 @@ sub cmd_block {
     if (QBitcoin::Block->block_pool($block->hash)) {
         Debugf("Received block %s already in block_pool", $block->hash_str);
         $self->syncing(0);
-        $self->request_new_block();
+        if ($block->prev_hash) {
+            $self->request_new_block();
+        }
+        else {
+            # The block is alternative valid genesis block (no GENESIS_HASH, regtest?)
+            $self->send_message("getblks", pack("Vv", timeslot($block->time), 1) . $block->hash);
+            $self->syncing(1);
+        }
         return 0;
     }
     if ($block->is_pending) {
