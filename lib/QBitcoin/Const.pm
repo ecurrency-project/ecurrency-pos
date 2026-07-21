@@ -75,6 +75,11 @@ use constant QBITCOIN_CONST => {
     PEER_PROBE_PERIOD       => 15, # sec, min interval between starting reachability probes of idle peers
     MAX_PROBE_CONNECTIONS   => 2,  # max simultaneous reachability-probe connections
     PEER_REVERIFY_PERIOD    => 6*3600, # sec, re-probe an already verified peer not contacted for this long
+    PEER_PROBE_DEAD_FAILS   => 10, # with this many consecutive failed connects the peer is considered long-dead
+    PEER_PROBE_DEAD_PERIOD  => 24*3600, # sec, probe a long-dead peer at most once per this period
+    PEER_CLEANUP_PERIOD     => 3600, # sec, how often to scan the peer table for expired records
+    PEER_EXPIRE_PERIOD      => 30*24*3600, # sec, forget a non-pinned peer with no activity for this long (if also unreachable)
+    PEER_EXPIRE_MIN_FAILS   => 3, # do not expire a peer until this many connects failed since its last activity
     MAX_INT64               => unpack("Q>", pack("H*", "7fffffffffffffff")), # 2^63-1, prevent warning about non-portable
     MAX_UINT64              => unpack("Q>", pack("H*", "ffffffffffffffff")), # 2^64-1, prevent warning about non-portable
 };

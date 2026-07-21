@@ -2,6 +2,7 @@ package QBitcoin::Peer;
 use warnings;
 use strict;
 
+use List::Util qw(max);
 use Socket qw(getaddrinfo unpack_sockaddr_in unpack_sockaddr_in6 AF_INET6 SOCK_STREAM);
 use QBitcoin::IP qw(ip_str parse_addr_port);
 use QBitcoin::Const;
@@ -15,6 +16,7 @@ use QBitcoin::ORM qw(create :types);
 use constant DEFAULT_INCREASE =>    1; # receive good new message (not empty block or transaction)
 use constant DEFAULT_DECREASE =>  100; # one incorrect message is as 100 correct
 use constant MIN_REPUTATION   => -400; # ban the peer if reputation less than this limit (after 4 bad message)
+use constant REPUTATION_DECAY_TIME => 3600*24*14; # reputation decreases in e times during 2 weeks
 
 use constant TABLE => 'peer';
 use constant PRIMARY_KEY => qw(type_id ip);
@@ -147,6 +149,7 @@ sub persist {
         # Became known (e.g. via addr/tx) while the handshake was in progress: adopt the stored record
         return $existing;
     }
+    $self->{reputation} = $self->reputation; # materialize the decay before moving its anchor
     $self->update_time(time());
     $self->create();
     $self->{in_db} = 1;
@@ -158,6 +161,11 @@ sub persist {
 sub update {
     my $self = shift;
     my $args = ref $_[0] ? $_[0] : { @_ };
+    if (exists $args->{update_time} && !exists $args->{reputation} && $self->{reputation}) {
+        # update_time is the reputation decay anchor: moving it forward without storing the
+        # correspondingly decayed value would silently cancel the decay accumulated so far
+        $args->{reputation} = $self->reputation;
+    }
     if (!$self->in_db) {
         foreach my $key (keys %$args) {
             my $value = $args->{$key};
@@ -193,7 +201,6 @@ sub add_reputation {
     my $increment = shift // DEFAULT_INCREASE;
 
     my $reputation = $self->reputation;
-    $self->{reputation_update} = time();
     Infof("Change reputation for peer %s: %f -> %f", $self->id, $reputation, $reputation + $increment);
     $self->update(update_time => time(), reputation => $reputation + $increment);
 }
@@ -207,20 +214,15 @@ sub decrease_reputation {
 sub reputation {
     my $self = shift;
     if (@_) {
-        $self->{reputation} = $_[0];
+        return $self->{reputation} = $_[0];
     }
-    elsif ($self->{reputation}) {
-        my $time = time();
-        if (($self->{reputation_update} // 0) < $time - 300) {
-            $self->{reputation_update} = $time;
-            # decrease in e times during 2 weeks
-            $self->{reputation} = $self->{reputation} * exp(($self->{update_time} - $time) / (3600*24*14));
-        }
-        return $self->{reputation};
-    }
-    else {
-        return 0;
-    }
+    my $reputation = $self->{reputation}
+        or return 0;
+    # The stored value is the reputation as of update_time (the decay anchor); decay is computed
+    # on read and never written back by itself. Any write that moves update_time forward must
+    # store the correspondingly decayed value along with it, see update().
+    my $age = time() - ($self->{update_time} // time());
+    return $age > 0 ? $reputation * exp(-$age / REPUTATION_DECAY_TIME) : $reputation;
 }
 
 sub conn_state {
@@ -308,7 +310,53 @@ sub need_probe {
     my $self = shift;
     my ($now) = @_;
     return 0 unless $self->is_connect_allowed;
+    if ($self->failed_connects >= PEER_PROBE_DEAD_FAILS && defined($self->last_fail_time)) {
+        # A long-dead peer: probing more often than once per day is a waste; regular outgoing
+        # connects (is_connect_allowed) keep their own, much shorter backoff
+        return 0 if $now - $self->last_fail_time < PEER_PROBE_DEAD_PERIOD;
+    }
     return !defined($self->last_success_time) || $self->last_success_time < $now - PEER_REVERIFY_PERIOD;
+}
+
+# Moment of the last outgoing connect attempt (successful or not), used for probe round-robin;
+# update_time (last activity) is the fallback for peers we have never dialed.
+sub last_attempt_time {
+    my $self = shift;
+    return max($self->last_fail_time // 0, $self->last_success_time // 0, $self->update_time // 0);
+}
+
+# Moment of the last known activity of the peer: created, greeted or earned/lost reputation
+# (update_time), or confirmed reachable by an outgoing handshake (last_success_time).
+sub last_activity_time {
+    my $self = shift;
+    return max($self->update_time // 0, $self->last_success_time // 0, $self->create_time // 0);
+}
+
+# A peer record no longer worth keeping: not configured, no activity for PEER_EXPIRE_PERIOD, and
+# confirmed still unreachable by several failed connects since that activity. The failed-connects
+# requirement also prevents mass expiry right after our own node was down for a long time: each
+# peer gets fresh connect attempts before it may be removed.
+sub is_expired {
+    my $self = shift;
+    my ($now) = @_;
+    return 0 if !$self->in_db;
+    return 0 if $self->pinned || $self->hidden;
+    return 0 if $self->conn_state != STATE_DISCONNECTED;
+    return 0 if $self->failed_connects < PEER_EXPIRE_MIN_FAILS;
+    my $last_activity = $self->last_activity_time;
+    return 0 if $now - $last_activity < PEER_EXPIRE_PERIOD;
+    return defined($self->last_fail_time) && $self->last_fail_time >= $last_activity;
+}
+
+# Delete the peer from the database and from the in-memory registry.
+# It may be learned and created again later (addr/vernak announce, relayed object origin).
+sub remove {
+    my $self = shift;
+    if ($self->in_db) {
+        QBitcoin::ORM::delete($self);
+        $self->{in_db} = 0;
+    }
+    delete $PEERS[$self->type_id]->{$self->ip} if @PEERS;
 }
 
 # Which origin IP to advertise when re-announcing a block/transaction.
