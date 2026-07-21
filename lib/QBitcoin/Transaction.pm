@@ -632,7 +632,7 @@ sub input_as_hashref {
     $in->{siglist} or die "Undefined siglist during input_as_hashref";
     my $redeem_script = $in->{txo}->redeem_script // die "Undefined redeem_script during input_as_hashref";
     my $alg = 0;
-    $alg = unpack("C", $in->{siglist}->[0]) if @{$in->{siglist}} && length($in->{siglist}->[0]) > 0;
+    $alg = unpack("xC", $in->{siglist}->[0]) if @{$in->{siglist}} && length($in->{siglist}->[0]) > 1;
     my $hash = $alg & CRYPT_ALGO_POSTQUANTUM ? hash256($redeem_script) : hash160($redeem_script);
     return {
         txid          => unpack("H*", $in->{txo}->tx_in),
@@ -650,7 +650,7 @@ sub inputraw_as_hashref {
     my $hash;
     if ($redeem_script) {
         my $alg = 0;
-        $alg = unpack("C", $in->{siglist}->[0]) if @{$in->{siglist}} && length($in->{siglist}->[0]) > 0;
+        $alg = unpack("xC", $in->{siglist}->[0]) if @{$in->{siglist}} && length($in->{siglist}->[0]) > 1;
         $hash = $alg & CRYPT_ALGO_POSTQUANTUM ? hash256($redeem_script) : hash160($redeem_script);
     }
     return {
