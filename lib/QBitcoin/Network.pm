@@ -133,7 +133,8 @@ sub connect_to {
     );
     connect($socket, $paddr);
     Debugf("Connecting to %s peer %s:%u", $peer->type, $peer->id, $peer->port);
-    $peer->update(update_time => time());
+    # do not touch update_time here: it means "last activity of the peer" and anchors the
+    # reputation decay; the attempt result is recorded in last_fail_time / last_success_time
     return $connection;
 }
 
@@ -290,6 +291,7 @@ sub main_loop {
         call_btc_peers();
         check_probes();
         probe_peers();
+        cleanup_peers();
         check_blockchain_alive();
         check_sync_peer();
 
@@ -687,10 +689,28 @@ sub probe_peers {
     my @candidates = grep { $_->need_probe($now) } QBitcoin::Peer->get_all(PROTOCOL_QBITCOIN)
         or return;
     # Round-robin: probe the least recently contacted peer first.
-    my ($peer) = sort { ($a->update_time // 0) <=> ($b->update_time // 0) } @candidates;
+    my ($peer) = sort { $a->last_attempt_time <=> $b->last_attempt_time } @candidates;
     $last_probe_time = $now;
     Debugf("Probing peer %s to verify reachability", $peer->id);
     connect_to($peer, probe => 1);
+}
+
+my $last_peer_cleanup_time = 0;
+# Forget peers that have long shown no activity and stay unreachable (see QBitcoin::Peer::is_expired),
+# otherwise the peer table grows forever with addresses learned from announcements and relayed
+# objects (e.g. a node briefly run on a dynamic IP).
+sub cleanup_peers {
+    my $now = time();
+    $now - $last_peer_cleanup_time >= PEER_CLEANUP_PERIOD
+        or return;
+    $last_peer_cleanup_time = $now;
+    foreach my $type_id (PROTOCOL_QBITCOIN, PROTOCOL_BITCOIN) {
+        foreach my $peer (grep { $_->is_expired($now) } QBitcoin::Peer->get_all($type_id)) {
+            Infof("Remove expired %s peer %s: no activity for %u days, %u failed connects",
+                $peer->type, $peer->id, ($now - $peer->last_activity_time) / (24*3600), $peer->failed_connects);
+            $peer->remove();
+        }
+    }
 }
 
 sub call_qbt_peers {
