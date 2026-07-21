@@ -40,6 +40,8 @@ my %SPEC = (
     address_type   => \&validate_address_type,
     tag            => qr/^(?:[a-zA-Z][a-zA-Z0-9_.-]{0,63})?\z/,
     password       => \&validate_password,
+    node           => qr/^[0-9A-Za-z\[\]:.\-]{1,255}\z/,
+    include_watchonly => \&validate_boolean,
 );
 
 sub validate {

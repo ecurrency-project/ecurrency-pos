@@ -9,7 +9,7 @@ use QBitcoin::RPC::Const;
 use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
-use QBitcoin::IP qw(ip_port_str);
+use QBitcoin::IP qw(ip_port_str parse_addr_port host_to_ips);
 use QBitcoin::ORM qw(dbh);
 use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Block;
@@ -26,6 +26,7 @@ use QBitcoin::Tag;
 use QBitcoin::Generate;
 use QBitcoin::Generate::Control;
 use QBitcoin::Protocol;
+use QBitcoin::Peer;
 use QBitcoin::ConnectionList;
 use QBitcoin::Utils qw(get_address_txs get_address_utxo address_received address_balance tokens_balance tokens_received get_tokens_info create_txo estimate_fees check_tx_tokens_balance);
 use Bitcoin::Serialized;
@@ -70,6 +71,8 @@ $READONLY{$_} = 1 foreach qw(
     getchaintxstats
     getblockstats
     getpeerinfo
+    listpeers
+    getaddressinfo
     getaddressbalance
     getreceivedbyaddress
     listunspent
@@ -1391,6 +1394,99 @@ sub cmd_getpeerinfo {
     return $self->response_ok(\@peers);
 }
 
+$PARAMS{listpeers} = "";
+$HELP{listpeers} = qq(
+Returns data about each known peer as a json array of objects.
+Unlike getpeerinfo it lists all known peers (the candidates for outgoing
+connections), not only the currently connected ones.
+
+Result:
+[                                     (json array)
+  {                                   (json object)
+    "addr" : "str",                   (string) (host:port) The IP address and port of the peer
+    "protocol" : "str",               (string) Protocol (QBitcoin, Bitcoin)
+    "connected" : true|false,         (boolean) Whether the peer is currently connected
+    "connect_allowed" : true|false,   (boolean) Whether an outgoing connection to the peer is allowed now (not disabled and not in failed-connects backoff)
+    "reputation" : n,                 (numeric) The peer reputation
+    "failed_connects" : n,            (numeric) Number of failed outgoing connects since the last success (see resetpeer)
+    "last_success_time" : n,          (numeric) Time of the last successful outgoing handshake, or null if the peer was never verified reachable
+    "last_fail_time" : n,             (numeric) Time of the last failed outgoing connect (if any)
+    "create_time" : n,                (numeric) Time the peer was learned
+    "update_time" : n,                (numeric) Time of the last peer state update
+    "software" : "str",               (string) Name and version of the peer software (if known)
+    "banned" : true|false,            (boolean) Incoming connections from the peer are disabled
+    "nocall" : true|false,            (boolean) Outgoing connections to the peer are disabled
+    "hidden" : true|false,            (boolean) The peer is configured as hidden (never announced to other peers)
+    "pinned" : true|false,            (boolean) The peer is pinned (explicitly configured)
+  },
+]
+
+Examples:
+> qbitcoin-cli listpeers
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "listpeers", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_listpeers {
+    my $self = shift;
+    my @peers;
+    foreach my $type_id (PROTOCOL_QBITCOIN, PROTOCOL_BITCOIN) {
+        foreach my $peer (sort { $b->reputation <=> $a->reputation || $a->id cmp $b->id } QBitcoin::Peer->get_all($type_id)) {
+            push @peers, {
+                addr              => ip_port_str($peer->ip, $peer->port),
+                protocol          => $peer->type,
+                connected         => $peer->conn_state == STATE_CONNECTED ? TRUE : FALSE,
+                connect_allowed   => $peer->is_connect_allowed ? TRUE : FALSE,
+                reputation        => $peer->reputation + 0,
+                failed_connects   => ($peer->failed_connects // 0) + 0,
+                last_success_time => $peer->last_success_time,
+                last_fail_time    => $peer->last_fail_time,
+                create_time       => $peer->create_time,
+                update_time       => $peer->update_time,
+                software          => $peer->software // "",
+                banned            => (($peer->status // 0) & PEER_STATUS_BANNED) ? TRUE : FALSE,
+                nocall            => (($peer->status // 0) & PEER_STATUS_NOCALL) ? TRUE : FALSE,
+                hidden            => $peer->hidden ? TRUE : FALSE,
+                pinned            => $peer->pinned ? TRUE : FALSE,
+            };
+        }
+    }
+    return $self->response_ok(\@peers);
+}
+
+$PARAMS{resetpeer} = "node";
+$HELP{resetpeer} = qq(
+resetpeer "node"
+
+Reset the failed-connects counter and backoff for the given known peer,
+so a new outgoing connection to the peer may be initiated on the next
+connection round if all other conditions are met (see listpeers).
+
+Arguments:
+1. node    (string, required) The peer IP address or hostname (see listpeers)
+
+Result:
+"str"    (string) Result message
+
+Examples:
+> qbitcoin-cli resetpeer "192.168.0.6"
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "resetpeer", "params": ["192.168.0.6"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_resetpeer {
+    my $self = shift;
+    my ($host) = parse_addr_port($self->args->[0]);
+    my %ip = map { $_ => 1 } host_to_ips($host)
+        or return $self->response_error("Cannot resolve $host", ERR_INVALID_ADDRESS_OR_KEY);
+    my @reset;
+    foreach my $type_id (PROTOCOL_QBITCOIN, PROTOCOL_BITCOIN) {
+        foreach my $peer (grep { $ip{$_->ip} } QBitcoin::Peer->get_all($type_id)) {
+            $peer->update(failed_connects => 0, last_fail_time => undef);
+            push @reset, $peer->type . " peer " . $peer->id;
+        }
+    }
+    @reset
+        or return $self->response_error("Unknown peer", ERR_INVALID_ADDRESS_OR_KEY);
+    return $self->response_ok("Reset failed connects for " . join(", ", @reset));
+}
+
 $PARAMS{getaddressbalance} = "address minconf?";
 $HELP{getaddressbalance} = qq{
 getaddressbalance "address" ( minconf )
@@ -1599,14 +1695,19 @@ sub cmd_listtransactions {
     ]);
 }
 
-$PARAMS{listmyaddresses} = "";
+$PARAMS{listmyaddresses} = "include_watchonly?";
 $HELP{listmyaddresses} = qq(
+listmyaddresses ( include_watchonly )
+
 Returns the list of addresses in the wallet.
+
+Arguments:
+1. include_watchonly    (boolean, optional, default=true) Also list watch-only addresses (imported without private key)
 
 Result:
 {                              (json object) json object with addresses as keys
   "address" : {                (json object) json object with information about address
-    "algo" : [ "str" ],        (json array) list of crypto algorithms supported by the address
+    "algo" : "str",            (string) crypto algorithm of the address key
     "staked" : true|false      (boolean) whether the address is used for staking (block validation)
     "watchonly" : true|false   (boolean) whether the address is watch-only (no private key)
     "tag" : "str"|null         (string or null) notification tag for this address
@@ -1616,20 +1717,74 @@ Result:
 
 Examples:
 > qbitcoin-cli listmyaddresses
+> qbitcoin-cli listmyaddresses false
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "listmyaddresses", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
 );
 sub cmd_listmyaddresses {
     my $self = shift;
+    my $include_watchonly = $self->args->[0] // TRUE;
     my %list;
     foreach my $my_address (QBitcoin::MyAddress->watched_address) {
+        next if $my_address->is_watchonly && !$include_watchonly;
         $list{$my_address->address} = {
-            algo      => CRYPT_ALGO_NAMES->{$my_address->algo},
+            algo      => defined($my_address->algo) ? CRYPT_ALGO_NAMES->{$my_address->algo} : undef,
             staked    => $my_address->staked ? TRUE : FALSE,
             watchonly => $my_address->is_watchonly ? TRUE : FALSE,
             tag       => $my_address->tag,
         };
     }
     $self->response_ok(\%list);
+}
+
+$PARAMS{getaddressinfo} = "address";
+$HELP{getaddressinfo} = qq(
+getaddressinfo "address"
+
+Return information about the given qbitcoin address.
+Some of the information is present only if the address is in the wallet
+(see listmyaddresses).
+
+Arguments:
+1. address    (string, required) The qbitcoin address for which to get information
+
+Result:
+{                               (json object)
+  "address" : "str",            (string) The qbitcoin address
+  "scripthash" : "hex",         (string) The hex-encoded scripthash generated by the address
+  "ismine" : true|false,        (boolean) If the wallet has the private key for the address
+  "iswatchonly" : true|false,   (boolean) If the address is watch-only (in the wallet without private key)
+  "algo" : "str",               (string, optional) crypto algorithm of the address key (wallet addresses only)
+  "staked" : true|false,        (boolean, optional) whether the address is used for staking (wallet addresses only)
+  "tag" : "str"|null,           (string or null, optional) notification tag for the address (wallet addresses only)
+  "pubkey" : "hex"              (string, optional) The hex value of the raw public key (if known)
+}
+
+Examples:
+> qbitcoin-cli getaddressinfo "myaddress"
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getaddressinfo", "params": ["myaddress"]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_getaddressinfo {
+    my $self = shift;
+    my $address = $self->args->[0];
+    my $scripthash = eval { scripthash_by_address($address) }
+        or return $self->response_error("Invalid address", ERR_INVALID_ADDRESS_OR_KEY);
+    my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash, 1);
+    my $res = {
+        address     => $address,
+        scripthash  => unpack("H*", $scripthash),
+        ismine      => $my_address && !$my_address->is_watchonly ? TRUE : FALSE,
+        iswatchonly => $my_address && $my_address->is_watchonly  ? TRUE : FALSE,
+    };
+    if ($my_address) {
+        $res->{algo}   = defined($my_address->algo) ? CRYPT_ALGO_NAMES->{$my_address->algo} : undef;
+        $res->{staked} = $my_address->staked ? TRUE : FALSE;
+        $res->{tag}    = $my_address->tag;
+        # pubkey derivation dies for an encrypted key without a stored pubkey while the wallet is locked
+        if (my $pubkey = eval { $my_address->pubkey }) {
+            $res->{pubkey} = unpack("H*", $pubkey);
+        }
+    }
+    return $self->response_ok($res);
 }
 
 $PARAMS{getbalance} = "minconf?";
@@ -2125,7 +2280,6 @@ sub cmd_getwalletinfo {
 
 # signmessagewithprivkey
 # verifymessage
-# getaddressinfo
 
 # listreceivedbyaddress
 
