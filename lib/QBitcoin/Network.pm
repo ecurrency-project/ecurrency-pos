@@ -596,6 +596,7 @@ sub check_blockchain_alive {
     }
 }
 
+my $sync_peer_since = 0; # moment the current sync peer was selected; a fresh selection resets the timeout
 sub check_sync_peer {
     if (blockchain_synced()) {
         sync_peer(undef);
@@ -606,7 +607,7 @@ sub check_sync_peer {
             Infof("Sync peer %s disconnected, selecting new sync peer", $sp->peer->id);
             sync_peer(undef);
         }
-        elsif (Time::HiRes::time() - $sp->last_recv_time > SYNC_PEER_TIMEOUT) {
+        elsif (Time::HiRes::time() - ($sp->last_recv_time > $sync_peer_since ? $sp->last_recv_time : $sync_peer_since) > SYNC_PEER_TIMEOUT) {
             Infof("Sync peer %s timed out (no data for %u sec), selecting new sync peer", $sp->peer->id, SYNC_PEER_TIMEOUT);
             $sp->syncing(0);
             sync_peer(undef);
@@ -634,8 +635,17 @@ sub check_sync_peer {
         Infof("Selected sync peer %s (weight %Lu, ping %s ms)", $best->peer->id,
             $best->has_weight // 0, $best->peer->ping_avg_ms // "?");
         sync_peer($best);
+        $sync_peer_since = Time::HiRes::time();
         if (!$best->syncing) {
             $best->request_new_block();
+            if (!$best->syncing && !blockchain_synced()) {
+                # request_new_block declined: the peer's known has_weight is not above ours
+                # and our tip is too old to declare the blockchain synced. The known weight
+                # may be stale (the peer does not re-announce during its own sync or genesis
+                # catch-up), so probe with a batch request anyway instead of deadlocking.
+                $best->request_blocks();
+                $best->syncing(1);
+            }
         }
     }
 }
