@@ -1518,6 +1518,7 @@ sub cmd_listunspent {
                     defined($utxo->{token_id})     ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
                     defined($utxo->{token_amount}) ? ( token_amount      => $utxo->{token_amount}      ) : (),
                     $utxo->{token_permissions}     ? ( token_permissions => $utxo->{token_permissions} ) : (),
+                    defined($utxo->{tag})          ? ( tag               => $utxo->{tag}               ) : (),
                     defined($utxo->{block_height}) ? (
                         confirmations => $best_height - $utxo->{block_height} + 1,
                         block_height  => $utxo->{block_height},

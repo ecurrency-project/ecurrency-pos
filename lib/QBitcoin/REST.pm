@@ -850,6 +850,7 @@ sub get_address_unspent {
                 defined($utxo->{token_id})     ? ( token_id          => unpack("H*", $utxo->{token_id}) ) : (),
                 defined($utxo->{token_amount}) ? ( token_amount      => $utxo->{token_amount}      ) : (),
                 $utxo->{token_permissions}     ? ( token_permissions => $utxo->{token_permissions} ) : (),
+                defined($utxo->{tag})          ? ( tag               => $utxo->{tag}               ) : (),
             }
         }
     }

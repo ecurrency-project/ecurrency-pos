@@ -740,10 +740,17 @@ sub output_as_hashref {
     my $res = {
         value   => $out->value / DENOMINATOR,
         address => $out->address,
-        data    => unpack("H*", $out->data),
     };
     if ($self->is_tokens) {
         $res = { %$res, %{$self->token_output_as_hashref($out)} };
+    }
+    elsif (length($out->data)) {
+        if (ord($out->data) eq ord(TXO_DATA_TAG)) {
+            $res->{tag} = substr($out->data, 1);
+        }
+        else {
+            $res->{data} = unpack("H*", $out->data);
+        }
     }
     return $res;
 }

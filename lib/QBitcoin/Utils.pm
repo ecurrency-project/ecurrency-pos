@@ -357,7 +357,6 @@ sub get_address_utxo {
                 block_pos    => $txo->[4],
                 tx_type      => TX_TYPES_NAMES->[$txo->[5]],
             };
-            $utxo->{data} = $txo->[8] if defined $txo->[8];
             if ($txo->[5] == TX_TYPE_TOKENS) {
                 if ($txo->[7]) {
                     if (!exists $token_hash{$txo->[7]}) {
@@ -370,6 +369,14 @@ sub get_address_utxo {
                     $utxo->{token_id} = $token_hash{$txo->[6]} = $txo->[0];
                 }
                 _add_token_data($utxo, $txo->[8]);
+            }
+            elsif (defined($txo->[8]) && length($txo->[8]) > 0) {
+                if (ord($txo->[8]) eq ord(TXO_DATA_TAG)) {
+                    $utxo->{tag} = substr($txo->[8], 1);
+                }
+                else {
+                    $utxo->{data} = $txo->[8];
+                }
             }
             $txo_chain{$txo->[0]}->[$txo->[1]] = $utxo;
             $txo_cnt++;
