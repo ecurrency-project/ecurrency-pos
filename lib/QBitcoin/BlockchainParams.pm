@@ -44,6 +44,11 @@ use constant TESTNET => {
     CHECKPOINTS        => {},
 };
 use constant REGTEST => {
+    GENESIS_HASH       => pack("H*", ""),
+    PORT               => 29555,
+    RPC_PORT           => 29556,
+    REST_PORT          => 29557,
+    SEED_PEER          => "",
     UPGRADE_FINISHED   => 0,
     CHECKPOINTS        => {},
 };

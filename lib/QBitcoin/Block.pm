@@ -207,6 +207,10 @@ sub reorg_penalty {
     # It should be overweight twice for revert last 16 blocks, 4 times for 32 blocks, 8 times for 64 blocks, 16 times for 128 blocks, 32 times for 256 blocks
     # But then decrease for prevent split-brain: 32 times for 900; 16 times for 3600; 8 times for 14400 blocks (~1 day), 4 times for 57600 blocks, 2 times for 230400 blocks, and no penalty for 921600 blocks (~3 months)
 
+    if (!$branch_start) {
+        Warningf("No reorg penalty for change genesis block");
+        return 0;
+    }
     return 0 if $self->height - $branch_start->height < INCORE_LEVELS;
     my $reorg_blocks = (timeslot($self->time) - timeslot($branch_start->time)) / BLOCK_INTERVAL - FORCE_BLOCKS;
     return 0 if $reorg_blocks <= 0;

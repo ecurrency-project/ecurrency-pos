@@ -181,7 +181,7 @@ sub receive {
         last if $best_block && $best_block->hash eq $new_best->prev_hash;
         $new_best->prev_block->next_block = $new_best;
     }
-    if (defined($HEIGHT) && $new_best->height == 0) {
+    if (defined($HEIGHT) && $new_best->height == 0 && GENESIS_HASH) {
         die "Error receiving alternative branch";
     }
     # $new_best is first block in new branch after fork, i.e $new_nest->prev_block is in the current best branch
@@ -217,7 +217,7 @@ sub receive {
     # reset all txo in the current best branch (started from the fork block) as unspent;
     # then set output in all txo in the new branch and check it against possible double-spend
     for (my $bl = $class->best_block($HEIGHT // $new_best->height); $bl && $bl->height >= $new_best->height; $bl = $bl->prev_block_load) {
-        $bl->prev_block_load->next_block = $bl;
+        $bl->prev_block_load->next_block = $bl if $bl->prev_block_load;
         Debugf("Remove block %s height %u from the best branch", $bl->hash_str, $bl->height);
         foreach my $tx (reverse @{$bl->transactions}) {
             $tx->unconfirm($bl);
