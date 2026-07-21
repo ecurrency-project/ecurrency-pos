@@ -6,6 +6,7 @@ use Scalar::Util qw(refaddr);
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::TXO;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced skip_scripts);
 use QBitcoin::CheckPoints qw(checkpoint_hash max_checkpoint_height prev_checkpoint_height);
@@ -316,8 +317,8 @@ sub receive {
                && $self->prev_block->weight > $old_best->prev_block->weight) {
             QBitcoin::Generate::Control->generate_new();
         }
-        if ($self->received_from || timeslot($self->time) >= $timeslot) {
-            # Do not announce old blocks loaded from the local database or generated
+        my $last_forced_time = $timeslot - ($timeslot - GENESIS_TIME) % (BLOCK_INTERVAL * FORCE_BLOCKS);
+        if (!$loaded && timeslot($self->time) >= $last_forced_time) {
             $self->announce_to_peers();
         }
     }
