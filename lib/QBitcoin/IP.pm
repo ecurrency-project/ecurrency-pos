@@ -13,9 +13,10 @@ our @EXPORT_OK = qw(
     parse_addr_port
     sockaddr_to_ip_port
     pack_sockaddr_by_ip
+    host_to_ips
 );
 
-use Socket qw(:DEFAULT inet_ntop inet_pton pack_sockaddr_in6 unpack_sockaddr_in6 sockaddr_family AF_INET6 PF_INET6);
+use Socket qw(:DEFAULT getaddrinfo inet_ntop inet_pton pack_sockaddr_in6 unpack_sockaddr_in6 sockaddr_family AF_INET6 PF_INET6 SOCK_STREAM);
 use QBitcoin::Const;
 
 # Packed 16-byte address as text: dotted quad for IPv6-mapped IPv4, IPv6 literal otherwise
@@ -66,6 +67,19 @@ sub sockaddr_to_ip_port {
     }
     my ($port, $ip4) = unpack_sockaddr_in($sockaddr);
     return ($port, IPV6_V4_PREFIX . $ip4);
+}
+
+# Resolve a hostname or an address literal into a list of unique packed 16-byte
+# addresses (IPv4 as IPv6-mapped); empty list if the name cannot be resolved
+sub host_to_ips {
+    my ($host) = @_;
+    my ($err, @res) = getaddrinfo($host, undef, { socktype => SOCK_STREAM });
+    return () if $err;
+    my %seen;
+    return grep { !$seen{$_}++ }
+        map { $_->{family} == AF_INET6 ?
+            (unpack_sockaddr_in6($_->{addr}))[1] :
+            IPV6_V4_PREFIX . (unpack_sockaddr_in($_->{addr}))[1] } @res;
 }
 
 # Build ($family, packed sockaddr) for connect()/bind() from a 16-byte packed address

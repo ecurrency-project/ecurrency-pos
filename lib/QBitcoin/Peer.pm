@@ -3,8 +3,7 @@ use warnings;
 use strict;
 
 use List::Util qw(max);
-use Socket qw(getaddrinfo unpack_sockaddr_in unpack_sockaddr_in6 AF_INET6 SOCK_STREAM);
-use QBitcoin::IP qw(ip_str parse_addr_port);
+use QBitcoin::IP qw(ip_str parse_addr_port host_to_ips);
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
@@ -74,16 +73,11 @@ sub get_or_create {
     }
     elsif ($args->{host}) {
         my ($addr, $port) = parse_addr_port($args->{host});
-        my ($err, @res) = getaddrinfo($addr, undef, { socktype => SOCK_STREAM });
-        if ($err) {
-            Errf("getaddrinfo for %s: %s", $addr, $err);
+        @ip = host_to_ips($addr);
+        if (!@ip) {
+            Errf("Cannot resolve peer address %s", $addr);
             return ();
         }
-        my %seen;
-        @ip = grep { !$seen{$_}++ }
-            map { $_->{family} == AF_INET6 ?
-                (unpack_sockaddr_in6($_->{addr}))[1] :
-                IPV6_V4_PREFIX . (unpack_sockaddr_in($_->{addr}))[1] } @res;
         $args->{port} = $port;
     }
     else {
