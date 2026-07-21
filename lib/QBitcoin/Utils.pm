@@ -979,21 +979,26 @@ sub create_txo {
     return ([ map { QBitcoin::TXO->new_txo($_) } @txo ], $token_id);
 }
 
+# Returns ($error, $warning). $error is set for transactions the consensus would
+# reject (mint without permission, overflow, malformed data); burning tokens is
+# consensus-legal, so it is reported as $warning and the transaction is allowed.
 sub check_tx_tokens_balance {
     my ($tx) = @_;
 
     my $in_value = 0;
     my $permissions = 0;
+    my @warnings;
     foreach my $txo (map { $_->{txo} } grep { defined($_->{txo}->token_hash) && length($_->{txo}->data // "") > 0 } @{$tx->in}) {
         if (!$txo->token_hash || !$tx->is_tokens || $txo->token_hash ne $tx->token_hash) {
-            return "Input " . $txo->tx_in_str . ":" . $txo->num . " burns tokens";
+            push @warnings, "Input " . $txo->tx_in_str . ":" . $txo->num . " burns tokens";
+            next;
         }
         my $txo_type = substr($txo->data, 0, 1);
         if ($txo_type eq TOKEN_TXO_TYPE_TRANSFER) {
             length($txo->data) == 9 or next;
             my $transfer_value = unpack("Q<", substr($txo->data, 1, 8));
             if ($transfer_value > MAX_UINT64 - $in_value) {
-                return "Input " . $txo->tx_in_str . ":" . $txo->num . " causes integer overflow";
+                return ("Input " . $txo->tx_in_str . ":" . $txo->num . " causes integer overflow");
             }
             $in_value += $transfer_value;
         }
@@ -1004,37 +1009,37 @@ sub check_tx_tokens_balance {
             }
         }
     }
-    return undef unless $tx->is_tokens;
-    return undef unless $tx->token_hash;
-    my $out_value = 0;
-    foreach my $out (grep { length($_->data // "") > 0 } @{$tx->out}) {
-        my $txo_type = substr($out->data, 0, 1);
-        if ($txo_type eq TOKEN_TXO_TYPE_TRANSFER) {
-            length($out->data) == 9 or return "Incorrect data length in token transfer output";
-            my $transfer_value = unpack("Q<", substr($out->data, 1, 8));
-            if ($transfer_value > MAX_UINT64 - $out_value) {
-                return "Output causes integer overflow";
+    if ($tx->is_tokens && $tx->token_hash) {
+        my $out_value = 0;
+        foreach my $out (grep { length($_->data // "") > 0 } @{$tx->out}) {
+            my $txo_type = substr($out->data, 0, 1);
+            if ($txo_type eq TOKEN_TXO_TYPE_TRANSFER) {
+                length($out->data) == 9 or return ("Incorrect data length in token transfer output");
+                my $transfer_value = unpack("Q<", substr($out->data, 1, 8));
+                if ($transfer_value > MAX_UINT64 - $out_value) {
+                    return ("Output causes integer overflow");
+                }
+                $out_value += $transfer_value;
             }
-            $out_value += $transfer_value;
+            else {
+                my $data = $tx->unpack_token_info($out->data)
+                    or return ("Incorrect data in token output");
+                if ($data->{permissions} && ($data->{permissions} & ~$permissions)) {
+                    return ("Attempt to gain token permission");
+                }
+                if ($data->{decimals} || $data->{symbol} || $data->{name}) {
+                    return ("Attempt to change token attributes");
+                }
+            }
         }
-        else {
-            my $data = $tx->unpack_token_info($out->data)
-                or return "Incorrect data in token output";
-            if ($data->{permissions} && ($data->{permissions} & ~$permissions)) {
-                return "Attempt to gain token permission";
-            }
-            if ($data->{decimals} || $data->{symbol} || $data->{name}) {
-                return "Attempt to change token attributes";
-            }
+        if ($in_value < $out_value && !($permissions & TOKEN_PERMISSION_MINT)) {
+            return ("Attempt to mint tokens without permission");
+        }
+        if ($in_value > $out_value) {
+            push @warnings, "Transaction burns " . ($in_value - $out_value) . " token units";
         }
     }
-    if ($in_value < $out_value && !($permissions & TOKEN_PERMISSION_MINT)) {
-        return "Attempt to mint tokens without permission";
-    }
-    if ($in_value > $out_value) {
-        return "Burn tokens not allowed";
-    }
-    return undef;
+    return (undef, @warnings ? join("; ", @warnings) : undef);
 }
 
 # estimate_fees(@targets) - estimate fee rates for given confirmation targets

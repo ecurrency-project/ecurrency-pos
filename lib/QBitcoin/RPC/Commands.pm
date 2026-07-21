@@ -624,6 +624,10 @@ Result:
   ]
 }
 
+If the transaction burns tokens (spends token outputs without transferring the
+tokens to the outputs), it is signed anyway and the response contains a top-level
+"warning" field describing the burned tokens.
+
 Examples:
 > qbitcoin-cli signrawtransactionwithkey "myhex" '["key1","key2"]'
 > curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "signrawtransactionwithkey", "params": ["myhex", ["key1","key2"]]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
@@ -705,8 +709,9 @@ sub cmd_signrawtransactionwithkey {
         return $self->response_error("Transaction fee too high: " . $fee_per_kb / DENOMINATOR . " > " . $max_fee_per_kb / DENOMINATOR . " BTC/kb", ERR_INVALID_REQUEST);
     }
 
-    if (my $err = check_tx_tokens_balance($tx)) {
-        return $self->response_error("Tokens balance check failed: $err", ERR_INVALID_REQUEST);
+    my ($token_err, $token_warning) = check_tx_tokens_balance($tx);
+    if ($token_err) {
+        return $self->response_error("Tokens balance check failed: $token_err", ERR_INVALID_REQUEST);
     }
 
     return $self->response_ok({
@@ -714,7 +719,7 @@ sub cmd_signrawtransactionwithkey {
         hash     => unpack("H*", $tx->hash),
         complete => @errors ? FALSE : TRUE,
         errors   => \@errors,
-    });
+    }, $token_warning);
 }
 
 sub max_fee_per_kb {
