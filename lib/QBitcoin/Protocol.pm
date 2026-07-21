@@ -865,6 +865,12 @@ sub cmd_getblks {
         $self->send_message("blocks", pack("C", $sent) . $response);
         $self->connection->obj_sent += $sent;
     }
+    elsif (my $best_block = QBitcoin::Block->best_block) {
+        # Nothing above the peer's locators: answer with our tip announce instead of
+        # silence, so the requester refreshes our known weight and its sync-peer
+        # timeout instead of timing out and re-requesting blindly.
+        $self->announce_block($best_block);
+    }
     return 0;
 }
 
