@@ -187,7 +187,7 @@ sub cmd_version {
         $self->peer->update(software => $software);
     }
     $self->request_btc_blocks() if UPGRADE_POW && !UPGRADE_FINISHED && !btc_synced();
-    $self->request_mempool if blockchain_synced() && !mempool_synced() && (!UPGRADE_POW || btc_synced());
+    $self->request_mempool if blockchain_synced() && !mempool_synced() && !$self->wait_btc_sync;
     $self->announce_best_btc_block() if UPGRADE_POW && !UPGRADE_FINISHED;
     if (my $best_block = QBitcoin::Block->best_block) {
         $self->announce_block($best_block);
@@ -272,6 +272,13 @@ sub check_duplicate_connection {
     return 0;
 }
 
+# QBT blocks and coinbase transactions cannot be validated until the BTC blockchain
+# is synced (coinbase refers to BTC blocks), so do not pull QBT data until then;
+# the sync will be resumed by request_new_block()/request_mempool() when btc_synced is set
+sub wait_btc_sync {
+    return UPGRADE_POW && !UPGRADE_FINISHED && !btc_synced();
+}
+
 sub request_tx {
     my $self = shift;
     $self->send_message("sendtx", $_) foreach @_;
@@ -332,6 +339,9 @@ sub cmd_ihavetx {
     }
     blockchain_synced()
         or return 0;
+    if ($self->wait_btc_sync) {
+        return 0;
+    }
 
     my $hash = unpack("a32", $data);
     if (QBitcoin::Transaction->check_by_hash($hash)) {
@@ -352,6 +362,11 @@ sub cmd_block {
         return -1;
     }
     $self->connection->obj_recv++;
+    if ($self->wait_btc_sync) {
+        Debugf("Ignore block %s from peer %s: BTC blockchain is not synced", $block->hash_str, $self->peer->id);
+        $self->syncing(0);
+        return 0;
+    }
     if (QBitcoin::Block->block_pool($block->hash)) {
         Debugf("Received block %s already in block_pool", $block->hash_str);
         $self->syncing(0);
@@ -446,6 +461,11 @@ sub cmd_blocks {
         Warningf("Bad (empty) blocks params from peer %s", $self->peer->id);
         $self->abort("incorrect_params");
         return -1;
+    }
+    if ($self->wait_btc_sync) {
+        Debugf("Ignore blocks from peer %s: BTC blockchain is not synced", $self->peer->id);
+        $self->syncing(0);
+        return 0;
     }
     my $data = Bitcoin::Serialized->new($blocks_data);
     my $num_blocks = unpack("C", $data->get(1));
@@ -566,6 +586,12 @@ sub cmd_tx {
         return -1;
     }
     $self->connection->obj_recv++;
+    if ($self->wait_btc_sync) {
+        # We do not request QBT data in this state, but a transaction may still arrive
+        # in response to an earlier request, sent before btc_synced was reset
+        Debugf("Ignore tx %s from peer %s: BTC blockchain is not synced", $tx->hash_str, $self->peer->id);
+        return 0;
+    }
     if (QBitcoin::Transaction->has_pending($tx->hash)) {
         Debugf("Transaction %s already pending", $tx->hash_str);
         return 0;
@@ -677,6 +703,9 @@ sub request_new_block {
     my $self = shift;
     my ($hash) = @_;
 
+    if ($self->wait_btc_sync) {
+        return;
+    }
     if (!blockchain_synced() && sync_peer() && sync_peer() != $self) {
         return;
     }
@@ -900,7 +929,7 @@ sub cmd_ihave {
     }
     $self->has_weight = $weight;
     $self->best_block_hash = $hash;
-    if (!UPGRADE_POW || btc_synced()) {
+    if (!$self->wait_btc_sync) {
         if ($weight > QBitcoin::Block->best_weight) {
             if (blockchain_synced() || !sync_peer() || sync_peer() == $self) {
                 $self->request_new_block($hash);

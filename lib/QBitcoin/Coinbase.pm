@@ -192,12 +192,15 @@ sub validate {
     my ($btc_block) = Bitcoin::Block->find(hash => $self->btc_block_hash);
     if (!$btc_block || !$btc_block->height) {
         # unset btc_synced() if last btc block older than COINBASE_CONFIRM_TIME
-        # otherwise assume this is not correct coinbase
+        # otherwise assume this is not correct coinbase.
+        # A coinbase needs COINBASE_CONFIRM_TIME after its btc block, so this can happen
+        # only if our btc blockchain lags far behind while btc_synced was still set;
+        # rejecting (and resetting btc_synced) is a safe reaction here: an unknown btc block
+        # is indistinguishable from a fake one, and silently ignoring invalid coinbases
+        # would let them go unpunished
         ($btc_block) = Bitcoin::Block->find(-sortby => 'height DESC', -limit => 1);
         if (!$btc_block || $btc_block->time < time() - COINBASE_CONFIRM_TIME) {
-            # TODO: request btc blocks
             btc_synced(0);
-            # TODO: set this tx as pending
             Warningf("BTC blockchain not synced, can't validate coinbase");
             return -1;
         }
