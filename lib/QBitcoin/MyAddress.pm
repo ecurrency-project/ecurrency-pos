@@ -29,7 +29,16 @@ use constant FIELDS => {
 
 use constant PRIMARY_KEY => 'address';
 
-mk_accessors(qw(private_key staked algo tag_id));
+mk_accessors(qw(private_key staked tag_id));
+
+# Primary algorithm for this address; the stored (database) value when present,
+# otherwise lazily derived from the private key, so ad-hoc objects created as
+# new(private_key => ...) can sign too. Setter form is used by update().
+sub algo {
+    my $self = shift;
+    return $self->{algo} = $_[0] if @_;
+    return $self->{algo} // $self->_pk_alg;
+}
 
 my $MY_ADDRESS;
 my $STAKE_ADDRESS;
