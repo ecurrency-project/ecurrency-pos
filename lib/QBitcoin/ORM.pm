@@ -48,7 +48,7 @@ sub dbh {
         $db_name .= ".sqlite" unless $db_name =~ /\.sqlite$/;
     }
     elsif ($dbi eq "mysql") {
-        $db_name .= ";mysql_read_default_file=$ENV{HOME}/my.cnf";
+        $db_name .= ";mysql_read_default_file=$ENV{HOME}/.my.cnf";
     }
     if (!$dsn) {
         $dsn = $config->{"dsn"} // ("DBI:$dbi:$db_name" . ($location ? ":$location" : ""));
