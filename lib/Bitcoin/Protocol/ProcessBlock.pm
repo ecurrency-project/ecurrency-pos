@@ -8,6 +8,7 @@ use List::Util qw(max);
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::ProtocolState qw(btc_synced);
 use QBitcoin::ConnectionList;
 use QBitcoin::Coinbase;
@@ -70,7 +71,7 @@ sub process_btc_block {
                         # TODO: rollback QBT blocks if reverted blocks contain generated QBT coinbase
                         QBitcoin::Coinbase->delete_by(btc_block_height => { '>' => $start_block->height });
                     }
-                    $revert_block->update(height => undef);
+                    $revert_block->update(height => undef, $revert_block->time >= GENESIS_TIME ? (scanned => 0) : ());
                 }
                 $block->height = $start_block->height + $new_height--;
                 my @new_blocks;
