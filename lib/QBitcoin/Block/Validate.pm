@@ -80,7 +80,9 @@ sub validate {
     my $upgraded = $block->prev_block ? $block->prev_block->upgraded // 0 : 0;
     my $min_block_fee;
     my $was_standard;
-    foreach my $transaction (@{$block->transactions}) {
+    my $can_consume = 1; # Can validator consume transaction fee? No if stake transaction has no inputs
+    for (my $num = 0; $num < @{$block->transactions}; $num++) {
+        my $transaction = $block->transactions->[$num];
         if ($tx_in_block{$transaction->hash}++) {
             return "Transaction " . $transaction->hash_str . " included in the block twice";
         }
@@ -118,7 +120,7 @@ sub validate {
             $was_standard = $transaction->hash_str;
         }
         elsif ($transaction->is_stake) {
-            if (keys %tx_in_block != 1) {
+            if ($num > 0) {
                 return "Stake transaction " . $transaction->hash_str . " must be the first transaction in the block";
             }
             # Equivocated stake: we hold a slashing tx proving this UTXO signed another
@@ -131,6 +133,16 @@ sub validate {
         }
         else {
             return "Transaction " . $transaction->hash_str . " is not a coinbase, stake or standard transaction";
+        }
+        if (!@{$transaction->in} && !$transaction->coins_created) {
+            if ($num > 0) {
+                return "Transaction " . $transaction->hash_str . " has no inputs";
+            }
+            # Stake transaction without inputs allowed only if the block has no (non-coinbase) transactions with positive fee
+            $can_consume = 0;
+        }
+        elsif (!$can_consume && $transaction->fee > 0 && !$transaction->coins_created) {
+            return "Transaction " . $transaction->hash_str . " has fee but block validator can't consume it";
         }
     }
     # After UPGRADE_FINISHED we can have no btc blocks and do not know when the upgrade was stopped,
@@ -154,7 +166,6 @@ sub validate_chain {
     my $block = shift;
 
     my $fail_tx;
-    my $can_consume = 1; # Can validator consume transaction fee? No if stake transaction has no inputs
     for (my $num = 0; $num < @{$block->transactions}; $num++) {
         my $tx = $block->transactions->[$num];
         if (defined($tx->block_height) && $tx->block_height != $block->height) {
@@ -178,20 +189,6 @@ sub validate_chain {
                     last;
                 }
             }
-        }
-        if (!@{$tx->in} && !$tx->coins_created) {
-            if ($num > 0) {
-                Warningf("Transaction %s has no inputs", $tx->hash_str);
-                $fail_tx = $tx->hash;
-                last;
-            }
-            # Stake transaction without inputs allowed only if the block has no (non-coinbase) transactions with positive fee
-            $can_consume = 0;
-        }
-        elsif (!$can_consume && $tx->fee > 0 && !$tx->coins_created) {
-            Warningf("Transaction %s has fee but block validator can't consume it", $tx->hash_str);
-            $fail_tx = $tx->hash;
-            last;
         }
         if (!skip_scripts()) {
             foreach my $in (@{$tx->in}) {
