@@ -134,6 +134,7 @@ sub tx_hashes {
 my $upgrade_stopped_block;
 
 sub upgrade_stopped {
+    my $class = shift;
     my ($timeslot) = @_;
     return 1 if UPGRADE_FINISHED;
     $upgrade_stopped_block //= __PACKAGE__->find(height => UPGRADE_MAX_BLOCKS + COINBASE_CONFIRM_BLOCKS) // 0;
