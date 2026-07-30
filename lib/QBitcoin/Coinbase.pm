@@ -208,11 +208,11 @@ sub validate {
         return -1;
     }
     if ($btc_block->time < GENESIS_TIME) {
-        Warningf("Incorrect coinbase transaction based on early btc block %s time %u", $btc_block->hash_str, $btc_block->time);
+        Warningf("Incorrect coinbase transaction based on early btc block %s time %u", $btc_block->hash_hex, $btc_block->time);
         return -1;
     }
     if ($btc_block->height >= UPGRADE_MAX_BLOCKS) {
-        Warningf("Incorrect coinbase transaction based on late btc block %s height %u", $btc_block->hash_str, $btc_block->height);
+        Warningf("Incorrect coinbase transaction based on late btc block %s height %u", $btc_block->hash_hex, $btc_block->height);
         return -1;
     }
     # Check merkle path (but ignore mismatch for produced upgrades)
