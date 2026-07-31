@@ -318,7 +318,10 @@ sub cmd_block {
     }
 
     if (!$block->scanned && $block->height && $block->height < UPGRADE_MAX_BLOCKS) {
-        if ($self->process_transactions($block, $block_data)) {
+        if (Bitcoin::Block->find(scanned => 0, height => { "<" => $block->height }, -limit => 1)) {
+            Warningf("Received out-of-order block %s height %u, postpone scanning", $block->hash_hex, $block->height);
+        }
+        elsif ($self->process_transactions($block, $block_data)) {
             $self->abort("bad_block_data");
             return -1;
         }
