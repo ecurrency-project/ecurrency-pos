@@ -1277,6 +1277,11 @@ sub check_input_script {
     my $self = shift;
     $self->{min_tx_time} = -1;
     $self->{min_tx_block_height} = -1;
+    # Slashing inputs are spent without a signature, so there is no input script to
+    # evaluate (the txo may not even have its redeem_script revealed); the equivocation
+    # evidence is checked by validate_slashing instead. Reached lazily via
+    # min_tx_time()/min_tx_block_height() for a mempool slashing tx.
+    return 0 if $self->is_slashing;
     foreach my $num (0 .. $#{$self->in}) {
         my $in = $self->in->[$num];
         if ($in->{txo}->check_script($in->{siglist}, $self, $num) != 0) {

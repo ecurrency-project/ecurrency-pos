@@ -16,11 +16,12 @@ use QBitcoin::Test::ORM;
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
-use QBitcoin::Crypto qw(generate_keypair);
+use QBitcoin::Crypto qw(generate_keypair hash256);
 use QBitcoin::Address qw(wallet_import_format addresses_by_pubkey);
 use QBitcoin::MyAddress;
 use QBitcoin::TXO;
 use QBitcoin::Transaction;
+use QBitcoin::Block;
 use QBitcoin::Slashing;
 use QBitcoin::ProtocolState qw(blockchain_synced);
 
@@ -82,5 +83,77 @@ ok($built, "report_equivocation built a slashing tx");
 ok(QBitcoin::Transaction->check_by_hash($built->hash), "slashing tx is in the mempool");
 ok(QBitcoin::Slashing->is_banned_stake($stake1, $timeslot), "the equivocated stake is now banned");
 ok(QBitcoin::Slashing->is_banned_stake($stake2, $timeslot), "...both conflicting stakes are banned");
+
+# --- the slashing tx in the mempool: choose_for_block filters by min_tx_time /
+# min_tx_block_height, which lazily call check_input_script. Slashing inputs are spent
+# without a signature (and the txo may have no redeem_script revealed), so no input
+# script must be evaluated (regression: substr on undef script in Script::State).
+{
+    my @warnings;
+    local $SIG{__WARN__} = sub { push @warnings, @_ };
+    is($built->min_tx_time, -1, "slashing tx min_tx_time is unlimited");
+    is($built->min_tx_block_height, -1, "slashing tx min_tx_block_height is unlimited");
+    is("@warnings", "", "no perl warnings evaluating slashing tx timelocks");
+}
+
+# --- a block carrying the slashing tx (regression: Block::Validate had no branch for
+# TX_TYPE_SLASHING, so the node's own generated block failed validation and died).
+# Non-regtest mode also enforces the fixed tx order: stake, coinbase, slashing, standard.
+$config->{regtest} = 0; # GENESIS_HASH is empty, so the genesis hash check stays off
+
+my $block_time = $timeslot + BLOCK_INTERVAL;
+
+# A fresh staked coin for the block's own (non-equivocated) stake.
+my $coin2 = QBitcoin::TXO->new_txo({ tx_in => pack("H*", "cd" x 32), num => 0, value => 1000, scripthash => $scripthash, data => "" });
+$coin2->set_redeem_script($redeem) == 0 or die "set_redeem_script\n";
+
+# Genesis-height block: block reward is GENESIS_REWARD, consumed by the stake.
+sub block_with {
+    my (@rest) = @_; # non-stake transactions, in block order
+    my $tx_hashes = join("", map { $_->hash } @rest);
+    my $bsd = ZERO_HASH . pack("N", timeslot($block_time)) . hash256($tx_hashes);
+    my $out = QBitcoin::TXO->new_txo({ value => $coin2->value + GENESIS_REWARD, scripthash => $scripthash, data => "" });
+    my $stake = QBitcoin::Transaction->new(
+        in              => [ { txo => $coin2, siglist => [] } ],
+        out             => [ $out ],
+        fee             => -GENESIS_REWARD,
+        tx_type         => TX_TYPE_STAKE,
+        block_sign_data => $bsd,
+        received_time   => time(),
+    );
+    $stake->sign_transaction;
+    my $block = QBitcoin::Block->new(
+        height       => 0,
+        time         => $block_time,
+        weight       => 0,
+        transactions => [ $stake, @rest ],
+    );
+    $block->merkle_root = $block->calculate_merkle_root;
+    $block->hash = $block->calculate_hash;
+    return $block;
+}
+
+is(block_with($built)->validate, "", "block with stake + slashing tx validates");
+
+# A zero-fee standard tx to probe the ordering rule (input scripts of standard txs are
+# not evaluated by block validate; preset timelocks to skip the lazy script check).
+my $coin3 = QBitcoin::TXO->new_txo({ tx_in => pack("H*", "ef" x 32), num => 0, value => 500, scripthash => $scripthash, data => "" });
+$coin3->set_redeem_script($redeem) == 0 or die "set_redeem_script\n";
+my $std = QBitcoin::Transaction->new(
+    in            => [ { txo => $coin3, siglist => [] } ],
+    out           => [ QBitcoin::TXO->new_txo({ value => 500, scripthash => $scripthash, data => "" }) ],
+    fee           => 0,
+    tx_type       => TX_TYPE_STANDARD,
+    received_time => time(),
+);
+$std->{min_tx_time} = -1;
+$std->{min_tx_block_height} = -1;
+$std->calculate_hash;
+
+is(block_with($built, $std)->validate, "", "block ordered stake, slashing, standard validates");
+like(block_with($std, $built)->validate, qr/must not be after standard/,
+    "slashing tx after a standard tx is rejected");
+
+$config->{regtest} = 1;
 
 done_testing();
