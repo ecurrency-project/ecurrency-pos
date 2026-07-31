@@ -148,9 +148,10 @@ sub choose_for_block {
 }
 
 sub compare_tx {
-    # coinbase first
+    # coinbase first, then slashing, then standard: the block layout enforced by
+    # Block::Validate (stake, coinbase(s), slashing(s), standard)
     return
-        ( $a->coins_created ? 0 : 1 ) <=> ( $b->coins_created ? 0 : 1 ) || # coinbase first
+        ( $a->coins_created ? 0 : $a->is_slashing ? 1 : 2 ) <=> ( $b->coins_created ? 0 : $b->is_slashing ? 1 : 2 ) ||
         ( $a->up && $b->up ? (
             ($a->up->btc_block_height // 0) <=> ($b->up->btc_block_height // 0) ||
             ($a->up->btc_tx_num       // 0) <=> ($b->up->btc_tx_num       // 0) ||
