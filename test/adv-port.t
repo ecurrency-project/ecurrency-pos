@@ -43,7 +43,7 @@ sub make_connection {
 my $next_nonce = 0;
 sub recv_version {
     my ($connection, %args) = @_;
-    my $payload = pack("VQ<Q<a26", 1, 0, time(), pack("Q<a16n", 0, $connection->peer->ip, $args{adv_port}));
+    my $payload = pack("VQ<Q<a26", QBitcoin::Protocol::PROTOCOL_VERSION, 0, time(), pack("Q<a16n", 0, $connection->peer->ip, $args{adv_port}));
     $payload .= pack("Q<", ++$next_nonce) unless $args{old_format};
     $connection->protocol->command("version");
     return $connection->protocol->cmd_version($payload);
