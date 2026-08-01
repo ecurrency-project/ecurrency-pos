@@ -423,6 +423,9 @@ sub _generate {
     # Just get upper limit for the stake tx size
     my $stake_tx = make_stake_tx("0e0", "", $timeslot);
     my $size = $stake_tx ? $stake_tx->size : 0;
+    # True while the signed stake is known to have never left this node; lets us void
+    # its (slot, UTXO) commitment if the generated block does not enter the best branch
+    my $stake_private = 0;
 
     my @transactions = QBitcoin::Mempool->choose_for_block($size, $timeslot, $prev_block, $stake_tx && $stake_tx->in, $contest);
     if (!@transactions && ($timeslot - GENESIS_TIME) / BLOCK_INTERVAL % FORCE_BLOCKS != 0) {
@@ -498,8 +501,20 @@ sub _generate {
             or die "Incorrect generated stake transaction\n";
         $stake_tx->save() == 0
             or die "Can't save stake transaction\n";
+        # The signed stake now lives in the global caches: from here it can end up in a
+        # block (ours or a peer's pending one via recv_pending_tx below) whether or not
+        # our block becomes best. Record it immediately so we never sign a conflicting
+        # stake for the same (slot, UTXO). Recording only when the block entered the
+        # best branch left a hole: after a lost-on-weight block the next generation in
+        # the same slot reused the UTXO with a different block_sign_data, and the
+        # equivocation detector (which observes our own blocks too) slashed ourselves.
+        QBitcoin::Generate::Control->record_stake($timeslot, $stake_tx);
+        $stake_private = 1;
         $stake_tx->process_pending();
         if (defined(my $height = QBitcoin::Block->recv_pending_tx($stake_tx))) {
+            # A pending peer block references this stake's hash: the stake is out (or at
+            # least its hash is), so its commitment must stand whatever happens below
+            $stake_private = 0;
             Infof("Generated stake tx %s is pending by a block, process it and skip new block generation", $stake_tx->hash_str);
             if ($height != -1) {
                 my $block = QBitcoin::Block->best_block($height);
@@ -532,12 +547,15 @@ sub _generate {
     # Remove the block from cache (and free my utxo) if it was not added as best block
     if (QBitcoin::Block->best_block->hash ne $generated->hash) {
         $generated->free();
-    }
-    elsif (@{$generated->transactions} && $generated->transactions->[0]->is_stake
-           && @{$generated->transactions->[0]->in}) {
-        # Our block entered the best branch, so its stake signature may reach peers:
-        # record it so we never sign a conflicting stake for the same (slot, UTXO).
-        QBitcoin::Generate::Control->record_stake($timeslot, $generated->transactions->[0]);
+        if ($stake_private) {
+            # The losing block was never announced (receive() rejects it before the
+            # announce path) and free() dropped its stake tx from all caches, so the
+            # stake signature never left this node and can never become equivocation
+            # evidence. Void its commitment and stop watching it: the same UTXOs may
+            # safely (and profitably) stake a different block later in this timeslot
+            QBitcoin::Generate::Control->unrecord_stake($timeslot, $stake_tx);
+            QBitcoin::Slashing->forget_stake($stake_tx, $timeslot);
+        }
     }
     return $generated;
 }

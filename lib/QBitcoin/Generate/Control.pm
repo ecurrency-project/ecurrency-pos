@@ -107,9 +107,10 @@ sub stake_conflicts {
     return 0;
 }
 
-# Record a stake we have committed to (its block entered our best branch, so the stake
-# signature may have reached peers). Keeps us from ever signing a second, different
-# stake for the same (timeslot, UTXO). Old slots beyond the slashing window are pruned.
+# Record a stake we have committed to (signed and put into circulation - even if its
+# block never becomes best, the signature exists and our own equivocation detector
+# observes it). Keeps us from ever signing a second, different stake for the same
+# (timeslot, UTXO). Old slots beyond the slashing window are pruned.
 sub record_stake {
     my $class = shift;
     my ($timeslot, $stake_tx) = @_;
@@ -120,6 +121,24 @@ sub record_stake {
     foreach my $slot (keys %PUBLISHED_STAKE) {
         delete $PUBLISHED_STAKE{$slot} if $slot < $cutoff;
     }
+}
+
+# Withdraw a recorded stake that provably never left the node: its block did not enter
+# the best branch, so it was never announced, and free() dropped the stake tx from all
+# caches. A signature nobody can ever see is no commitment, so the (timeslot, UTXO)
+# slots become stakeable again - the node may sign a different block with them later in
+# the same timeslot. Only entries pointing at this very stake are removed; entries from
+# other stakes (a sibling block, an earlier published one) stay.
+sub unrecord_stake {
+    my $class = shift;
+    my ($timeslot, $stake_tx) = @_;
+    my $slot = $PUBLISHED_STAKE{$timeslot}
+        or return;
+    foreach my $in (@{$stake_tx->in}) {
+        my $key = $in->{txo}->key;
+        delete $slot->{$key} if defined($slot->{$key}) && $slot->{$key} eq $stake_tx->hash;
+    }
+    delete $PUBLISHED_STAKE{$timeslot} if !%$slot;
 }
 
 1;
