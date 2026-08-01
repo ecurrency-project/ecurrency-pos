@@ -74,7 +74,7 @@ my $coinB = staked_coin(1, $addrB, 1000);
 my $slot = timeslot(GENESIS_TIME + 1000);
 
 # First stake picks the heavier address A.
-my $stake1 = QBitcoin::Generate::make_stake_tx("0e0", "", $slot);
+my $stake1 = QBitcoin::Generate::make_stake_tx("0e0", "", $slot, 0);
 ok($stake1, "first stake built");
 is($stake1->in->[0]{txo}->scripthash, scalar($addrA->scripthash), "first stake uses the heavier address A");
 
@@ -82,13 +82,13 @@ is($stake1->in->[0]{txo}->scripthash, scalar($addrA->scripthash), "first stake u
 QBitcoin::Generate::Control->record_stake($slot, $stake1);
 
 # Next stake in the same slot must skip A and use the still-free address B.
-my $stake2 = QBitcoin::Generate::make_stake_tx("0e0", "", $slot);
+my $stake2 = QBitcoin::Generate::make_stake_tx("0e0", "", $slot, 0);
 ok($stake2, "sibling stake built with a free address");
 is($stake2->in->[0]{txo}->scripthash, scalar($addrB->scripthash), "sibling stake uses the free address B");
 
 # Once both are published, no free address remains -> no stake.
 QBitcoin::Generate::Control->record_stake($slot, $stake2);
-my $stake3 = QBitcoin::Generate::make_stake_tx("0e0", "", $slot);
+my $stake3 = QBitcoin::Generate::make_stake_tx("0e0", "", $slot, 0);
 ok(!$stake3 || !@{$stake3->in}, "no stake when all addresses are already used this slot");
 
 done_testing();
