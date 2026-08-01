@@ -193,7 +193,7 @@ sub static_reward {
         my $timeslot = timeslot($time);
         if (!UPGRADE_POW || $prev_block->upgraded >= UPGRADE_MAX_VALUE || Bitcoin::Block->upgrade_stopped($timeslot)) {
             $static_reward = int(STATIC_REWARD / 2**int(($timeslot - GENESIS_TIME) / BLOCK_INTERVAL / REWARD_HALVING));
-            $static_reward *= ($timeslot - $prev_block->time) / BLOCK_INTERVAL;
+            $static_reward *= ($timeslot - timeslot($prev_block->time)) / BLOCK_INTERVAL;
         }
     }
     return $static_reward;
