@@ -80,7 +80,8 @@ sub new_txo {
     my $class = shift;
     my $hash = @_ == 1 ? $_[0] : { @_ };
     $hash->{data} //= "";
-    $hash->{value} = int($hash->{value});
+    # Input placeholders (slashing proof verification, signrawtransaction) have no value
+    $hash->{value} = int($hash->{value}) if defined $hash->{value};
     return bless $hash, $class;
 }
 
