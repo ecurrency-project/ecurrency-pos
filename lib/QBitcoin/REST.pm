@@ -667,7 +667,8 @@ sub vin_obj {
     my $res = {
         txid          => unpack("H*", $vin->{txo}->tx_in),
         vout          => $vin->{txo}->num,
-        redeem_script => unpack("H*", $vin->{txo}->redeem_script),
+        # Slashing inputs spend without revealing the redeem script, so it may be unknown
+        redeem_script => unpack("H*", $vin->{txo}->redeem_script // ""),
         siglist       => [ map { unpack("H*", $_) } @{$vin->{siglist}} ],
         prevout       => {
             value              => $vin->{txo}->value,
