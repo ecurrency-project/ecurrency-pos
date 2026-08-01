@@ -228,6 +228,7 @@ sub validate {
 
 sub as_hashref {
     my $self = shift;
+    my $value = $self->value; # it's lvalue; prevent convert to float by division
     return {
         btc_block_hash   => unpack("H*", $self->btc_block_hash),
         btc_block_height => $self->btc_block_height+0,
@@ -235,7 +236,7 @@ sub as_hashref {
         btc_out_num      => $self->btc_out_num+0,
         btc_tx_data      => unpack("H*", $self->btc_tx_data),
         merkle_path      => unpack("H*", $self->merkle_path),
-        value            => $self->value / DENOMINATOR,
+        value            => $value / DENOMINATOR,
         scripthash       => unpack("H*", $self->scripthash),
         upgrade_level    => $self->upgrade_level+0,
     };
