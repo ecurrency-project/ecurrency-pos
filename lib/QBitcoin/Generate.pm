@@ -67,10 +67,10 @@ sub gen_time {
 }
 
 sub txo_confirmed {
-    my ($txo) = @_;
+    my ($txo, $max_height) = @_;
     my $block_height = QBitcoin::Transaction->check_by_hash($txo->tx_in)
         or die "No input transaction " . $txo->tx_in_str . " for my utxo\n";
-    return $block_height >= 0;
+    return $block_height >= 0 && $block_height <= $max_height;
 }
 
 sub reward_addr {
@@ -212,13 +212,18 @@ sub make_out_union {
 }
 
 sub make_stake_tx {
-    my ($reward, $block_sign_data, $timeslot) = @_;
+    my ($reward, $block_sign_data, $timeslot, $prev_height) = @_;
     # Exclude UTXOs we have already published a stake with in this timeslot: re-using
     # them would self-equivocate. The free (still-unused) UTXOs remain available, so in
     # "separate" reward mode a later call can build a second, independent stake with a
     # different address in the same slot - as if it were another node (see generate()).
+    # Only UTXOs confirmed in the prev_block chain (height <= $prev_height) are
+    # spendable: sibling and contest blocks replace the best blocks above that height,
+    # so outputs confirmed there (e.g. our own just-published stake outputs) do not
+    # exist in the branch being built. Including them also broke the reward split:
+    # their age in the block's own slot is 0, making the total stake weight 0.
     my @my_txo = grep {
-        txo_confirmed($_) && !QBitcoin::Generate::Control->is_utxo_published($timeslot, $_->key)
+        txo_confirmed($_, $prev_height) && !QBitcoin::Generate::Control->is_utxo_published($timeslot, $_->key)
     } QBitcoin::TXO->staked_utxo();
     my $reward_to = $config->{reward_to} // "union";
     my @out;
@@ -420,8 +425,9 @@ sub _generate {
         # Create new coinbase transaction and add it to mempool (if it's not there)
         QBitcoin::Transaction->new_coinbase($coinbase, $upgrade_level);
     }
+    my $prev_height = $prev_block ? $prev_block->height : -1;
     # Just get upper limit for the stake tx size
-    my $stake_tx = make_stake_tx("0e0", "", $timeslot);
+    my $stake_tx = make_stake_tx("0e0", "", $timeslot, $prev_height);
     my $size = $stake_tx ? $stake_tx->size : 0;
     # True while the signed stake is known to have never left this node; lets us void
     # its (slot, UTXO) commitment if the generated block does not enter the best branch
@@ -463,7 +469,7 @@ sub _generate {
         my $tx_hashes = "";
         $tx_hashes .= $_->hash foreach @transactions;
         my $block_sign_data = ($prev_block ? $prev_block->hash : ZERO_HASH) . pack("N", $timeslot) . hash256($tx_hashes);
-        $stake_tx = make_stake_tx($reward, $block_sign_data, $timeslot);
+        $stake_tx = make_stake_tx($reward, $block_sign_data, $timeslot, $prev_height);
         Infof("Generated stake tx %s with input amount %lu, consume %lu fee", $stake_tx->hash_str,
             sum0(map { $_->{txo}->value } @{$stake_tx->in}), -$stake_tx->fee);
         # Slashing self-guard (skip genesis / inputless stake): never (re)stake the
