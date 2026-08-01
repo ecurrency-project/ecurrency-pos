@@ -737,8 +737,9 @@ sub deserialize_output {
 sub output_as_hashref {
     my $self = shift;
     my $out = shift;
+    my $value = $out->value;
     my $res = {
-        value   => $out->value / DENOMINATOR,
+        value   => $value / DENOMINATOR,
         address => $out->address,
     };
     if ($self->is_tokens) {
@@ -885,7 +886,8 @@ sub load_txo {
 sub calculate_fee {
     my $self = shift;
 
-    $self->fee = sum0(map { $_->{txo}->value } @{$self->in}) + $self->coins_created - sum0(map { $_->value } @{$self->out});
+    # "+0" is needed to avoid rounding float values in case of NV value exists in addition to IV
+    $self->fee = sum0(map { $_->{txo}->value+0 } @{$self->in}) + $self->coins_created - sum0(map { $_->value+0 } @{$self->out});
 }
 
 sub coins_created {
@@ -1572,7 +1574,8 @@ sub stake_weight {
                     $self->hash_str, $in->tx_in_str, $in->num);
                 return undef;
             }
-            $weight += $in->value * ((timeslot($block->time) - timeslot($in_block_time)) / BLOCK_INTERVAL);
+            my $value = $in->value; # prevent convertion to float
+            $weight += $value * ((timeslot($block->time) - timeslot($in_block_time)) / BLOCK_INTERVAL);
         }
         # Prevent int64 overflow, too large weight will not give more advantage, so just set it to maximum value
         $weight = MAX_INT64 if $weight > MAX_INT64;

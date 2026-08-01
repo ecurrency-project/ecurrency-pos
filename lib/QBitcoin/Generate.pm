@@ -127,8 +127,9 @@ sub my_txo_by_address {
     my %my;
     foreach my $my_txo (@$my_txo) {
         my $my = $my{$my_txo->scripthash} //= [ 0, 0 ];
-        $my->[0] += $my_txo->value;
-        $my->[1] += $my_txo->value * ($time - QBitcoin::Transaction->txo_time($my_txo));
+        my $value = $my_txo->value; # prevent convertion to float in case of large value
+        $my->[0] += $value;
+        $my->[1] += $value * ($time - QBitcoin::Transaction->txo_time($my_txo));
     }
     return (
         sort { $b->[2] <=> $a->[2] || $b->[1] <=> $a->[1] || $a->[0] cmp $b->[0] }
