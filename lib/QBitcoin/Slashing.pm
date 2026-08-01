@@ -321,6 +321,29 @@ sub observe {
     return $conflict;
 }
 
+# Forget a stake of our own whose block never became best: it was not announced and
+# its stake tx was dropped with the block, so the signature never left this node and
+# can never become part of equivocation evidence. Keeping it watched would only stop
+# us from staking the same UTXO again in this slot - or worse, make us slash ourselves
+# when we do. Matched by block_sign_data (the equivocation identity): an entry with a
+# different block_sign_data is a DIFFERENT signed message - potential evidence that
+# must stay watched.
+sub forget_stake {
+    my $class = shift;
+    my ($stake, $timeslot) = @_;
+    $stake && $stake->is_stake
+        or return;
+    my $slot = $SEEN{$timeslot}
+        or return;
+    foreach my $in (@{$stake->in}) {
+        my $key  = $in->{txo}->key;
+        my $snap = $slot->{$key}
+            or next;
+        delete $slot->{$key} if $snap->block_sign_data eq $stake->block_sign_data;
+    }
+    delete $SEEN{$timeslot} if !%$slot;
+}
+
 # A retained copy of a stake for the %SEEN watch list. It is a genuine
 # QBitcoin::Transaction (so observe()/new_tx()/_proof_of_stake() keep dealing with a
 # single, uniform type), but with its OUTPUT txos rebuilt fresh via create_outputs and
