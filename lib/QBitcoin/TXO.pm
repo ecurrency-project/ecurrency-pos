@@ -182,15 +182,18 @@ sub store_spend {
     # We're already inside SQL transaction created in QBitcoin::Block->store()
     my ($tx) = @_;
     my ($tx_in_id) = dbh->selectrow_array("SELECT id FROM `" . TRANSACTION_TABLE . "` WHERE hash = UNHEX(?)", undef, unpack("H*", $self->tx_in));
-    my $sql = "UPDATE `" . QBitcoin::RedeemScript->TABLE . "` SET script = UNHEX(?) WHERE hash = UNHEX(?) AND script IS NULL";
-    DEBUG_ORM && Debugf("dbi [%s] values [%s,%s]", $sql, unpack("H*", $self->redeem_script), unpack("H*", $self->scripthash));
-    my $res = dbh->do($sql, undef, unpack("H*", $self->redeem_script), unpack("H*", $self->scripthash));
-    $res
-        or die "Can't store txo " . $self->tx_in_str . ":" . $self->num . " as spend: " . (dbh->errstr // "no error") . "\n";
-    $sql = "UPDATE `" . TABLE . "` SET tx_out = ?, siglist = UNHEX(?) WHERE tx_in = ? AND num = ?";
+    if (defined $self->redeem_script) {
+        # Slashing inputs spend without revealing the redeem script, keep it NULL
+        my $sql = "UPDATE `" . QBitcoin::RedeemScript->TABLE . "` SET script = UNHEX(?) WHERE hash = UNHEX(?) AND script IS NULL";
+        DEBUG_ORM && Debugf("dbi [%s] values [%s,%s]", $sql, unpack("H*", $self->redeem_script), unpack("H*", $self->scripthash));
+        my $res = dbh->do($sql, undef, unpack("H*", $self->redeem_script), unpack("H*", $self->scripthash));
+        $res
+            or die "Can't store txo " . $self->tx_in_str . ":" . $self->num . " as spend: " . (dbh->errstr // "no error") . "\n";
+    }
+    my $sql = "UPDATE `" . TABLE . "` SET tx_out = ?, siglist = UNHEX(?) WHERE tx_in = ? AND num = ?";
     my $siglist = store_siglist($self->siglist);
     DEBUG_ORM && Debugf("dbi [%s] values [%u,'%s',%u,%u]", $sql, $tx->id, unpack("H*", $siglist), $tx_in_id, $self->num);
-    $res = dbh->do($sql, undef, $tx->id, unpack("H*", $siglist), $tx_in_id, $self->num);
+    my $res = dbh->do($sql, undef, $tx->id, unpack("H*", $siglist), $tx_in_id, $self->num);
     $res == 1
         or die "Can't store txo " . $self->tx_in_str . ":" . $self->num . " as spend: " . (dbh->errstr // "no error") . "\n";
 }
