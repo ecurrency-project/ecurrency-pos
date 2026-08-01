@@ -16,7 +16,7 @@ use QBitcoin::Test::ORM;
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
-use QBitcoin::Crypto qw(generate_keypair hash256);
+use QBitcoin::Crypto qw(generate_keypair);
 use QBitcoin::Address qw(wallet_import_format addresses_by_pubkey);
 use QBitcoin::MyAddress;
 use QBitcoin::TXO;
@@ -99,9 +99,18 @@ ok(QBitcoin::Slashing->is_banned_stake($stake2, $timeslot), "...both conflicting
 # --- a block carrying the slashing tx (regression: Block::Validate had no branch for
 # TX_TYPE_SLASHING, so the node's own generated block failed validation and died).
 # Non-regtest mode also enforces the fixed tx order: stake, coinbase, slashing, standard.
-$config->{regtest} = 0; # GENESIS_HASH is empty, so the genesis hash check stays off
+$config->{regtest} = 0;
+# On chains with a fixed mainnet GENESIS_HASH the synthetic genesis-height block would
+# fail the genesis hash check (and a matching hash would short-circuit validation
+# before the tx-order checks), so neutralize it for this section.
+{
+    no warnings 'redefine';
+    *QBitcoin::Block::Validate::GENESIS_HASH = sub () { "" };
+}
 
-my $block_time = $timeslot + BLOCK_INTERVAL;
+# A recent timeslot: chains with a slashing hardfork use the legacy block sign data
+# (and reject slashing txs in blocks) before their SLASHING_START.
+my $block_time = timeslot(time());
 
 # A fresh staked coin for the block's own (non-equivocated) stake.
 my $coin2 = QBitcoin::TXO->new_txo({ tx_in => pack("H*", "cd" x 32), num => 0, value => 1000, scripthash => $scripthash, data => "" });
@@ -110,24 +119,25 @@ $coin2->set_redeem_script($redeem) == 0 or die "set_redeem_script\n";
 # Genesis-height block: block reward is GENESIS_REWARD, consumed by the stake.
 sub block_with {
     my (@rest) = @_; # non-stake transactions, in block order
-    my $tx_hashes = join("", map { $_->hash } @rest);
-    my $bsd = ZERO_HASH . pack("N", timeslot($block_time)) . hash256($tx_hashes);
     my $out = QBitcoin::TXO->new_txo({ value => $coin2->value + GENESIS_REWARD, scripthash => $scripthash, data => "" });
     my $stake = QBitcoin::Transaction->new(
         in              => [ { txo => $coin2, siglist => [] } ],
         out             => [ $out ],
         fee             => -GENESIS_REWARD,
         tx_type         => TX_TYPE_STAKE,
-        block_sign_data => $bsd,
         received_time   => time(),
     );
-    $stake->sign_transaction;
     my $block = QBitcoin::Block->new(
         height       => 0,
         time         => $block_time,
         weight       => 0,
         transactions => [ $stake, @rest ],
     );
+    # Sign over the block's own sign data (the stake tx hash is not part of it), so
+    # the test does not depend on the branch-specific sign data format.
+    $stake->block_sign_data = $block->sign_data;
+    $stake->sign_transaction;
+    delete $block->{tx_hashes}; # was cached before the stake got its hash
     $block->merkle_root = $block->calculate_merkle_root;
     $block->hash = $block->calculate_hash;
     return $block;
