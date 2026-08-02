@@ -471,9 +471,7 @@ sub _generate {
         my $tx_hashes = "";
         $tx_hashes .= $_->hash foreach @transactions;
         my $prev_hash = $prev_block ? $prev_block->hash : ZERO_HASH;
-        my $block_sign_data = $timeslot < SLASHING_START
-            ? $prev_hash . $tx_hashes
-            : $prev_hash . pack("N", $timeslot) . hash256($tx_hashes);
+        my $block_sign_data = $prev_hash . pack("N", $timeslot) . hash256($tx_hashes);
         $stake_tx = make_stake_tx($reward, $block_sign_data, $timeslot, $prev_height);
         Infof("Generated stake tx %s with input amount %lu, consume %lu fee", $stake_tx->hash_str,
             sum0(map { $_->{txo}->value } @{$stake_tx->in}), -$stake_tx->fee);
