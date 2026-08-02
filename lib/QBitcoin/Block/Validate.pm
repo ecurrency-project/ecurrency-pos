@@ -115,6 +115,9 @@ sub validate {
         }
         elsif ($transaction->is_slashing) {
             $fee += $transaction->fee;
+            if ($block->time < SLASHING_START) {
+                return "Slashing transaction " . $transaction->hash_str . " is not allowed before slashing time";
+            }
             if ($was_standard && !$config->{regtest}) {
                 return "Slashing transaction " . $transaction->hash_str . " must not be after standard transaction $was_standard";
             }
@@ -145,9 +148,6 @@ sub validate {
                 return "Stake transaction " . $transaction->hash_str . " is equivocated (slashed); block invalid";
             }
             $stake_reward = -$transaction->fee; # fee is negative for stake transactions
-        }
-        elsif ($transaction->is_slashing && $block->time < SLASHING_START) {
-            return "Slashing transaction " . $transaction->hash_str . " is not allowed before slashing time";
         }
         else {
             return "Transaction " . $transaction->hash_str . " is not a coinbase, stake or standard transaction";
