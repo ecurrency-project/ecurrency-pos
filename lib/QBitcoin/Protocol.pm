@@ -174,7 +174,7 @@ sub cmd_version {
     if ($self->check_duplicate_connection($nonce) != 0) {
         return -1;
     }
-    if ($protocol_version < 3 && time() >= SLASHING_START) {
+    if ($protocol_version < 3) {
         Warningf("Peer %s protocol version %u is too old, closing", $self->peer->id, $protocol_version);
         $self->abort("old_protocol");
         return -1;
