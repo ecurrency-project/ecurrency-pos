@@ -224,6 +224,7 @@ sub validate_outputs {
             elsif (validate_address($key)) {
                 (defined($out->{$key}) && !ref($out->{$key}) && is_amount($out->{$key}))
                     or return 0;
+                $out->{$key} = int($out->{$key} * DENOMINATOR + 0.5);
                 $address_count++;
             }
             else {
