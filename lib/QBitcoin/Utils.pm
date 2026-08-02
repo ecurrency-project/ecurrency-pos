@@ -943,8 +943,9 @@ sub create_txo {
             $data = TXO_DATA_TAG . $out->{$key};
         }
         elsif (my $scripthash = eval { scripthash_by_address($key) }) {
-            my $value = int($out->{$key} * DENOMINATOR + 0.5);
-            push @txo, { scripthash => $scripthash, value => $value };
+            $out->{$key} =~ /^[0-9]+$/ && $out->{$key} <= MAX_VALUE
+                or return undef;
+            push @txo, { scripthash => $scripthash, value => $out->{$key} };
         }
         else {
             return undef;
