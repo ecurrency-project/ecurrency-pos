@@ -203,30 +203,7 @@ sub load_stored_inputs {
     my $class = shift;
     my ($tx_id, $tx_hash) = @_;
     # TODO: move this to QBitcoin::ORM
-    my $sql = "SELECT value, num, tx_in.hash AS tx_in, siglist, s.hash as scripthash, s.script as redeem_script, data";
-    $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
-    $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
-    $sql .= " WHERE tx_out = ?";
-    my $sth = dbh->prepare($sql);
-    DEBUG_ORM && Debugf("sql: [%s] values [%u]", $sql, $tx_id);
-    $sth->execute($tx_id);
-    my @txo;
-    while (my $hash = $sth->fetchrow_hashref()) {
-        $hash->{tx_out} = $tx_hash;
-        my $txo = $class->new_saved($hash);
-        $txo->tx_out && $txo->tx_out eq $tx_hash
-            or die sprintf("Cached txo %s:%u has no tx_out %s\n", $txo->tx_in_str, $txo->num, unpack("H*", substr($tx_hash, 0, 4)));
-        push @txo, $txo;
-    }
-    DEBUG_ORM && Debugf("found %u entries", scalar(@txo));
-    return @txo;
-}
-
-sub load_stored_token_inputs {
-    my $class = shift;
-    my ($tx_id, $tx_hash) = @_;
-    # TODO: move this to QBitcoin::ORM
-    my $sql = "SELECT value, num, tx_in.hash AS tx_in, siglist, IFNULL(tx_token.hash, tx_in.hash) AS token_hash, s.hash as scripthash, s.script as redeem_script, data";
+    my $sql = "SELECT value, num, tx_in.hash AS tx_in, siglist, CASE WHEN tx_in.tx_type = " . TX_TYPE_TOKENS . " THEN IFNULL(tx_token.hash, tx_in.hash) ELSE NULL END as token_hash, s.hash as scripthash, s.script as redeem_script, data";
     $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
     $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
     $sql .= " LEFT JOIN `" . TRANSACTION_TABLE . "` AS tx_token ON (tx_token.id = tx_in.token_id)";

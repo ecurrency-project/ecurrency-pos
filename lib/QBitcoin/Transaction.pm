@@ -1357,9 +1357,7 @@ sub pre_load {
             $attr->{in} = [];
         }
         else {
-            my @in_txo = $attr->{tx_type} == TX_TYPE_TOKENS
-                ? QBitcoin::TXO->load_stored_token_inputs($attr->{id}, $attr->{hash})
-                : QBitcoin::TXO->load_stored_inputs($attr->{id}, $attr->{hash});
+            my @in_txo = QBitcoin::TXO->load_stored_inputs($attr->{id}, $attr->{hash});
             my @inputs;
             foreach my $txo (@in_txo) {
                 push @inputs, {
