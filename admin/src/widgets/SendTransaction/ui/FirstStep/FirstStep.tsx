@@ -1,24 +1,31 @@
 import { useEffect, useState } from 'react';
 import { Alert, Form, Input, InputNumber, Select, message } from 'antd';
 
-import { assessFee, assessTokenFee, parseTokenAmount, sumUtxoValues, useSendTransaction, NATIVE_ASSET_ID } from '@/features/SendTransaction';
+import {
+    assessFee,
+    assessTokenFee,
+    parseNativeAmount,
+    parseTokenAmount,
+    sumUtxoValues,
+    useSendTransaction,
+    NATIVE_ASSET_ID,
+} from '@/features/SendTransaction';
 import { formatTokenAmount } from '@/entities/Token';
 
 import { isAddress, formatSat } from '@/shared/utils';
 import { Button } from '@/shared/ui/Button';
-import { FORM_MAX_WIDTH, COIN_DECIMALS, SAT_PER_COIN } from '@/shared/const/const';
-import { sat2btc } from '@/shared/lib/fmtbtc';
+import { FORM_MAX_WIDTH, COIN_DECIMALS } from '@/shared/const/const';
+import { satToNativeString } from '@/shared/lib/fmtbtc';
 import { brand } from '@/brand';
 
 import { AssetOptionLabel } from './AssetOptionLabel';
 
 import cls from './FirstStep.module.css';
 
-// Interim bridge from the coins the InputNumber yields to base units. Returns
-// null for anything BigInt() would refuse (NaN, Infinity from an absurd input).
-const coinsToSat = (value: number | string | null): bigint | null => {
-    const sat = Math.round(Number(value) * SAT_PER_COIN);
-    return Number.isFinite(sat) ? BigInt(sat) : null;
+const nativeToSat = (value: string | number | null): bigint | null => {
+    if (value == null || value === '') return null;
+    const parsed = parseNativeAmount(String(value));
+    return parsed.ok ? parsed.value : null;
 };
 
 export const FirstStep = () => {
@@ -89,7 +96,7 @@ export const FirstStep = () => {
 
     useEffect(() => {
         if (!isFeeManual) {
-            form.setFieldValue('fee', suggestedFeeSat > 0n ? sat2btc(suggestedFeeSat.toString()) : undefined);
+            form.setFieldValue('fee', suggestedFeeSat > 0n ? satToNativeString(suggestedFeeSat) : undefined);
             form.validateFields(['fee'], { validateOnly: true }).catch(() => {});
         }
     }, [form, suggestedFeeSat, isFeeManual]);
@@ -142,7 +149,7 @@ export const FirstStep = () => {
                 address: targetAddress,
                 amount: isTokenMode
                     ? (tokenAmount || undefined)
-                    : (amountSat ? sat2btc(amountSat.toString()) : undefined),
+                    : (amountSat ? satToNativeString(amountSat) : undefined),
                 addresses: selectedAddresses,
                 changeAddress: changeAddress || undefined,
                 remember: true
@@ -226,18 +233,15 @@ export const FirstStep = () => {
                             required: true, message: 'Please input amount!'
                         },
                         {
-                            type: 'number', message: 'Please input only numbers!'
-                        },
-                        {
-                            validator: async (_, value: number | null) => {
-                                if (!value || value <= 0) {
+                            validator: async (_, value: string | null) => {
+                                if (value == null || value === '') return;
+                                const parsed = parseNativeAmount(String(value));
+                                if (!parsed.ok) {
+                                    if (parsed.error === 'too_many_decimals') {
+                                        await Promise.reject(`Max ${COIN_DECIMALS} decimal places`);
+                                    }
                                     await Promise.reject('Please input a positive amount!');
-                                    return;
-                                }
-                                const amount = coinsToSat(value);
-                                if (amount === null) {
-                                    await Promise.reject('Please input a positive amount!');
-                                } else if (selectedAddresses.length && amount + feeSat > totalSelectedBalance) {
+                                } else if (selectedAddresses.length && parsed.value + feeSat > totalSelectedBalance) {
                                     await Promise.reject(`Amount + fee exceeds balance (${formatSat(totalSelectedBalance)})`);
                                 }
                             }
@@ -249,9 +253,10 @@ export const FirstStep = () => {
                         placeholder="Amount"
                         style={{ width: '100%' }}
                         controls={false}
-                        min={0}
+                        stringMode
+                        min="0"
                         precision={COIN_DECIMALS}
-                        onChange={(value) => setAmountSat((value ? coinsToSat(value) : 0n) ?? 0n)}
+                        onChange={(value) => setAmountSat(nativeToSat(value) ?? 0n)}
                     />
                 </Form.Item>
             )}
@@ -296,10 +301,14 @@ export const FirstStep = () => {
                 rules={[
                     { required: true, message: 'Please input fee!' },
                     {
-                        validator: async (_, value: number | null) => {
-                            if (value == null) return;
-                            const valueSat = coinsToSat(value);
-                            if (valueSat === null) return;
+                        validator: async (_, value: string | null) => {
+                            const valueSat = nativeToSat(value);
+                            if (valueSat === null) {
+                                if (value != null && value !== '') {
+                                    await Promise.reject('Please input a valid fee!');
+                                }
+                                return;
+                            }
                             if (suggestedFeeSat > 0n && valueSat < suggestedFeeSat) {
                                 await Promise.reject(`Fee is below the network minimum (${formatSat(suggestedFeeSat)})`);
                             }
@@ -316,11 +325,12 @@ export const FirstStep = () => {
                 <InputNumber
                     style={{ width: '100%' }}
                     controls={false}
-                    min={0}
+                    stringMode
+                    min="0"
                     precision={COIN_DECIMALS}
-                    step={0.00000001}
+                    step="0.00000001"
                     onChange={(value) => {
-                        setFeeSat(value != null ? coinsToSat(value) : null);
+                        setFeeSat(nativeToSat(value));
                     }}
                 />
             </Form.Item>

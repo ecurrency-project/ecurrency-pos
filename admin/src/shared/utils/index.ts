@@ -1,5 +1,5 @@
 import { brand } from '@/brand';
-import { sat2btc } from '@/shared/lib/fmtbtc';
+import { satToNativeString } from '@/shared/lib/fmtbtc';
 
 const NATIVE_PRECISION = 8;
 const HASH256_RE = /^[a-f0-9]{64}$/i;
@@ -35,11 +35,11 @@ export const formatTime = (unix: number, useUTC: boolean = false) => {
         + (useUTC ? ' UTC' : '')
 }
 
-export const formatNumber = (s: number, precision: number | null = null): string => {
+export const formatNumber = (s: number | string, precision: number | null = null): string => {
     let str = s.toString();
     if (str.includes('e')) {
         const digits = precision != null ? precision : 20;
-        str = s.toFixed(digits);
+        str = Number(s).toFixed(digits);
     }
     // eslint-disable-next-line prefer-const
     let [whole, dec] = str.split('.');
@@ -58,4 +58,4 @@ export const formatNumber = (s: number, precision: number | null = null): string
     return whole + (dec != null ? '.' + dec : '')
 }
 
-export const formatSat = (sats: number | bigint, label = brand.assetLabel): string => `${formatNumber(sat2btc(sats.toString()), NATIVE_PRECISION)} ${label}`
+export const formatSat = (sats: number | bigint | string, label = brand.assetLabel): string => `${formatNumber(satToNativeString(sats), NATIVE_PRECISION)} ${label}`

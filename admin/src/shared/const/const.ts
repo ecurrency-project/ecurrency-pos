@@ -9,7 +9,6 @@ export const LATEST_BLOCKS_DISPLAY_COUNT = 5;
 
 // Coin units (8 decimals as in Bitcoin)
 export const COIN_DECIMALS = 8;
-export const SAT_PER_COIN = 10 ** COIN_DECIMALS;
 
 // Polling intervals (ms)
 export const MEMPOOL_RECENT_PULL_INTERVAL = 5000;

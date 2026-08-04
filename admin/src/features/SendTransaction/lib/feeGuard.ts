@@ -19,8 +19,6 @@ export const assessFee = (amountSat: bigint, feeSat: bigint): FeeAssessment => {
     }
 
     if (feeSat * 100n >= amountSat * WARN_PERCENT) {
-        // BigInt division truncates toward zero, which for positive operands is
-        // exactly the Math.floor this used to do.
         const percent = Number((feeSat * 100n) / amountSat);
         return {
             level: 'warn',

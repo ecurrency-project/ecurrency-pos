@@ -4,7 +4,7 @@ export { assessFee, assessTokenFee } from './lib/feeGuard';
 export type { FeeAssessment, FeeRisk } from './lib/feeGuard';
 export { sumUtxoValues } from './lib/processUtxos';
 export type { SpendableUtxo, TokenUtxo, TokenUtxoGroup } from './lib/processUtxos';
-export { parseTokenAmount } from './lib/tokenAmount';
+export { parseTokenAmount, parseNativeAmount } from './lib/tokenAmount';
 export type {
     SendTransactionFormState,
     SendTransactionFormActions,

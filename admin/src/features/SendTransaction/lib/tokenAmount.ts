@@ -1,3 +1,5 @@
+import { COIN_DECIMALS } from '@/shared/const/const';
+
 export type ParseTokenAmountResult =
     | { ok: true; value: bigint }
     | { ok: false; error: 'invalid' | 'not_positive' | 'too_many_decimals' };
@@ -28,3 +30,7 @@ export const parseTokenAmount = (input: string, decimals: number): ParseTokenAmo
 
     return { ok: true, value };
 };
+
+/** The native coin is just a token with COIN_DECIMALS decimals. */
+export const parseNativeAmount = (input: string): ParseTokenAmountResult =>
+    parseTokenAmount(input, COIN_DECIMALS);

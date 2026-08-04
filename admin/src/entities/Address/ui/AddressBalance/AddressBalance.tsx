@@ -4,6 +4,7 @@ import { formatSat } from '@/shared/utils';
 import { BALANCE_POLL_INTERVAL } from '@/shared/const/const.ts';
 
 import { useGetAddressQuery } from '../../api/addressApi';
+import { addressBalanceSat } from '../../lib/addressBalance';
 
 interface AddressBalanceProps {
     address: string;
@@ -22,7 +23,7 @@ export const AddressBalance = ({ address }: AddressBalanceProps) => {
         return <span>—</span>;
     }
 
-    const balance = Number(data.chain_stats.funded_txo_sum) - Number(data.chain_stats.spent_txo_sum);
+    const balance = addressBalanceSat(data.chain_stats);
 
     return <span>{formatSat(balance)}</span>;
 };

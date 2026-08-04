@@ -1,5 +1,7 @@
 import type { UTXO } from '@/entities/Address';
 
+import { toBaseUnits } from '@/shared/lib/baseUnits';
+
 export interface SpendableUtxo {
     outpoint: string;
     valueSat: bigint;
@@ -22,16 +24,6 @@ interface ProcessedUtxos {
 
 export const sumUtxoValues = (utxos: readonly SpendableUtxo[]): bigint =>
     utxos.reduce((sum, utxo) => sum + utxo.valueSat, 0n);
-
-const toBaseUnits = (value: unknown): bigint | null => {
-    if (typeof value === 'number') {
-        return Number.isInteger(value) ? BigInt(value) : null;
-    }
-    if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
-        return BigInt(value.trim());
-    }
-    return null;
-};
 
 const carriesTokens = (utxo: UTXO): boolean =>
     utxo.token_amount != null || utxo.token_permissions != null;
