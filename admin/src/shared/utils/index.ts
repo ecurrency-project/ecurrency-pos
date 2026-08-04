@@ -58,4 +58,4 @@ export const formatNumber = (s: number, precision: number | null = null): string
     return whole + (dec != null ? '.' + dec : '')
 }
 
-export const formatSat = (sats: number, label = brand.assetLabel): string => `${formatNumber(sat2btc(sats), NATIVE_PRECISION)} ${label}`
+export const formatSat = (sats: number | bigint, label = brand.assetLabel): string => `${formatNumber(sat2btc(sats.toString()), NATIVE_PRECISION)} ${label}`

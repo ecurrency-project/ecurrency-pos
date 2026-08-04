@@ -1,12 +1,14 @@
-import type { TransactionInput, TransactionJSON } from '../model/types/types';
+import type { TransactionInput, TransactionJSON, TransactionOutput } from '../model/types/types';
 import type { AddressData } from '../model/context/SendTransactionContext';
+import { sumUtxoValues } from './processUtxos';
 import type { SpendableUtxo } from './processUtxos';
 import { selectCoins } from './coinSelection';
+import { toWireAmount } from './wireAmount';
 
 export interface CreateTransactionParams {
     targetAddress: string;
-    amountSat: number;
-    feeSat: number;
+    amountSat: bigint;
+    feeSat: bigint;
     selectedAddresses: string[];
     changeAddress: string;
     addressesData?: Record<string, AddressData>;
@@ -23,7 +25,7 @@ export const createTransactionJSON = (params: CreateTransactionParams): CreateTr
         return { success: false, error: 'Missing required fields' };
     }
 
-    if (!Number.isInteger(amountSat) || amountSat <= 0) {
+    if (amountSat <= 0n) {
         return { success: false, error: 'Invalid amount' };
     }
 
@@ -42,19 +44,17 @@ export const createTransactionJSON = (params: CreateTransactionParams): CreateTr
         return { success: false, error: 'Insufficient balance' };
     }
 
-    const selectedSumSat = selected.reduce((sum, utxo) => sum + utxo.valueSat, 0);
-
-    const changeSat = selectedSumSat - amountSat - feeSat;
+    const changeSat = sumUtxoValues(selected) - amountSat - feeSat;
 
     // Outputs — an array of objects {address: value_in_satoshis}
-    const outputs: Record<string, number>[] = [];
+    const outputs: TransactionOutput[] = [];
 
-    if (changeSat > 0 && changeAddress === trimmedTarget) {
-        outputs.push({ [trimmedTarget]: amountSat + changeSat });
+    if (changeSat > 0n && changeAddress === trimmedTarget) {
+        outputs.push({ [trimmedTarget]: toWireAmount(amountSat + changeSat) });
     } else {
-        outputs.push({ [trimmedTarget]: amountSat });
-        if (changeSat > 0) {
-            outputs.push({ [changeAddress]: changeSat });
+        outputs.push({ [trimmedTarget]: toWireAmount(amountSat) });
+        if (changeSat > 0n) {
+            outputs.push({ [changeAddress]: toWireAmount(changeSat) });
         }
     }
 

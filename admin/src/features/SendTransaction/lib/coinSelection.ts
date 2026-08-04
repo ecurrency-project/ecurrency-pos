@@ -1,41 +1,40 @@
 import type { SpendableUtxo, TokenUtxo } from './processUtxos';
 
-export const selectCoins = (
-    utxos: readonly SpendableUtxo[],
-    targetSat: number,
-): SpendableUtxo[] | null => {
-    const sorted = [...utxos].sort((a, b) => b.valueSat - a.valueSat);
-    const selected: SpendableUtxo[] = [];
-    let sum = 0;
-
-    for (const utxo of sorted) {
-        selected.push(utxo);
-        sum += utxo.valueSat;
-        if (sum >= targetSat) return selected;
-    }
-
-    return null;
-};
-
-/**
- * Largest-first selection over token UTXOs (base units, BigInt).
- * Mirrors selectCoins; returns null when the token balance is insufficient.
- */
-export const selectTokenCoins = (
-    utxos: readonly TokenUtxo[],
+const selectLargestFirst = <T>(
+    items: readonly T[],
     target: bigint,
-): TokenUtxo[] | null => {
-    const sorted = [...utxos].sort((a, b) =>
-        a.tokenAmount === b.tokenAmount ? 0 : a.tokenAmount > b.tokenAmount ? -1 : 1
-    );
-    const selected: TokenUtxo[] = [];
+    getValue: (item: T) => bigint,
+): T[] | null => {
+    const sorted = [...items].sort((a, b) => {
+        const aValue = getValue(a);
+        const bValue = getValue(b);
+
+        return aValue === bValue ? 0 : aValue > bValue ? -1 : 1;
+    });
+    const selected: T[] = [];
     let sum = 0n;
 
-    for (const utxo of sorted) {
-        selected.push(utxo);
-        sum += utxo.tokenAmount;
+    for (const item of sorted) {
+        selected.push(item);
+        sum += getValue(item);
         if (sum >= target) return selected;
     }
 
     return null;
 };
+
+export const selectCoins = (
+    utxos: readonly SpendableUtxo[],
+    targetSat: bigint,
+): SpendableUtxo[] | null =>
+    selectLargestFirst(utxos, targetSat, (utxo) => utxo.valueSat);
+
+/**
+ * Largest-first selection over token UTXOs (base units).
+ * Returns null when the token balance is insufficient.
+ */
+export const selectTokenCoins = (
+    utxos: readonly TokenUtxo[],
+    target: bigint,
+): TokenUtxo[] | null =>
+    selectLargestFirst(utxos, target, (utxo) => utxo.tokenAmount);

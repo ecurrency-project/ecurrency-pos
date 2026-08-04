@@ -53,7 +53,7 @@ export const ThirdStep = () => {
 
                 // The node derives the fee as Σ(inputs) − Σ(outputs); it must
                 // match what the user confirmed on the previous step.
-                if (created.fee !== feeSat) {
+                if (BigInt(created.fee) !== feeSat) {
                     setErrorText(`Fee mismatch: the node computed ${created.fee} sat, expected ${feeSat} sat. Transaction was not sent.`);
                     setTransactionStatus('error');
                     message.error('Fee mismatch — transaction was not sent');

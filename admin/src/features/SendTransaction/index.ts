@@ -2,6 +2,7 @@ export { SendTransactionProvider, useSendTransaction, NATIVE_ASSET_ID } from './
 export type { AddressData } from './model/context/SendTransactionContext';
 export { assessFee, assessTokenFee } from './lib/feeGuard';
 export type { FeeAssessment, FeeRisk } from './lib/feeGuard';
+export { sumUtxoValues } from './lib/processUtxos';
 export type { SpendableUtxo, TokenUtxo, TokenUtxoGroup } from './lib/processUtxos';
 export { parseTokenAmount } from './lib/tokenAmount';
 export type {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Form, Input, InputNumber, Select, message } from 'antd';
 
-import { assessFee, assessTokenFee, parseTokenAmount, useSendTransaction, NATIVE_ASSET_ID } from '@/features/SendTransaction';
+import { assessFee, assessTokenFee, parseTokenAmount, sumUtxoValues, useSendTransaction, NATIVE_ASSET_ID } from '@/features/SendTransaction';
 import { formatTokenAmount } from '@/entities/Token';
 
 import { isAddress, formatSat } from '@/shared/utils';
@@ -13,6 +13,13 @@ import { brand } from '@/brand';
 import { AssetOptionLabel } from './AssetOptionLabel';
 
 import cls from './FirstStep.module.css';
+
+// Interim bridge from the coins the InputNumber yields to base units. Returns
+// null for anything BigInt() would refuse (NaN, Infinity from an absurd input).
+const coinsToSat = (value: number | string | null): bigint | null => {
+    const sat = Math.round(Number(value) * SAT_PER_COIN);
+    return Number.isFinite(sat) ? BigInt(sat) : null;
+};
 
 export const FirstStep = () => {
     const {
@@ -82,22 +89,22 @@ export const FirstStep = () => {
 
     useEffect(() => {
         if (!isFeeManual) {
-            form.setFieldValue('fee', suggestedFeeSat > 0 ? sat2btc(suggestedFeeSat) : undefined);
+            form.setFieldValue('fee', suggestedFeeSat > 0n ? sat2btc(suggestedFeeSat.toString()) : undefined);
             form.validateFields(['fee'], { validateOnly: true }).catch(() => {});
         }
     }, [form, suggestedFeeSat, isFeeManual]);
 
     const totalSelectedBalance = selectedAddresses.reduce((total, address) => {
-        return total + (addressesData?.[address]?.balance || 0);
-    }, 0);
+        return total + (addressesData?.[address]?.balance ?? 0n);
+    }, 0n);
 
     // Native available for the fee in token mode: spendable native UTXOs plus
     // the native value carried by the token UTXOs that will be spent anyway.
     const nativeCarriedSat = isTokenMode
-        ? selectedAddresses
-            .flatMap((address) => addressesData?.[address]?.tokens?.[assetId]?.utxos ?? [])
-            .reduce((sum, utxo) => sum + utxo.valueSat, 0)
-        : 0;
+        ? sumUtxoValues(
+            selectedAddresses.flatMap((address) => addressesData?.[address]?.tokens?.[assetId]?.utxos ?? [])
+        )
+        : 0n;
     const nativeAvailableForFeeSat = totalSelectedBalance + nativeCarriedSat;
 
     const feeAssessment = isTokenMode
@@ -135,7 +142,7 @@ export const FirstStep = () => {
                 address: targetAddress,
                 amount: isTokenMode
                     ? (tokenAmount || undefined)
-                    : (amountSat ? sat2btc(amountSat) : undefined),
+                    : (amountSat ? sat2btc(amountSat.toString()) : undefined),
                 addresses: selectedAddresses,
                 changeAddress: changeAddress || undefined,
                 remember: true
@@ -225,7 +232,12 @@ export const FirstStep = () => {
                             validator: async (_, value: number | null) => {
                                 if (!value || value <= 0) {
                                     await Promise.reject('Please input a positive amount!');
-                                } else if (selectedAddresses.length && Math.round(value * SAT_PER_COIN) + feeSat > totalSelectedBalance) {
+                                    return;
+                                }
+                                const amount = coinsToSat(value);
+                                if (amount === null) {
+                                    await Promise.reject('Please input a positive amount!');
+                                } else if (selectedAddresses.length && amount + feeSat > totalSelectedBalance) {
                                     await Promise.reject(`Amount + fee exceeds balance (${formatSat(totalSelectedBalance)})`);
                                 }
                             }
@@ -239,7 +251,7 @@ export const FirstStep = () => {
                         controls={false}
                         min={0}
                         precision={COIN_DECIMALS}
-                        onChange={(value) => setAmountSat(value ? Math.round(value * SAT_PER_COIN) : 0)}
+                        onChange={(value) => setAmountSat((value ? coinsToSat(value) : 0n) ?? 0n)}
                     />
                 </Form.Item>
             )}
@@ -286,8 +298,9 @@ export const FirstStep = () => {
                     {
                         validator: async (_, value: number | null) => {
                             if (value == null) return;
-                            const valueSat = Math.round(Number(value) * SAT_PER_COIN);
-                            if (suggestedFeeSat > 0 && valueSat < suggestedFeeSat) {
+                            const valueSat = coinsToSat(value);
+                            if (valueSat === null) return;
+                            if (suggestedFeeSat > 0n && valueSat < suggestedFeeSat) {
                                 await Promise.reject(`Fee is below the network minimum (${formatSat(suggestedFeeSat)})`);
                             }
                             if (isTokenMode && selectedAddresses.length && valueSat > nativeAvailableForFeeSat) {
@@ -307,7 +320,7 @@ export const FirstStep = () => {
                     precision={COIN_DECIMALS}
                     step={0.00000001}
                     onChange={(value) => {
-                        setFeeSat(value != null ? Math.round(Number(value) * SAT_PER_COIN) : null);
+                        setFeeSat(value != null ? coinsToSat(value) : null);
                     }}
                 />
             </Form.Item>
