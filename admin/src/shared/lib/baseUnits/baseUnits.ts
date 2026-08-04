@@ -1,3 +1,6 @@
+/** A base-unit amount as the node encodes it. */
+export type BaseUnits = number | string;
+
 /**
  * A base-unit amount from the node may arrive as a JSON number or as a decimal
  * string: values are read straight out of the DB, and a Perl scalar holding both

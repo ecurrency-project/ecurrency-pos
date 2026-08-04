@@ -1,13 +1,15 @@
 import type { EntityState } from '@reduxjs/toolkit';
 
+import type { BaseUnits } from '@/shared/lib/baseUnits';
+
 export interface Prevout {
     scripthash_address: string;
     scripthash: string;
-    value: number;
+    value: BaseUnits;
     asset?: string;
     assetcommitment?: string;
     scriptpubkey_type?: string;
-    token_amount?: number;
+    token_amount?: BaseUnits;
     token_permissions?: number;
     token_decimals?: number;
     token_id?: string;
@@ -64,13 +66,13 @@ export interface Vout {
     scriptpubkey: string;
     scriptpubkey_type: string;
     scripthash_address?: string;
-    value: number;
+    value: BaseUnits;
     valuecommitment: string;
     asset: string;
     assetcommitment: string;
     pegout?: Pegout;
     token_id?: string;
-    token_amount?: number;
+    token_amount?: BaseUnits;
     token_permissions?: number;
     token_decimals?: number;
 }
@@ -90,8 +92,8 @@ export interface ITransaction {
     vout: Vout[];
     size: number;
     weight: number;
-    fee: number;
-    value: number;
+    fee: BaseUnits;
+    value: BaseUnits;
     is_coinbase: boolean;
     status: ITxStatus;
     token_id?: string;
@@ -99,9 +101,9 @@ export interface ITransaction {
 
 export interface TxShort {
     txid: string;
-    fee: number;
+    fee: BaseUnits;
     size: number;
-    value: number;
+    value: BaseUnits;
 }
 
 export interface ITransactionBoxSchema extends EntityState<ITransaction, string>{

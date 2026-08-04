@@ -3,7 +3,8 @@ import { formatNumber } from "@/shared/utils";
 import { brand } from '@/brand';
 import { TokenValue } from '@/entities/Token';
 import type { Prevout, Vin, Vout } from '../model/types/ITransaction.ts';
-import { sat2btc } from '@/shared/lib/fmtbtc';
+import { satToNativeString } from '@/shared/lib/fmtbtc';
+import { toBaseUnits } from '@/shared/lib/baseUnits';
 
 export const NATIVE_PRECISION = 8;
 
@@ -30,7 +31,7 @@ export const formatOutAmount = (vout: Prevout | Vout) => {
 
     if (isNativeOut(vout)) {
         return <span>
-      {formatNumber(sat2btc(vout.value), NATIVE_PRECISION)}
+      {formatNumber(satToNativeString(vout.value), NATIVE_PRECISION)}
             { ' ' }
             {!vout.asset ? brand.assetLabel : <Link to={`/asset/${vout.asset}`}>{brand.assetLabel}</Link>}
     </span>
@@ -42,5 +43,6 @@ export const isAllUnconfidential = (vouts: Vout[]) => vouts.every(vout => vout.v
 
 export const isNativeOut = (vout: Vout | Prevout) => (!vout.asset && !vout.assetcommitment) || vout.asset === brand.assetId
 export const isAllNative = (vouts: Vout[]) => vouts.every(isNativeOut);
-export const outTotal = (vouts: Vout[]) => vouts.reduce((total, vout) => total + (+vout.value || 0), 0);
+export const outTotal = (vouts: Vout[]): bigint =>
+    vouts.reduce((total, vout) => total + (toBaseUnits(vout.value) ?? 0n), 0n);
 

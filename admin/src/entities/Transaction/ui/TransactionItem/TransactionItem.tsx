@@ -18,7 +18,7 @@ export const TransactionItem = memo(function TransactionItem(props: TransactionI
         transaction
     } = props;
 
-    const feerate = transaction.fee / transaction.size;
+    const feerate = Number(transaction.fee) / transaction.size;
 
     return (
         <div className={className}>

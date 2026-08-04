@@ -1,4 +1,4 @@
-type BaseUnits = number | string;
+import type { BaseUnits } from '@/shared/lib/baseUnits';
 
 interface ChainStats {
     funded_txo_count: number;
