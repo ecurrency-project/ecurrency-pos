@@ -4,12 +4,12 @@ export interface TransactionInput {
 }
 
 /**
- * Output object for POST /wallet/transaction/create: `{"<addr>": <sat>}` for
+ * Output object for POST /wallet/transaction/create: `{"<addr>": "<sat>"}` for
  * native. A token output additionally carries `token_id` and `token_amount`
- * (base units, decimal string — uint64 may exceed 2^53) and holds exactly one
- * address key.
+ * (base units) and holds exactly one address key. Every amount is a decimal
+ * string — see toWireAmount.
  */
-export type TransactionOutput = Record<string, number | string>;
+export type TransactionOutput = Record<string, string>;
 
 export interface TransactionJSON {
     inputs: TransactionInput[];
@@ -20,7 +20,7 @@ export type TransactionStatus = 'process' | 'finish' | 'error';
 
 export interface SendTransactionFormState {
     targetAddress: string;
-    amountSat: number;
+    amountSat: bigint;
     selectedAddresses: string[];
     feeRate: number;
     changeAddress: string;
@@ -30,7 +30,7 @@ export interface SendTransactionFormState {
 
 export interface SendTransactionFormActions {
     setTargetAddress: (value: string) => void;
-    setAmountSat: (value: number) => void;
+    setAmountSat: (value: bigint) => void;
     setSelectedAddresses: (value: string[]) => void;
     setFeeRate: (value: number) => void;
     setChangeAddress: (value: string) => void;

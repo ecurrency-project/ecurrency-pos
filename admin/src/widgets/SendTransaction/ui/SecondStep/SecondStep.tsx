@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { useSendTransaction } from '@/features/SendTransaction';
+import { useSendTransaction, sumUtxoValues } from '@/features/SendTransaction';
 import { formatTokenAmount } from '@/entities/Token';
 
 import { Button } from '@/shared/ui/Button';
@@ -32,7 +32,7 @@ export const SecondStep = () => {
             (transactionJSON?.inputs ?? []).map((input) => `${input.txid}:${input.vout}`)
         );
         const from: string[] = [];
-        let spentSumSat = 0;
+        let spentSumSat = 0n;
 
         Object.entries(addressesData ?? {}).forEach(([address, data]) => {
             const spentUtxos = data.utxos.filter((utxo) => spentOutpoints.has(utxo.outpoint));
@@ -41,8 +41,8 @@ export const SecondStep = () => {
                 : [];
             if (spentUtxos.length || spentTokenUtxos.length) {
                 from.push(address);
-                spentSumSat += spentUtxos.reduce((sum, utxo) => sum + utxo.valueSat, 0);
-                spentSumSat += spentTokenUtxos.reduce((sum, utxo) => sum + utxo.valueSat, 0);
+                spentSumSat += sumUtxoValues(spentUtxos);
+                spentSumSat += sumUtxoValues(spentTokenUtxos);
             }
         });
 
@@ -115,7 +115,7 @@ export const SecondStep = () => {
                         ))}
                     </div>
                 </div>
-                {changeSat > 0 && (
+                {changeSat > 0n && (
                     <div className={cls.summaryRow}>
                         <span className={cls.summaryLabel}>{isTokenMode ? `${brand.assetLabel} change` : 'Change'}</span>
                         <span className={cls.summaryValue}>

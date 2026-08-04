@@ -1,7 +1,9 @@
 import type { TransactionInput, TransactionJSON, TransactionOutput } from '../model/types/types';
 import type { AddressData } from '../model/context/SendTransactionContext';
+import { sumUtxoValues } from './processUtxos';
 import type { SpendableUtxo, TokenUtxo } from './processUtxos';
 import { selectCoins, selectTokenCoins } from './coinSelection';
+import { toWireAmount } from './wireAmount';
 
 export interface CreateTokenTransactionParams {
     tokenId: string;
@@ -10,7 +12,7 @@ export interface CreateTokenTransactionParams {
     targetAddress: string;
     changeAddress: string;
     selectedAddresses: string[];
-    feeSat: number;
+    feeSat: bigint;
     addressesData?: Record<string, AddressData>;
 }
 
@@ -59,7 +61,7 @@ export const createTokenTransactionJSON = (
         return { success: false, error: 'Invalid amount' };
     }
 
-    if (!Number.isInteger(feeSat) || feeSat <= 0) {
+    if (feeSat <= 0n) {
         return { success: false, error: 'Invalid fee' };
     }
 
@@ -79,13 +81,13 @@ export const createTokenTransactionJSON = (
     }
 
     const tokenInSum = selectedTokenUtxos.reduce((sum, utxo) => sum + utxo.tokenAmount, 0n);
-    const nativeCarriedSat = selectedTokenUtxos.reduce((sum, utxo) => sum + utxo.valueSat, 0);
+    const nativeCarriedSat = sumUtxoValues(selectedTokenUtxos);
 
     // Native inputs are only needed when the token UTXOs don't carry enough
     // native value to pay the fee.
     let selectedNativeUtxos: SpendableUtxo[] = [];
     const deficitSat = feeSat - nativeCarriedSat;
-    if (deficitSat > 0) {
+    if (deficitSat > 0n) {
         const nativeUtxos = selectedAddresses.flatMap(
             (address) => addressesData?.[address]?.utxos ?? []
         );
@@ -96,7 +98,7 @@ export const createTokenTransactionJSON = (
         selectedNativeUtxos = selected;
     }
 
-    const nativeInSum = nativeCarriedSat + selectedNativeUtxos.reduce((sum, utxo) => sum + utxo.valueSat, 0);
+    const nativeInSum = nativeCarriedSat + sumUtxoValues(selectedNativeUtxos);
     const nativeChangeSat = nativeInSum - feeSat;
     const tokenChange = tokenInSum - tokenAmount;
 
@@ -105,27 +107,27 @@ export const createTokenTransactionJSON = (
 
     if (tokenChange > 0n && changeAddress === trimmedTarget) {
         outputs.push({
-            [trimmedTarget]: 0,
+            [trimmedTarget]: toWireAmount(0n),
             token_id: tokenId,
-            token_amount: (tokenAmount + tokenChange).toString(),
+            token_amount: toWireAmount(tokenAmount + tokenChange),
         });
     } else {
         outputs.push({
-            [trimmedTarget]: 0,
+            [trimmedTarget]: toWireAmount(0n),
             token_id: tokenId,
-            token_amount: tokenAmount.toString(),
+            token_amount: toWireAmount(tokenAmount),
         });
         if (tokenChange > 0n) {
             outputs.push({
-                [changeAddress]: 0,
+                [changeAddress]: toWireAmount(0n),
                 token_id: tokenId,
-                token_amount: tokenChange.toString(),
+                token_amount: toWireAmount(tokenChange),
             });
         }
     }
 
-    if (nativeChangeSat > 0) {
-        outputs.push({ [changeAddress]: nativeChangeSat });
+    if (nativeChangeSat > 0n) {
+        outputs.push({ [changeAddress]: toWireAmount(nativeChangeSat) });
     }
 
     const inputs: TransactionInput[] = [

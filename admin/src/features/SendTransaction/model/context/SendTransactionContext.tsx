@@ -13,7 +13,7 @@ import { createTokenTransactionJSON as buildTokenTransaction } from '../../lib/c
 import { parseTokenAmount } from '../../lib/tokenAmount';
 
 export interface AddressData {
-    balance: number;
+    balance: bigint;
     balanceFormatted: string;
     utxos: SpendableUtxo[];
     tokens: Record<string, TokenUtxoGroup>;
@@ -31,17 +31,17 @@ interface SendTransactionContextValue {
 
     targetAddress: string;
     setTargetAddress: (value: string) => void;
-    amountSat: number;
-    setAmountSat: (value: number) => void;
+    amountSat: bigint;
+    setAmountSat: (value: bigint) => void;
     /** Token amount as the raw decimal input string (base-unit precision > 2^53). */
     tokenAmount: string;
     setTokenAmount: (value: string) => void;
     selectedAddresses: string[];
     setSelectedAddresses: (value: string[]) => void;
-    feeSat: number;
-    suggestedFeeSat: number;
+    feeSat: bigint;
+    suggestedFeeSat: bigint;
     isFeeManual: boolean;
-    setFeeSat: (value: number | null) => void;
+    setFeeSat: (value: bigint | null) => void;
     changeAddress: string;
     setChangeAddress: (value: string) => void;
 
@@ -80,12 +80,12 @@ export const SendTransactionProvider: FC<SendTransactionProviderProps> = ({ chil
 
     const [transactionStatus, setTransactionStatus] = useState<TransactionStatus>('process');
     const [targetAddress, setTargetAddress] = useState('');
-    const [amountSat, setAmountSat] = useState(0);
+    const [amountSat, setAmountSat] = useState(0n);
     const [tokenAmount, setTokenAmount] = useState('');
     const [selectedAddresses, setSelectedAddresses] = useState<string[]>(
         navState.address ? [navState.address] : []
     );
-    const [manualFeeSat, setManualFeeSat] = useState<number | null>(null);
+    const [manualFeeSat, setManualFeeSat] = useState<bigint | null>(null);
     const [changeAddress, setChangeAddress] = useState('');
     const [transactionJSON, setTransactionJSON] = useState<TransactionJSON | undefined>();
     const [assetId, setAssetIdState] = useState<string>(navState.tokenId ?? NATIVE_ASSET_ID);
@@ -126,13 +126,13 @@ export const SendTransactionProvider: FC<SendTransactionProviderProps> = ({ chil
     const feeRate = useMemo(() => getDefaultFeeRate(feeEstimate) ?? 0, [feeEstimate]);
 
     const suggestedFeeSat = useMemo(() => {
-        if (feeRate <= 0 || !addressesData) return 0;
+        if (feeRate <= 0 || !addressesData) return 0n;
 
         if (isTokenMode) {
             const tokenUtxos = selectedAddresses.flatMap(
                 (address) => addressesData[address]?.tokens?.[assetId]?.utxos ?? []
             );
-            if (tokenUtxos.length === 0) return 0;
+            if (tokenUtxos.length === 0) return 0n;
 
             const nativeUtxos = selectedAddresses.flatMap(
                 (address) => addressesData[address]?.utxos ?? []
@@ -150,21 +150,21 @@ export const SendTransactionProvider: FC<SendTransactionProviderProps> = ({ chil
         const availableUtxos = selectedAddresses.flatMap(
             (address) => addressesData[address]?.utxos ?? []
         );
-        if (availableUtxos.length === 0) return 0;
+        if (availableUtxos.length === 0) return 0n;
 
         return suggestFeeSat({ utxos: availableUtxos, amountSat, feeRate });
     }, [feeRate, addressesData, selectedAddresses, amountSat, isTokenMode, assetId, tokenAmount, tokenDecimals]);
 
     const feeSat = manualFeeSat ?? suggestedFeeSat;
 
-    const handleSetFeeSat = useCallback((value: number | null) => {
+    const handleSetFeeSat = useCallback((value: bigint | null) => {
         setManualFeeSat(value);
     }, []);
 
     // Switching the asset changes the amount's unit — reset both amounts.
     const setAssetId = useCallback((value: string) => {
         setAssetIdState(value);
-        setAmountSat(0);
+        setAmountSat(0n);
         setTokenAmount('');
     }, []);
 

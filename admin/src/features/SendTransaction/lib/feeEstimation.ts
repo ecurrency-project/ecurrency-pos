@@ -1,3 +1,4 @@
+import { sumUtxoValues } from './processUtxos';
 import type { SpendableUtxo, TokenUtxo } from './processUtxos';
 import { selectCoins, selectTokenCoins } from './coinSelection';
 
@@ -28,20 +29,20 @@ export const minRelayFeeSat = (
     inputCount: number,
     feeRate: number,
     opts?: { outputCount?: number; extraBytes?: number },
-): number => {
+): bigint => {
     const outputCount = opts?.outputCount ?? OUTPUT_COUNT;
     const extraBytes = opts?.extraBytes ?? 0;
     const estimatedSize =
         inputCount * INPUT_SIZE_BYTES + outputCount * OUTPUT_SIZE_BYTES + TX_OVERHEAD_BYTES + extraBytes;
 
-    return Math.floor(estimatedSize * feeRate) + 1;
+    return BigInt(Math.floor(estimatedSize * feeRate)) + 1n;
 };
 
 export const suggestFeeSat = (params: {
     utxos: readonly SpendableUtxo[];
-    amountSat: number;
+    amountSat: bigint;
     feeRate: number;
-}): number => {
+}): bigint => {
     const { utxos, amountSat, feeRate } = params;
 
     const selected = selectCoins(utxos, amountSat) ?? [...utxos];
@@ -61,12 +62,12 @@ export const suggestTokenFeeSat = (params: {
     nativeUtxos: readonly SpendableUtxo[];
     tokenAmount: bigint;
     feeRate: number;
-}): number => {
+}): bigint => {
     const { tokenUtxos, nativeUtxos, tokenAmount, feeRate } = params;
 
     const tokenSelected = selectTokenCoins(tokenUtxos, tokenAmount) ?? [...tokenUtxos];
     const tokenInputCount = Math.max(1, tokenSelected.length);
-    const nativeCarriedSat = tokenSelected.reduce((sum, utxo) => sum + utxo.valueSat, 0);
+    const nativeCarriedSat = sumUtxoValues(tokenSelected);
     const opts = { outputCount: TOKEN_TX_OUTPUT_COUNT, extraBytes: TOKEN_TX_EXTRA_BYTES };
 
     let fee = minRelayFeeSat(tokenInputCount, feeRate, opts);
@@ -74,7 +75,7 @@ export const suggestTokenFeeSat = (params: {
 
     for (let i = 0; i < 5; i++) {
         const deficitSat = fee - nativeCarriedSat;
-        const selected = deficitSat > 0 ? selectCoins(nativeUtxos, deficitSat) : [];
+        const selected = deficitSat > 0n ? selectCoins(nativeUtxos, deficitSat) : [];
         // Not enough native to cover the fee: report the current estimate,
         // the transaction builder will fail with a clear error anyway.
         if (selected === null) break;

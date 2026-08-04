@@ -2,7 +2,7 @@ import type { UTXO } from '@/entities/Address';
 
 export interface SpendableUtxo {
     outpoint: string;
-    valueSat: number;
+    valueSat: bigint;
 }
 
 export interface TokenUtxo extends SpendableUtxo {
@@ -15,10 +15,13 @@ export interface TokenUtxoGroup {
 }
 
 interface ProcessedUtxos {
-    value: number;
+    value: bigint;
     utxos: SpendableUtxo[];
     tokens: Record<string, TokenUtxoGroup>;
 }
+
+export const sumUtxoValues = (utxos: readonly SpendableUtxo[]): bigint =>
+    utxos.reduce((sum, utxo) => sum + utxo.valueSat, 0n);
 
 const toBaseUnits = (value: unknown): bigint | null => {
     if (typeof value === 'number') {
@@ -40,12 +43,10 @@ export const processUtxos = (utxos: UTXO[]): ProcessedUtxos => {
                 return acc;
             }
 
-            const parsedValue = toBaseUnits(utxo.value);
-            if (parsedValue === null) {
+            const valueSat = toBaseUnits(utxo.value);
+            if (valueSat === null) {
                 return acc;
             }
-
-            const valueSat = Number(parsedValue);
 
             if (carriesTokens(utxo)) {
                 const tokenAmount = toBaseUnits(utxo.token_amount);
@@ -70,6 +71,6 @@ export const processUtxos = (utxos: UTXO[]): ProcessedUtxos => {
             acc.utxos.push({ outpoint: `${utxo.txid}:${utxo.vout}`, valueSat });
             return acc;
         },
-        { value: 0, utxos: [], tokens: {} }
+        { value: 0n, utxos: [], tokens: {} }
     );
 };
