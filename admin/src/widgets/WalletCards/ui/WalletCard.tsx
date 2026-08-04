@@ -55,7 +55,7 @@ export const WalletCard = (props: WalletCardProps) => {
     });
 
     const balanceSat = addressInfo
-        ? addressInfo.chain_stats.funded_txo_sum - addressInfo.chain_stats.spent_txo_sum
+        ? Number(addressInfo.chain_stats.funded_txo_sum) - Number(addressInfo.chain_stats.spent_txo_sum)
         : 0;
     const tokens = Object.entries(addressInfo?.tokens ?? {});
     const visibleTokens = tokens.slice(0, WALLET_TOKEN_CHIP_LIMIT);

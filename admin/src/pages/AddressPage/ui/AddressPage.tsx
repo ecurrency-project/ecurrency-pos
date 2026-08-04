@@ -20,9 +20,9 @@ interface AddressPageProps {
     className?: string
 }
 
-const fmtTxos = (count: number, sum: number) =>
+const fmtTxos = (count: number, sum: number | string) =>
     (count > 0 ? `${count} outputs` : 'No Outputs')
-    + (sum > 0 ? ` (${formatSat(sum)})` : '');
+    + (Number(sum) > 0 ? ` (${formatSat(Number(sum))})` : '');
 
 const AddressPage = (props: AddressPageProps) => {
     const { className } = props;
@@ -45,7 +45,7 @@ const AddressPage = (props: AddressPageProps) => {
     }, [transactionsByAddress]);
 
     const chainUtxoCount = address && address?.chain_stats.funded_txo_count - address?.chain_stats.spent_txo_count || 0;
-    const chainUtxoSum = address && address?.chain_stats.funded_txo_sum - address?.chain_stats.spent_txo_sum || 0;
+    const chainUtxoSum = address && Number(address.chain_stats.funded_txo_sum) - Number(address.chain_stats.spent_txo_sum) || 0;
 
     if (addressLoading) {
         return <div className={classNames(cls.AddressPage, 'container', className)}>Loading...</div>
