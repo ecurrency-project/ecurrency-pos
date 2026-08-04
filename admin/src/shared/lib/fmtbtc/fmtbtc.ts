@@ -1,4 +1,13 @@
 import { moveDecimalPoint } from '@/shared/lib/moveDecimalPoint';
+import { COIN_DECIMALS } from '@/shared/const/const';
+
+/**
+ * Satoshi -> coins as a decimal string, shifted textually so nothing passes
+ * through a double. The `converters` below return numbers, which loses the tail
+ * of any amount above 2^53 satoshi.
+ */
+export const satToNativeString = (sat: number | bigint | string): string =>
+    moveDecimalPoint(sat.toString(), -COIN_DECIMALS);
 
 export type Unit = 'msat' | 'sat' | 'bit' | 'milli' | 'btc';
 

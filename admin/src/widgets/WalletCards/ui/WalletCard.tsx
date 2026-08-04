@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dropdown, type MenuProps, Modal, Popover, Switch, Tooltip } from 'antd';
 
-import { useGetAddressQuery } from '@/entities/Address';
+import { useGetAddressQuery, addressBalanceSat } from '@/entities/Address';
 import { TokenChip } from '@/entities/Token';
 import type { IMyAddress } from '@/entities/MyAddress';
 
@@ -12,7 +12,7 @@ import { Clipboard } from '@/shared/ui/Clipboard';
 import { NativeCoinIcon } from '@/shared/ui/NativeCoinIcon';
 import { VStack } from '@/shared/ui/Stack';
 import { formatNumber } from '@/shared/utils';
-import { sat2btc } from '@/shared/lib/fmtbtc';
+import { satToNativeString } from '@/shared/lib/fmtbtc';
 import { brand } from '@/brand';
 import {
     BALANCE_POLL_INTERVAL,
@@ -54,9 +54,7 @@ export const WalletCard = (props: WalletCardProps) => {
         pollingInterval: BALANCE_POLL_INTERVAL,
     });
 
-    const balanceSat = addressInfo
-        ? Number(addressInfo.chain_stats.funded_txo_sum) - Number(addressInfo.chain_stats.spent_txo_sum)
-        : 0;
+    const balanceSat = addressInfo ? addressBalanceSat(addressInfo.chain_stats) : 0n;
     const tokens = Object.entries(addressInfo?.tokens ?? {});
     const visibleTokens = tokens.slice(0, WALLET_TOKEN_CHIP_LIMIT);
     const overflowCount = tokens.length - visibleTokens.length;
@@ -160,7 +158,7 @@ export const WalletCard = (props: WalletCardProps) => {
                 ) : (
                     <div className={cls.balance}>
                         <span className={cls.amount} translate="no">
-                            {formatNumber(sat2btc(balanceSat), COIN_DECIMALS)}
+                            {formatNumber(satToNativeString(balanceSat), COIN_DECIMALS)}
                         </span>
                         <span className={cls.unit}>{brand.assetLabel}</span>
                         <span className={cls.feePill}>Native · fees</span>
