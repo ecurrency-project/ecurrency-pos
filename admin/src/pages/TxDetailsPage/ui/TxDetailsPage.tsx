@@ -43,7 +43,7 @@ const TxDetailsPage = (props: TxDetailsPageProps) => {
         : confirmations > 0
             ? `${confirmations} Confirmations`
             : 'Confirmed';
-    const feerate = transaction && transaction.fee ? transaction.fee / transaction.size : null;
+    const feerate = transaction && transaction.fee ? Number(transaction.fee) / transaction.size : null;
 
     if (isLoading) {
         return <div className={classNames(cls.TxDetailsPage, 'container', className)}>Loading...</div>

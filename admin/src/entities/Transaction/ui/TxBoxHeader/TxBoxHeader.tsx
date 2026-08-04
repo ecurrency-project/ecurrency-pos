@@ -6,6 +6,7 @@ import { Tooltip } from 'antd';
 import { HStack, VStack } from '@/shared/ui/Stack';
 import { Button } from '@/shared/ui/Button';
 import { formatSat, formatTime } from '@/shared/utils';
+import type { BaseUnits } from '@/shared/lib/baseUnits';
 
 import ExpandMoreIcon from "@/shared/assets/icons/expand_more.svg?react";
 
@@ -17,7 +18,7 @@ interface TxBoxHeaderProps {
     toggleExpanded: () => void
     expanded: boolean;
     date?: number
-    fee: number
+    fee: BaseUnits
 }
 
 export const TxBoxHeader = memo(function TxBoxHeader(props: TxBoxHeaderProps) {
