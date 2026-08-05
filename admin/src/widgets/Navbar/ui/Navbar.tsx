@@ -8,7 +8,7 @@ import { ThemeSwitcher } from '@/features/ThemeSwitcher';
 import { HStack } from '@/shared/ui/Stack';
 import { Button } from '@/shared/ui/Button';
 import { RouterPath } from '@/shared/config/router/router.tsx';
-import { Logo } from '@/brand';
+import { brand, Logo } from '@/brand';
 
 import cls from "./Navbar.module.css";
 
@@ -26,7 +26,7 @@ export const Navbar = memo(function Navbar(props: NavbarProps) {
             className={classNames(cls.Navbar, className, 'container')}
         >
             <Link className="navbar-brand" to="/">
-                <Logo height={50} width={127}/>
+                <Logo height={brand.logoSize.height} width={brand.logoSize.width}/>
             </Link>
             <HStack>
                 <Button

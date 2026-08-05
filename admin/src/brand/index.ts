@@ -3,11 +3,12 @@ import type { ComponentType, SVGProps } from 'react';
 import { Logo } from './Logo';
 
 export interface BrandConfig {
-    assetId: string;
     assetLabel: { main: string; testnet: string };
     assetName: string;
     addressMainnetRe: RegExp;
     addressTestnetRe: RegExp;
+    logoSize: { width: number; height: number };
+    accent?: { light: string; dark: string };
     CoinIcon?: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
@@ -15,11 +16,11 @@ export interface BrandConfig {
 const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{20,80}$/;
 
 export const brand: BrandConfig = {
-    assetId: '',
     assetLabel: { main: 'COIN', testnet: 'tCOIN' },
     assetName: 'Blockchain',
     addressMainnetRe: BASE58_RE,
     addressTestnetRe: BASE58_RE,
+    logoSize: { width: 127, height: 50 },
 };
 
 export { Logo };
