@@ -68,7 +68,10 @@ sub choose_for_block {
                     $mempool[$i]->upgrade_level, $upgrade_level, $mempool[$i]->hash_str, $new_tx->hash_str);
                 $mempool[$i] = $new_tx;
             }
-            my $key = $coinbase->btc_tx_hash . $coinbase->btc_out_num;
+            # pack() the number parts of %spent keys: string concatenation of an
+            # lvalue-accessor return would set the string flag on the object's own
+            # field and JSON encoders would then render it as a string
+            my $key = $coinbase->btc_tx_hash . pack("S", $coinbase->btc_out_num);
             if (exists $spent{$key}) {
                 # Spent in previous mempool transaction
                 $mempool[$i] = undef;
@@ -84,7 +87,7 @@ sub choose_for_block {
                 $skip = 1;
                 last;
             }
-            if (exists $spent{$txo->tx_in . $txo->num}) {
+            if (exists $spent{$txo->key}) {
                 # Spent in previous mempool transaction
                 $skip = 1;
                 last;
@@ -118,7 +121,7 @@ sub choose_for_block {
             next;
         }
         foreach my $in (@{$mempool[$i]->in}) {
-            $spent{$in->{txo}->tx_in . $in->{txo}->num} = 1;
+            $spent{$in->{txo}->key} = 1;
         }
         $mempool_out{$mempool[$i]->hash} = scalar @{$mempool[$i]->out};
         $size += $mempool[$i]->size;

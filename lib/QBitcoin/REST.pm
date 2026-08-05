@@ -5,7 +5,10 @@ use strict;
 # Esplora RESTful HTTP API
 # https://github.com/blockstream/esplora/blob/master/API.md
 
-use JSON::XS;
+# Cpanel::JSON::XS (unlike JSON::XS) encodes an integer that was later used in
+# string context as a number, so stale string flags on live objects do not turn
+# numeric fields into JSON strings
+use Cpanel::JSON::XS;
 use Time::HiRes;
 use List::Util qw(sum0);
 use MIME::Base64 qw(decode_base64);
@@ -37,15 +40,15 @@ use Bitcoin::Serialized;
 use parent qw(QBitcoin::HTTP);
 
 use constant {
-    FALSE => JSON::XS::false,
-    TRUE  => JSON::XS::true,
+    FALSE => Cpanel::JSON::XS::false,
+    TRUE  => Cpanel::JSON::XS::true,
 };
 
 use constant DEBUG_REST => 0;
 
 mk_accessors(qw(cors));
 
-my $JSON = JSON::XS->new;
+my $JSON = Cpanel::JSON::XS->new;
 
 sub type_id() { PROTOCOL_REST }
 
@@ -507,14 +510,14 @@ sub wallet_tx_create {
         my $in = $tx->in->[$num];
         my $txo = $in->{txo};
         if ($txo->tx_out) {
-            return $self->http_response(400, "Input " . $txo->tx_in_str . ":" . $txo->num . " already confirmed spent");
+            return $self->http_response(400, sprintf("Input %s:%u already confirmed spent", $txo->tx_in_str, $txo->num));
         }
         if (!$txo->unspent) {
-            return $self->http_response(400, "Input " . $txo->tx_in_str . ":" . $txo->num . " already spent");
+            return $self->http_response(400, sprintf("Input %s:%u already spent", $txo->tx_in_str, $txo->num));
         }
         $input_amount += $txo->value;
         my $address = QBitcoin::MyAddress->get_by_hash($txo->scripthash, 0)
-            or return $self->http_response(400, "Input " . $txo->tx_in_str . ":" . $txo->num . " does not belong to a known address");
+            or return $self->http_response(400, sprintf("Input %s:%u does not belong to a known address", $txo->tx_in_str, $txo->num));
         $address->private_key
             or return $self->http_response(400, "No private key for address " . $address->address);
         $tx->make_sign($in, $address, $num);

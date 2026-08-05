@@ -27,10 +27,10 @@ use constant ERR_CODES => {
 
 use constant ERR_CODES;
 
-use JSON::XS;
+use Cpanel::JSON::XS;
 use constant {
-    FALSE => JSON::XS::false,
-    TRUE  => JSON::XS::true,
+    FALSE => Cpanel::JSON::XS::false,
+    TRUE  => Cpanel::JSON::XS::true,
 };
 
 use Exporter qw(import);

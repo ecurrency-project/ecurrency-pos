@@ -662,11 +662,11 @@ sub cmd_signrawtransactionwithkey {
         my $txo = $in->{txo};
         if ($txo->tx_out) {
             # Already confirmed spent
-            return $self->response_error("Input " . $txo->tx_in_str . ":" . $txo->num . " already confirmed spent.", ERR_DESERIALIZATION_ERROR);
+            return $self->response_error(sprintf("Input %s:%u already confirmed spent.", $txo->tx_in_str, $txo->num), ERR_DESERIALIZATION_ERROR);
         }
         elsif (!$txo->unspent && !$replace) {
             # Unconfirmed spent
-            return $self->response_error("Input " . $txo->tx_in_str . ":" . $txo->num . " already spent.", ERR_DESERIALIZATION_ERROR);
+            return $self->response_error(sprintf("Input %s:%u already spent.", $txo->tx_in_str, $txo->num), ERR_DESERIALIZATION_ERROR);
         }
         $input_amount += $txo->value;
         my ($address, $script);

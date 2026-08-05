@@ -2,7 +2,7 @@ package QBitcoin::HTTP;
 use warnings;
 use strict;
 
-use JSON::XS;
+use Cpanel::JSON::XS;
 use Time::HiRes;
 use Scalar::Util qw(weaken);
 use HTTP::Request;
@@ -26,7 +26,7 @@ use constant ATTR => qw(
 
 mk_accessors(ATTR);
 
-my $JSON = JSON::XS->new;
+my $JSON = Cpanel::JSON::XS->new;
 
 sub direction() { DIR_IN }
 sub startup()   {}

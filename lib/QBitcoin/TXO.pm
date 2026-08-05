@@ -40,7 +40,7 @@ my %TXO;
 
 sub key {
     my $self = shift;
-    return $self->tx_in . pack("v", $self->num);
+    return $self->tx_in . pack("s", $self->num);
 }
 
 sub save {

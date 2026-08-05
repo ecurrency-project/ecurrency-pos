@@ -109,7 +109,8 @@ sub get_address_txs {
         }
         undef @txs_out;
         undef %txs_in;
-        @txs_chain = map [ $_->[0], $_->[1], $_->[2] ],
+        # $_->[1]+0: SUM() amounts are fetched as strings, numify for JSON encoding
+        @txs_chain = map [ $_->[0], $_->[1]+0, $_->[2] ],
             sort { $b->[2] <=> $a->[2] || $b->[3] <=> $a->[3] }
                 @txs_inmem, @txs_in;
     }
@@ -157,7 +158,9 @@ sub address_stats {
     if (my $script = QBitcoin::RedeemScript->find(hash => $scripthash)) {
         my $sql = "SELECT IFNULL(SUM(value), 0), COUNT(*), IFNULL(SUM(CASE WHEN tx_out IS NULL THEN 0 ELSE value END), 0), COUNT(tx_out), COUNT(DISTINCT tx_in)+COUNT(DISTINCT tx_out) FROM `" . QBitcoin::TXO->TABLE . "` WHERE scripthash = ?";
         my ($result) = dbh->selectall_array($sql, undef, $script->id);
-        ($funded_sum, $funded_cnt, $spent_sum, $spent_cnt, $tx_cnt) = @$result;
+        # SUM() results come from the driver as strings (DECIMAL type); numify them
+        # so JSON encoders render the stats as numbers
+        ($funded_sum, $funded_cnt, $spent_sum, $spent_cnt, $tx_cnt) = map { $_ + 0 } @$result;
         # Calculate transactions with both inputs and outputs to this address
         my ($res2) = dbh->selectall_array("SELECT COUNT(DISTINCT t1.tx_in) FROM `" . QBitcoin::TXO->TABLE . "` t1 JOIN `" . QBitcoin::TXO->TABLE . "` t2 ON (t1.tx_in = t2.tx_out AND t1.scripthash = t2.scripthash) WHERE t1.scripthash = ?", undef, $script->id);
         $tx_cnt -= $res2->[0];
@@ -198,8 +201,8 @@ sub address_stats {
 
     return {
         chain_stats   => {
-            funded_txo_sum   => $funded_sum+0,
-            funded_txo_count => $funded_cnt+0,
+            funded_txo_sum   => $funded_sum,
+            funded_txo_count => $funded_cnt,
             spent_txo_sum    => $spent_sum,
             spent_txo_count  => $spent_cnt,
             tx_count         => $tx_cnt,
@@ -232,6 +235,7 @@ sub address_received {
             ($result) = dbh->selectall_array($sql, undef, $script->id);
         }
         $value = $result->[0] // 0;
+        $value += 0; # SUM() is fetched as a string, numify for JSON encoding
     }
     if ($minconf && $blockchain_height - $minconf + 1 <= $max_db_height) {
         return $value;
@@ -281,6 +285,7 @@ sub address_balance {
             ($result) = dbh->selectall_array($sql, undef, $script->id);
         }
         $value = $result->[0] // 0;
+        $value += 0; # SUM() is fetched as a string, numify for JSON encoding
     }
 
     for (my $height = $max_db_height + 1; $height <= $blockchain_height; $height++) {
@@ -945,7 +950,9 @@ sub create_txo {
         elsif (my $scripthash = eval { scripthash_by_address($key) }) {
             $out->{$key} =~ /^[0-9]+$/ && $out->{$key} <= MAX_VALUE
                 or return undef;
-            push @txo, { scripthash => $scripthash, value => $out->{$key} };
+            # +0: the client may send the amount as a decimal string (and the regex
+            # match above marks even a JSON number as string), numify for JSON encoding
+            push @txo, { scripthash => $scripthash, value => $out->{$key}+0 };
         }
         else {
             return undef;
@@ -986,7 +993,9 @@ sub check_tx_tokens_balance {
     my @warnings;
     foreach my $txo (map { $_->{txo} } grep { defined($_->{txo}->token_hash) && length($_->{txo}->data // "") > 0 } @{$tx->in}) {
         if (!$txo->token_hash || !$tx->is_tokens || $txo->token_hash ne $tx->token_hash) {
-            push @warnings, "Input " . $txo->tx_in_str . ":" . $txo->num . " burns tokens";
+            # sprintf %u: concatenating the num accessor return would mark the live
+            # txo's num field as string for JSON encoding
+            push @warnings, sprintf("Input %s:%u burns tokens", $txo->tx_in_str, $txo->num);
             next;
         }
         my $txo_type = substr($txo->data, 0, 1);
@@ -994,7 +1003,7 @@ sub check_tx_tokens_balance {
             length($txo->data) == 9 or next;
             my $transfer_value = unpack("Q<", substr($txo->data, 1, 8));
             if ($transfer_value > MAX_UINT64 - $in_value) {
-                return ("Input " . $txo->tx_in_str . ":" . $txo->num . " causes integer overflow");
+                return (sprintf("Input %s:%u causes integer overflow", $txo->tx_in_str, $txo->num));
             }
             $in_value += $transfer_value;
         }

@@ -20,7 +20,11 @@ sub _init_checkpoints {
 
 sub checkpoint_hash {
     _init_checkpoints() if !defined $checkpoints;
-    return $checkpoints->{$_[0]};
+    # Copy the argument: $_[0] aliases the caller's scalar (often an lvalue-accessor
+    # return, i.e. the block's own height field), and using it as a hash key directly
+    # would set its string flag, making JSON encoders render the field as a string
+    my ($height) = @_;
+    return $checkpoints->{$height};
 }
 
 sub max_checkpoint_height {

@@ -22,29 +22,24 @@ our @EXPORT_OK = qw(
 my %MY_UTXO;
 my %STAKED_UTXO;
 
-sub _in_key {
-    my ($txo) = @_;
-    return $txo->tx_in . $txo->num;
-}
-
 sub myutxo_add {
     my ($txo, $staked) = @_;
     if ($staked) {
-        $STAKED_UTXO{_in_key($txo)} = $txo;
+        $STAKED_UTXO{$txo->key} = $txo;
         Infof("Add staked UTXO %s:%u %lu coins", $txo->tx_in_str, $txo->num, $txo->value);
     }
     else {
-        $MY_UTXO{_in_key($txo)} = $txo;
+        $MY_UTXO{$txo->key} = $txo;
         Infof("Add my UTXO %s:%u %lu coins", $txo->tx_in_str, $txo->num, $txo->value);
     }
 }
 
 sub myutxo_del {
     my ($txo) = @_;
-    if (delete $MY_UTXO{_in_key($txo)}) {
+    if (delete $MY_UTXO{$txo->key}) {
         Infof("Delete my UTXO %s:%u %lu coins", $txo->tx_in_str, $txo->num, $txo->value);
     }
-    elsif (delete $STAKED_UTXO{_in_key($txo)}) {
+    elsif (delete $STAKED_UTXO{$txo->key}) {
         Infof("Delete staked UTXO %s:%u %lu coins", $txo->tx_in_str, $txo->num, $txo->value);
     }
 }

@@ -4,13 +4,13 @@ use strict;
 
 use Getopt::Long qw(:config bundling no_ignore_case no_auto_abbrev require_order);
 use HTTP::Tiny;
-use JSON::XS;
+use Cpanel::JSON::XS;
 use IO::Socket::INET;
 use POSIX qw(strftime :sys_wait_h);
 
 use constant MAX_CHILDREN_DEFAULT => 10;
 
-my $JSON = JSON::XS->new->utf8;
+my $JSON = Cpanel::JSON::XS->new->utf8;
 
 my %children_per_url; # $url => count of active child processes
 

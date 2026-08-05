@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 use Role::Tiny;
-use JSON::XS;
+use Cpanel::JSON::XS;
 use Scalar::Util qw(looks_like_number);
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
@@ -15,7 +15,7 @@ use QBitcoin::Accessors qw(mk_accessors);
 
 mk_accessors(qw(validate_message));
 
-my $JSON = JSON::XS->new;
+my $JSON = Cpanel::JSON::XS->new;
 
 my %SPEC = (
     height         => qr/^(?:0|[1-9][0-9]{0,9})\z/,
