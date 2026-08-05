@@ -14,7 +14,6 @@ import { parseTokenAmount } from '../../lib/tokenAmount';
 
 export interface AddressData {
     balance: bigint;
-    balanceFormatted: string;
     utxos: SpendableUtxo[];
     tokens: Record<string, TokenUtxoGroup>;
 }

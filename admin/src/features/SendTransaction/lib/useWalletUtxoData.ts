@@ -3,8 +3,6 @@ import { useEffect, useState } from 'react';
 import { useGetMyAddressesQuery } from '@/entities/MyAddress';
 import { useLazyGetAddressUtxosQuery } from '@/entities/Address';
 
-import { formatSat } from '@/shared/utils';
-
 import type { AddressData } from '../model/context/SendTransactionContext';
 import { processUtxos } from './processUtxos';
 
@@ -46,7 +44,6 @@ export const useWalletUtxoData = (): UseWalletUtxoDataResult => {
 
                     map[address] = {
                         balance: value,
-                        balanceFormatted: formatSat(value),
                         utxos: spendableUtxos,
                         tokens,
                     };

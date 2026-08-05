@@ -5,6 +5,7 @@ import { useGetTipHeightQuery } from '@/entities/TipHeight';
 
 import { HStack } from '@/shared/ui/Stack';
 import { formatSat } from '@/shared/utils';
+import { useAssetLabel } from '@/shared/lib/network';
 
 import { isAllNative, isAllUnconfidential, isRbf, outTotal } from './../utils.tsx';
 import type { ITxStatus, Vin, Vout } from '../../model/types/ITransaction.ts';
@@ -27,6 +28,7 @@ export const TxItemFooter = memo(function TxItemFooter(props: TransactionBoxProp
         vout,
     } = props;
 
+    const assetLabel = useAssetLabel();
     const { data: tipHeight = 0 } = useGetTipHeightQuery();
 
     const confirmationText = !txStatus?.confirmed ? 'Unconfirmed' : tipHeight ? `${tipHeight - txStatus.block_height + 1} confirmations` : 'Confirmed';
@@ -41,7 +43,7 @@ export const TxItemFooter = memo(function TxItemFooter(props: TransactionBoxProp
                 <span>{confirmationText} {!txStatus.confirmed && isRbf(vin) ? '(RBF)' : ''}</span>
             )}
             <span>
-                {!isAllUnconfidential(vout) ? 'Confidential' : isAllNative(vout) ? formatSat(outTotal(vout)) : ''}
+                {!isAllUnconfidential(vout) ? 'Confidential' : isAllNative(vout) ? formatSat(outTotal(vout), assetLabel) : ''}
             </span>
         </HStack>
     );

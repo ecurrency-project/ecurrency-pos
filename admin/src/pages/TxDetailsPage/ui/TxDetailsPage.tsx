@@ -11,6 +11,7 @@ import { useGetTransactionQuery } from '@/entities/Transaction';
 import { Clipboard } from '@/shared/ui/Clipboard';
 import { HStack, VStack } from '@/shared/ui/Stack';
 import { formatNumber, formatSat, formatTime } from '@/shared/utils';
+import { useAssetLabel } from '@/shared/lib/network';
 import { TX_POLL_INTERVAL, TX_MIN_CONFIRMATIONS } from '@/shared/const/const';
 
 import CubeIcon from "@/shared/assets/icons/cube.svg?react";
@@ -25,6 +26,7 @@ const TxDetailsPage = (props: TxDetailsPageProps) => {
     const { className } = props;
     const { id } = useParams<{ id: string }>();
     const { data: tipHeight = 0 } = useGetTipHeightQuery();
+    const assetLabel = useAssetLabel();
     const { data: transaction, isLoading } = useGetTransactionQuery({ id: id as string });
     const [useUTC, setUseUTC] = useState<boolean>(false);
 
@@ -89,7 +91,7 @@ const TxDetailsPage = (props: TxDetailsPageProps) => {
 
                 <HStack justify="space-between" className={cls.statsTableItem}>
                     <span>Transaction fees</span>
-                    <span className="amount">{formatSat(transaction.fee)} ({feerate?.toFixed(1) || 0} sat/B)</span>
+                    <span className="amount">{formatSat(transaction.fee, assetLabel)} ({feerate?.toFixed(1) || 0} sat/B)</span>
                 </HStack>
 
                 <HStack justify="space-between" className={cls.statsTableItem}>

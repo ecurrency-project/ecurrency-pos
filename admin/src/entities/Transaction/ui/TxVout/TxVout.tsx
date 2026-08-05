@@ -4,6 +4,7 @@ import classNames from "classnames";
 
 import { HStack, VStack } from '@/shared/ui/Stack';
 import { moveDecimalPoint } from '@/shared/lib/moveDecimalPoint';
+import { useAssetLabel } from '@/shared/lib/network';
 
 import type { ISpend, Vout } from '../../model/types/ITransaction.ts';
 
@@ -30,6 +31,8 @@ export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
         highlightAddress,
     } = props;
 
+    const assetLabel = useAssetLabel();
+
     const unspendable_types = [ 'op_return', 'provably_unspendable', 'fee' ];
 
     const isHighlighted = highlightAddress && vout.scripthash_address === highlightAddress;
@@ -43,7 +46,7 @@ export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
                         <div className={cls.wrapper}>
                             {description ||'Nonstandard'}
                             <span className={cls.amount}>
-                                {formatOutAmount(vout)}
+                                {formatOutAmount(vout, assetLabel)}
                             </span>
                         </div>
                     </HStack>

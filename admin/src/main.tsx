@@ -9,14 +9,17 @@ import { ErrorBoundaryProvider } from '@/app/providers/ErrorBoundary';
 import { ThemeProvider } from '@/app/providers/ThemeProvider'
 
 import { StoreProvider } from '@/app/providers/StoreProvider';
+import { NetworkProvider } from '@/app/providers/NetworkProvider';
 
 createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
         <StoreProvider>
             <ErrorBoundaryProvider>
-                <ThemeProvider>
-                    <App/>
-                </ThemeProvider>
+                <NetworkProvider>
+                    <ThemeProvider>
+                        <App/>
+                    </ThemeProvider>
+                </NetworkProvider>
             </ErrorBoundaryProvider>
         </StoreProvider>
     </BrowserRouter>

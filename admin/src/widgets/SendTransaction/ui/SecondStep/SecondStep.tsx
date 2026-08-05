@@ -5,11 +5,12 @@ import { formatTokenAmount } from '@/entities/Token';
 
 import { Button } from '@/shared/ui/Button';
 import { formatSat } from '@/shared/utils';
-import { brand } from '@/brand';
+import { useAssetLabel } from '@/shared/lib/network';
 
 import cls from './SecondStep.module.css';
 
 export const SecondStep = () => {
+    const assetLabel = useAssetLabel();
     const {
         targetAddress,
         amountSat,
@@ -86,7 +87,7 @@ export const SecondStep = () => {
                     <span className={cls.summaryValue} translate="no">
                         {isTokenMode
                             ? `${formatTokenAmount(tokenSent || '0', tokenDecimals)}${ticker}`
-                            : formatSat(amountSat)}
+                            : formatSat(amountSat, assetLabel)}
                     </span>
                 </div>
                 {isTokenMode && tokenChange && (
@@ -99,12 +100,12 @@ export const SecondStep = () => {
                 )}
                 <div className={cls.summaryRow}>
                     <span className={cls.summaryLabel}>Network fee</span>
-                    <span className={cls.summaryValue} translate="no">{formatSat(feeSat)}</span>
+                    <span className={cls.summaryValue} translate="no">{formatSat(feeSat, assetLabel)}</span>
                 </div>
                 {!isTokenMode && (
                     <div className={cls.summaryRow}>
                         <span className={cls.summaryLabel}>Total</span>
-                        <span className={cls.summaryValue} translate="no">{formatSat(amountSat + feeSat)}</span>
+                        <span className={cls.summaryValue} translate="no">{formatSat(amountSat + feeSat, assetLabel)}</span>
                     </div>
                 )}
                 <div className={cls.summaryRow}>
@@ -117,9 +118,9 @@ export const SecondStep = () => {
                 </div>
                 {changeSat > 0n && (
                     <div className={cls.summaryRow}>
-                        <span className={cls.summaryLabel}>{isTokenMode ? `${brand.assetLabel} change` : 'Change'}</span>
+                        <span className={cls.summaryLabel}>{isTokenMode ? `${assetLabel} change` : 'Change'}</span>
                         <span className={cls.summaryValue}>
-                            {changeAddress} ({formatSat(changeSat)})
+                            {changeAddress} ({formatSat(changeSat, assetLabel)})
                         </span>
                     </div>
                 )}

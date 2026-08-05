@@ -13,7 +13,7 @@ import { NativeCoinIcon } from '@/shared/ui/NativeCoinIcon';
 import { VStack } from '@/shared/ui/Stack';
 import { formatNumber } from '@/shared/utils';
 import { satToNativeString } from '@/shared/lib/fmtbtc';
-import { brand } from '@/brand';
+import { useAssetLabel } from '@/shared/lib/network';
 import {
     BALANCE_POLL_INTERVAL,
     CLIPBOARD_TOOLTIP_TIMEOUT,
@@ -46,6 +46,7 @@ export const WalletCard = (props: WalletCardProps) => {
     const { myAddress, stakedLoading, onStakedChange } = props;
 
     const navigate = useNavigate();
+    const assetLabel = useAssetLabel();
     const [copied, setCopied] = useState(false);
     const [receiveOpen, setReceiveOpen] = useState(false);
 
@@ -160,7 +161,7 @@ export const WalletCard = (props: WalletCardProps) => {
                         <span className={cls.amount} translate="no">
                             {formatNumber(satToNativeString(balanceSat), COIN_DECIMALS)}
                         </span>
-                        <span className={cls.unit}>{brand.assetLabel}</span>
+                        <span className={cls.unit}>{assetLabel}</span>
                         <span className={cls.feePill}>Native · fees</span>
                     </div>
                 )}

@@ -5,6 +5,7 @@ import classNames from "classnames";
 import { HStack, VStack } from '@/shared/ui/Stack';
 import { formatNumber } from '@/shared/utils';
 import { moveDecimalPoint } from '@/shared/lib/moveDecimalPoint';
+import { useAssetLabel } from '@/shared/lib/network';
 
 import type { Vin } from '../../model/types/ITransaction.ts';
 
@@ -29,6 +30,8 @@ export const TxVin = memo(function TxVin(props: TransactionVinProps) {
         highlightAddress,
     } = props;
 
+    const assetLabel = useAssetLabel();
+
     const isHighlighted = highlightAddress && vin.prevout?.scripthash_address === highlightAddress;
 
     const wrapper = (children: ReactNode, description: ReactNode) => (
@@ -38,7 +41,7 @@ export const TxVin = memo(function TxVin(props: TransactionVinProps) {
                     <span className={cls.index}>{`#${index}`}</span>
                     <div className={cls.wrapper}>
                         {description}
-                        <span className={cls.amount}>{vin.prevout && formatOutAmount(vin.prevout)}</span>
+                        <span className={cls.amount}>{vin.prevout && formatOutAmount(vin.prevout, assetLabel)}</span>
                     </div>
                 </HStack>
             </div>
