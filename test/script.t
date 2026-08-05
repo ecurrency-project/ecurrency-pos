@@ -24,6 +24,10 @@ my @scripts_ok = (
     [ op_ifif     => OP_0 . OP_IF . OP_0 . OP_VERIFY . OP_ELSE . OP_1 . OP_IF . OP_1 . OP_ELSE . OP_0 . OP_ENDIF . OP_ENDIF ],
     [ op_success  => OP_0 . OP_SUCCESS62 . OP_RETURN ],
     [ op_success2 => OP_0 . "\xd0" . OP_RETURN ],
+    [ op_equal    => OP_1 . OP_1 . OP_EQUAL ],
+    [ op_equal_data => op_pushdata("abc") . op_pushdata("abc") . OP_EQUAL ],
+    [ op_equal_if => OP_1 . OP_1 . OP_EQUAL . OP_IF . OP_1 . OP_ELSE . OP_0 . OP_ENDIF ],
+    [ op_equal_notif => OP_0 . OP_1 . OP_EQUAL . OP_NOTIF . OP_1 . OP_ELSE . OP_0 . OP_ENDIF ],
 );
 
 my @scripts_fail = (
@@ -36,6 +40,9 @@ my @scripts_fail = (
     [ op_if       => OP_IF . OP_1 . OP_ENDIF ],
     [ op_if2      => OP_1 . OP_IF . OP_0 . OP_ELSE . OP_1 . OP_SUCCESS62 . OP_ENDIF ],
     [ op_ifif     => OP_1 . OP_1 . OP_IF . OP_ELSE . OP_IF . OP_ENDIF . OP_1 ],
+    [ op_equal    => OP_0 . OP_1 . OP_EQUAL ],
+    [ op_equal_data => op_pushdata("abc") . op_pushdata("abd") . OP_EQUAL ],
+    [ op_equal_stack => OP_1 . OP_EQUAL ],
 );
 
 foreach my $check_data (@scripts_ok) {
