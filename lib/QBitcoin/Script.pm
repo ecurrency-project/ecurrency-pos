@@ -136,7 +136,7 @@ foreach my $opcode (keys %{&OPCODES}) {
             my $stack = $state->stack;
             @$stack >= 1 or return 0;
             local $a = unpack_int(pop @$stack) // return 0;
-            push @$stack, pack_int($INT_1_1{$cmd}->());
+            push @$stack, pack_int($INT_1_1{$cmd}->()) // return 0;
             return undef;
         };
     }
@@ -147,7 +147,7 @@ foreach my $opcode (keys %{&OPCODES}) {
             my $stack = $state->stack;
             @$stack >= 2 or return 0;
             local ($a, $b) = map { unpack_int($_) // return 0 } splice(@$stack, -2);
-            push @$stack, pack_int($INT_2_1{$cmd}->());
+            push @$stack, pack_int($INT_2_1{$cmd}->()) // return 0;
             return undef;
         };
     }
