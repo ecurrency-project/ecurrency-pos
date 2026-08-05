@@ -1780,6 +1780,39 @@ sub compare_tx {
         $a->hash cmp $b->hash;
 }
 
+use constant DESC_PACKAGE_TX => 64; # bound for the descendant walk, as MAX_PACKAGE_TX in QBitcoin::Mempool
+
+# Cumulative fee and size of the transaction with its unconfirmed descendants;
+# the walk is bounded, a partial aggregate is enough for eviction ordering
+sub _desc_aggregate {
+    my ($tx) = @_;
+    my ($fee, $size, $count) = (0, 0, 0);
+    my %seen = ($tx->hash => 1);
+    my @stack = ($tx);
+    while (defined(my $t = pop @stack)) {
+        $fee  += $t->fee;
+        $size += $t->size;
+        last if ++$count > DESC_PACKAGE_TX;
+        foreach my $out (@{$t->out}) {
+            foreach my $sp ($out->spent_list) {
+                next if defined $sp->block_height;
+                next if $seen{$sp->hash}++;
+                push @stack, $sp;
+            }
+        }
+    }
+    return ($fee, $size);
+}
+
+# worst first: lowest feerate, then latest received
+sub _cmp_evict {
+    my ($sa, $ta, $sb, $tb) = @_;
+    return
+        $sa->[0] * $sb->[1] <=> $sb->[0] * $sa->[1] ||
+        ($tb->received_time // 0) <=> ($ta->received_time // 0) ||
+        $ta->hash cmp $tb->hash;
+}
+
 sub want_tx {
     my ($tx) = @_;
 
@@ -1791,7 +1824,9 @@ sub want_tx {
         return 0;
     }
 
-    # Reject if mempool over size limit and this tx is not better than worst evictable
+    # Reject if mempool over size limit and this tx is not better than worst evictable.
+    # Admission compares plain feerates (an incoming tx has no descendants yet, and the
+    # worst tx is tracked cheaply); eviction ranks by descendant score, see evict_mempool
     if ($MEMPOOL_SIZE + $tx->size > MAX_MEMPOOL_SIZE) {
         return 0 if $tx->fee == 0;
         my $worst = mempool_worst_tx();
@@ -1809,23 +1844,29 @@ sub want_tx {
 
 sub evict_mempool {
     my @mempool =
-        sort { compare_tx($b, $a) }
         grep { !defined($_->block_height)
                && $_->is_mempool_limited
                && !$_->in_blocks
                && !$_->drop_immune
                && !($_->received_from_peer && $_->received_from->syncing)
         } values %TRANSACTION;
+    # Order by descendant score: the rate of the transaction alone or with all its
+    # unconfirmed descendants, whichever is better. A cheap parent paid for by its
+    # descendants (CPFP) is evicted after single transactions with a lower cumulative
+    # rate; drop() cascades to the descendants, so the whole chain goes together.
+    my %score;
     foreach my $tx (@mempool) {
+        my ($desc_fee, $desc_size) = _desc_aggregate($tx);
+        $score{$tx->hash} = $tx->fee * $desc_size >= $desc_fee * $tx->size
+            ? [ $tx->fee, $tx->size ]
+            : [ $desc_fee, $desc_size ];
+    }
+    foreach my $tx (sort { _cmp_evict($score{$a->hash}, $a, $score{$b->hash}, $b) } @mempool) {
+        last if $MEMPOOL_SIZE <= MAX_MEMPOOL_SIZE && $MEMPOOL_ZERO_FEE_COUNT <= MAX_MEMPOOL_ZERO_FEE_TX;
+        next unless $MEMPOOL_SIZE > MAX_MEMPOOL_SIZE || ($MEMPOOL_ZERO_FEE_COUNT > MAX_MEMPOOL_ZERO_FEE_TX && $tx->fee == 0);
+        next unless $TRANSACTION{$tx->hash}; # already dropped with an evicted ancestor
         Infof("Evict tx %s fee %li size %u from mempool", $tx->hash_str, $tx->fee, $tx->size);
-        if ($MEMPOOL_SIZE > MAX_MEMPOOL_SIZE || ($MEMPOOL_ZERO_FEE_COUNT > MAX_MEMPOOL_ZERO_FEE_TX && $tx->fee == 0)) {
-            if ($tx->drop()) {
-                last if $MEMPOOL_SIZE <= MAX_MEMPOOL_SIZE && $MEMPOOL_ZERO_FEE_COUNT <= MAX_MEMPOOL_ZERO_FEE_TX;
-            }
-        }
-        else {
-            last;
-        }
+        $tx->drop();
     }
 }
 
