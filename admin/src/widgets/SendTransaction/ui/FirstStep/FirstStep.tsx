@@ -16,6 +16,7 @@ import { isAddress, formatSat } from '@/shared/utils';
 import { Button } from '@/shared/ui/Button';
 import { FORM_MAX_WIDTH, COIN_DECIMALS } from '@/shared/const/const';
 import { satToNativeString } from '@/shared/lib/fmtbtc';
+import { useAssetLabel } from '@/shared/lib/network';
 import { brand } from '@/brand';
 
 import { AssetOptionLabel } from './AssetOptionLabel';
@@ -58,10 +59,11 @@ export const FirstStep = () => {
 
     const [form] = Form.useForm();
     const [submittable, setSubmittable] = useState<boolean>(false);
+    const assetLabel = useAssetLabel();
     const values = Form.useWatch([], form);
 
     const assetOptions = [
-        { value: NATIVE_ASSET_ID, label: `${brand.assetLabel} (native)` },
+        { value: NATIVE_ASSET_ID, label: `${assetLabel} (native)` },
         ...Object.entries(tokenTotals).map(([tokenId, total]) => ({
             value: tokenId,
             label: <AssetOptionLabel tokenId={tokenId} total={total} />,
@@ -72,7 +74,7 @@ export const FirstStep = () => {
         if (!isTokenMode) {
             return {
                 value: address,
-                label: `${address} (${addressesData?.[address].balanceFormatted})`,
+                label: `${address} (${formatSat(addressesData?.[address].balance ?? 0n, assetLabel)})`,
             };
         }
         const group = addressesData?.[address]?.tokens?.[assetId];
@@ -242,7 +244,7 @@ export const FirstStep = () => {
                                     }
                                     await Promise.reject('Please input a positive amount!');
                                 } else if (selectedAddresses.length && parsed.value + feeSat > totalSelectedBalance) {
-                                    await Promise.reject(`Amount + fee exceeds balance (${formatSat(totalSelectedBalance)})`);
+                                    await Promise.reject(`Amount + fee exceeds balance (${formatSat(totalSelectedBalance, assetLabel)})`);
                                 }
                             }
                         }
@@ -297,7 +299,7 @@ export const FirstStep = () => {
             <Form.Item
                 label="Network fee:"
                 name="fee"
-                extra={isTokenMode ? `The network fee is always paid in ${brand.assetLabel}.` : undefined}
+                extra={isTokenMode ? `The network fee is always paid in ${assetLabel}.` : undefined}
                 rules={[
                     { required: true, message: 'Please input fee!' },
                     {
@@ -310,11 +312,11 @@ export const FirstStep = () => {
                                 return;
                             }
                             if (suggestedFeeSat > 0n && valueSat < suggestedFeeSat) {
-                                await Promise.reject(`Fee is below the network minimum (${formatSat(suggestedFeeSat)})`);
+                                await Promise.reject(`Fee is below the network minimum (${formatSat(suggestedFeeSat, assetLabel)})`);
                             }
                             if (isTokenMode && selectedAddresses.length && valueSat > nativeAvailableForFeeSat) {
                                 await Promise.reject(
-                                    `Not enough ${brand.assetLabel} for the fee (available ${formatSat(nativeAvailableForFeeSat)})`
+                                    `Not enough ${assetLabel} for the fee (available ${formatSat(nativeAvailableForFeeSat, assetLabel)})`
                                 );
                             }
                         }

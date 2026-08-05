@@ -17,7 +17,7 @@ export const NativeCoinIcon = ({ className }: NativeCoinIconProps) => {
 
     return (
         <span className={classNames(cls.monogram, className)} aria-hidden="true">
-            {(brand.assetLabel[0] || '?').toUpperCase()}
+            {(brand.assetName[0] || '?').toUpperCase()}
         </span>
     );
 };

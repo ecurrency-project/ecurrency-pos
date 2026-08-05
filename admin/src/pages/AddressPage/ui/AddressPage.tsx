@@ -14,6 +14,7 @@ import { Clipboard } from '@/shared/ui/Clipboard';
 
 import { formatNumber, formatSat } from '@/shared/utils';
 import { toBaseUnits } from '@/shared/lib/baseUnits';
+import { useAssetLabel } from '@/shared/lib/network';
 
 import cls from './AddressPage.module.css';
 
@@ -21,16 +22,17 @@ interface AddressPageProps {
     className?: string
 }
 
-const fmtTxos = (count: number, sum: number | string | bigint) => {
+const fmtTxos = (count: number, sum: number | string | bigint, assetLabel: string) => {
     const sumSat = toBaseUnits(sum) ?? 0n;
     return (count > 0 ? `${count} outputs` : 'No Outputs')
-        + (sumSat > 0n ? ` (${formatSat(sumSat)})` : '');
+        + (sumSat > 0n ? ` (${formatSat(sumSat, assetLabel)})` : '');
 };
 
 const AddressPage = (props: AddressPageProps) => {
     const { className } = props;
     const { id } = useParams<{ id: string }>();
     const [chainHash, setChainHash] = useState<string>('');
+    const assetLabel = useAssetLabel();
 
     const {
         data: address,
@@ -79,21 +81,21 @@ const AddressPage = (props: AddressPageProps) => {
                 {address.chain_stats.funded_txo_count > 0 && (
                     <HStack justify='space-between' className={cls.statsTableItem}>
                         <span>Confirmed received</span>
-                        <span>{fmtTxos(address.chain_stats.funded_txo_count, address.chain_stats.funded_txo_sum)}</span>
+                        <span>{fmtTxos(address.chain_stats.funded_txo_count, address.chain_stats.funded_txo_sum, assetLabel)}</span>
                     </HStack>
                 )}
 
                 {address.chain_stats.spent_txo_count > 0 && (
                     <HStack justify='space-between' className={cls.statsTableItem}>
                         <span>Confirmed spent</span>
-                        <span>{fmtTxos(address.chain_stats.spent_txo_count, address.chain_stats.spent_txo_sum)}</span>
+                        <span>{fmtTxos(address.chain_stats.spent_txo_count, address.chain_stats.spent_txo_sum, assetLabel)}</span>
                     </HStack>
                 )}
 
                 {address.chain_stats.tx_count > 0 && (
                     <HStack justify='space-between' className={cls.statsTableItem}>
                         <span>Confirmed unspent</span>
-                        <span>{fmtTxos(chainUtxoCount, chainUtxoSum)}</span>
+                        <span>{fmtTxos(chainUtxoCount, chainUtxoSum, assetLabel)}</span>
                     </HStack>
                 )}
             </VStack>

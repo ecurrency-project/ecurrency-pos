@@ -6,7 +6,7 @@ import { HStack } from '@/shared/ui/Stack';
 import { formatNumber } from '@/shared/utils';
 import { satToNativeString } from '@/shared/lib/fmtbtc';
 import type { BaseUnits } from '@/shared/lib/baseUnits';
-import { brand } from '@/brand';
+import { useAssetLabel } from '@/shared/lib/network';
 
 import cls from './TxCoinbase.module.css';
 
@@ -18,6 +18,7 @@ interface TxCoinbaseProps {
 
 export const TxCoinbase = (props: TxCoinbaseProps) => {
     const { className, value, index } = props;
+    const assetLabel = useAssetLabel();
 
     return (
         <div className={classNames(cls.TxCoinbase, className)}>
@@ -26,7 +27,7 @@ export const TxCoinbase = (props: TxCoinbaseProps) => {
                     <span className={cls.index}>{`#${index}`}</span>
                     <div className={cls.wrapper}>
                         Coinbase
-                        <span className={cls.amount}>{formatNumber(satToNativeString(value), NATIVE_PRECISION)}{' '}{brand.assetLabel}</span>
+                        <span className={cls.amount}>{formatNumber(satToNativeString(value), NATIVE_PRECISION)}{' '}{assetLabel}</span>
                     </div>
                 </HStack>
             </div>

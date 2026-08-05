@@ -17,7 +17,7 @@ export const linkToAddr = (addr: string) =>
     <Link to={`/address/${addr}`}>{addr}</Link>
 
 
-export const formatOutAmount = (vout: Prevout | Vout) => {
+export const formatOutAmount = (vout: Prevout | Vout, assetLabel: string) => {
     if (vout.value == null) return `Confidential`;
 
     if (vout.token_amount != null && vout.token_id) {
@@ -33,7 +33,7 @@ export const formatOutAmount = (vout: Prevout | Vout) => {
         return <span>
       {formatNumber(satToNativeString(vout.value), NATIVE_PRECISION)}
             { ' ' }
-            {!vout.asset ? brand.assetLabel : <Link to={`/asset/${vout.asset}`}>{brand.assetLabel}</Link>}
+            {!vout.asset ? assetLabel : <Link to={`/asset/${vout.asset}`}>{assetLabel}</Link>}
     </span>
     }
 }

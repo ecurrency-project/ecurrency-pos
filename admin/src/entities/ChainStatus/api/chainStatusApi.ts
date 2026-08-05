@@ -10,7 +10,10 @@ const chainStatusApi = rtkApi
                 query: () => '/admin/status',
                 providesTags: ['ChainStatus'],
             }),
+            getNodeStatus: build.query<ChainStatus, void>({
+                query: () => '/api/status',
+            }),
         }),
     });
 
-export const { useGetChainStatusQuery } = chainStatusApi;
+export const { useGetChainStatusQuery, useGetNodeStatusQuery } = chainStatusApi;
