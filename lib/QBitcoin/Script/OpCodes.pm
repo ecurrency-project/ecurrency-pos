@@ -61,7 +61,8 @@ use constant OPCODES => {
     OP_SWAP                => 0x7c, # +
     OP_TUCK                => 0x7d, # +
 
-    OP_SUCCESS7e           => 0x7e, # + ex: disabled OP_CAT
+    OP_TX_TYPE             => 0x7e, # push current transaction type onto the stack
+
     OP_SUCCESS7f           => 0x7f, # + ex: disabled OP_SPLIT, OP_SUBSTR
     OP_SUCCESS80           => 0x80, # + ex: disabled OP_NUM2BIN, OP_LEFT
     OP_SUCCESS81           => 0x81, # + ex: disabled OP_BIN2NUM, OP_RIGHT
@@ -134,6 +135,11 @@ use constant OPCODES => {
     OP_NOP10               => 0xb9, # +
 
     OP_CHECKSIGADD         => 0xba, # +
+
+    # Transaction introspection (covenants, e.g. the delegated-staking script)
+    OP_INPUTSCRIPTHASH     => 0xbb, # + previously OP_SUCCESS
+    OP_INPUTSVALUE         => 0xbc, # + previously OP_SUCCESS
+    OP_OUTPUTSVALUE        => 0xbd, # + previously OP_SUCCESS
 };
 use constant { map { $_ => chr(OPCODES->{$_}) } keys %{&OPCODES} };
 
