@@ -173,7 +173,7 @@ foreach my $opcode (keys %{&OPCODES}) {
 foreach my $opcode (0x01 .. 0x4b) {
     $OP_CMD[$opcode] = sub { pushdatan($opcode, @_) };
 }
-foreach my $opcode (0xbb .. 0xfe) {
+foreach my $opcode (0xbe .. 0xfe) {
     $OP_CMD[$opcode] = sub { success(@_) };
 }
 foreach (1 .. 10) {
@@ -443,6 +443,66 @@ sub cmd_checksequenceverify($) {
             $in->{min_rel_block_height} = $n if ($in->{min_rel_block_height} // -1) < $n;
         }
     }
+    return undef;
+}
+
+# OP_TX_TYPE: push the type of the transaction being validated (used by the
+# freeze/HTLC scripts to constrain how an output may be spent, e.g. only by a
+# TX_TYPE_BURN). Pushed as a script integer.
+sub cmd_tx_type($) {
+    my ($state) = @_;
+    return unless $state->ifstate;
+    push @{$state->stack}, pack_int($state->tx->tx_type);
+    return undef;
+}
+
+# OP_INPUTSCRIPTHASH: push the scripthash of the txo currently being spent.
+# The delegated-staking covenant uses it to name "my own address" without baking
+# the hash into the script.
+sub cmd_inputscripthash($) {
+    my ($state) = @_;
+    return unless $state->ifstate;
+    push @{$state->stack}, $state->tx->in->[$state->input_num]{txo}->scripthash;
+    return undef;
+}
+
+sub _sum_by_scripthash {
+    my %sum;
+    foreach my $txo (@_) {
+        my $scripthash = $txo->scripthash;
+        $sum{$scripthash} //= 0;
+        $sum{$scripthash} += $txo->value;
+    }
+    return \%sum;
+}
+
+# OP_INPUTSVALUE: pop a scripthash, push the total value of the transaction inputs
+# with that scripthash (0 if none). Sums are memoized on the transaction, so
+# repeated queries for the same scripthash cost O(1) and no sigops charge is needed.
+sub cmd_inputsvalue($) {
+    my ($state) = @_;
+    return unless $state->ifstate;
+    my $stack = $state->stack;
+    @$stack or return 0;
+    my $scripthash = pop @$stack;
+    my $tx = $state->tx;
+    my $sum = $tx->{script_inputs_value} //= _sum_by_scripthash(map { $_->{txo} } @{$tx->in});
+    push @$stack, pack_int($sum->{$scripthash} // 0) // return 0;
+    return undef;
+}
+
+# OP_OUTPUTSVALUE: pop a scripthash, push the total value of the transaction outputs
+# paying to that scripthash (0 if none). Together with OP_INPUTSVALUE this expresses
+# the covenant "the value of address X must not decrease in this transaction".
+sub cmd_outputsvalue($) {
+    my ($state) = @_;
+    return unless $state->ifstate;
+    my $stack = $state->stack;
+    @$stack or return 0;
+    my $scripthash = pop @$stack;
+    my $tx = $state->tx;
+    my $sum = $tx->{script_outputs_value} //= _sum_by_scripthash(@{$tx->out});
+    push @$stack, pack_int($sum->{$scripthash} // 0) // return 0;
     return undef;
 }
 
