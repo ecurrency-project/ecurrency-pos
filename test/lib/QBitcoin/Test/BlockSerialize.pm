@@ -2,7 +2,7 @@ package QBitcoin::Test::BlockSerialize;
 use warnings;
 use strict;
 
-use JSON::XS;
+use Cpanel::JSON::XS;
 use Test::MockModule;
 use QBitcoin::Const;
 use QBitcoin::Config;

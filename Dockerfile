@@ -12,7 +12,7 @@ WORKDIR /build
 
 RUN apk add --no-cache \
     perl openssl sqlite-libs gmp \
-    perl-json-xs perl-dbi perl-dbd-sqlite \
+    perl-cpanel-json-xs perl-dbi perl-dbd-sqlite \
     perl-http-message perl-hash-multivalue perl-params-validate \
     perl-role-tiny perl-tie-ixhash perl-cryptx
 
@@ -40,7 +40,7 @@ WORKDIR /database
 
 RUN apk add --no-cache \
     perl openssl sqlite-libs gmp \
-    perl-json-xs perl-dbd-sqlite perl-dbd-mysql perl-dbi \
+    perl-cpanel-json-xs perl-dbd-sqlite perl-dbd-mysql perl-dbi \
     perl-http-message perl-hash-multivalue perl-params-validate \
     perl-role-tiny perl-tie-ixhash perl-cryptx busybox-extras
 

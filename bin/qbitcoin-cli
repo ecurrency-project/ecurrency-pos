@@ -4,13 +4,15 @@ use strict;
 
 use Getopt::Long qw(:config bundling no_ignore_case no_auto_abbrev require_order);
 use HTTP::Tiny;
-use JSON::XS;
+use Cpanel::JSON::XS;
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config qw($config read_config);
 use QBitcoin::BlockchainParams;
 
-my $JSON = JSON::XS->new;
+# allow_bignum: decode amounts that do not fit a native int/float into
+# Math::BigInt/BigFloat instead of losing precision
+my $JSON = Cpanel::JSON::XS->new->allow_bignum;
 
 sub main {
     my ( $help, $conffile );
@@ -138,7 +140,7 @@ sub call_rpc {
         if (defined($code) && $code == ERR_CONFIRMATION_REQUIRED && !$asked{force}++) {
             confirm($error->{message} // "The operation requires confirmation.")
                 or do { print STDERR "Aborted\n"; return 1 };
-            $extra{force} = JSON::XS::true;
+            $extra{force} = Cpanel::JSON::XS::true;
             next;
         }
         last;

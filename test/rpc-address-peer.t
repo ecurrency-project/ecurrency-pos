@@ -72,25 +72,25 @@ my (undef, $foreign_address) = make_address(CRYPT_ALGO_ECDSA);
 my $info = rpc('getaddressinfo', $address)->_rpc_result;
 is($info->{address},     $address,                                         "getaddressinfo: address");
 is($info->{scripthash},  unpack("H*", scripthash_by_address($address)),    "getaddressinfo: scripthash");
-is($info->{ismine},      JSON::XS::true,  "own address is mine");
-is($info->{iswatchonly}, JSON::XS::false, "own address is not watch-only");
-is($info->{staked},      JSON::XS::false, "own address is not staked");
+is($info->{ismine},      Cpanel::JSON::XS::true,  "own address is mine");
+is($info->{iswatchonly}, Cpanel::JSON::XS::false, "own address is not watch-only");
+is($info->{staked},      Cpanel::JSON::XS::false, "own address is not staked");
 is($info->{algo},        "ecdsa",         "own address algo");
 ok($info->{pubkey},                       "own address pubkey is known");
 
 rpc('stakeaddress', $address);
 $info = rpc('getaddressinfo', $address)->_rpc_result;
-is($info->{staked}, JSON::XS::true, "staked flag after stakeaddress");
+is($info->{staked}, Cpanel::JSON::XS::true, "staked flag after stakeaddress");
 
 rpc('setaddresstag', $watch_address, "exchange");
 $info = rpc('getaddressinfo', $watch_address)->_rpc_result;
-is($info->{ismine},      JSON::XS::false, "watch-only address is not mine");
-is($info->{iswatchonly}, JSON::XS::true,  "watch-only address is watch-only");
+is($info->{ismine},      Cpanel::JSON::XS::false, "watch-only address is not mine");
+is($info->{iswatchonly}, Cpanel::JSON::XS::true,  "watch-only address is watch-only");
 is($info->{tag},         "exchange",      "watch-only address tag");
 
 $info = rpc('getaddressinfo', $foreign_address)->_rpc_result;
-is($info->{ismine},      JSON::XS::false, "foreign address is not mine");
-is($info->{iswatchonly}, JSON::XS::false, "foreign address is not watch-only");
+is($info->{ismine},      Cpanel::JSON::XS::false, "foreign address is not mine");
+is($info->{iswatchonly}, Cpanel::JSON::XS::false, "foreign address is not watch-only");
 ok(!exists $info->{staked},               "no wallet info for foreign address");
 
 my $bad = rpc('getaddressinfo', substr($address, 0, -1) . ($address =~ /1$/ ? "2" : "1"));
@@ -101,7 +101,7 @@ my $list = rpc('listmyaddresses')->_rpc_result;
 ok($list->{$address},       "listmyaddresses: own address listed by default");
 ok($list->{$watch_address}, "listmyaddresses: watch-only address listed by default");
 
-$list = rpc('listmyaddresses', JSON::XS::false)->_rpc_result;
+$list = rpc('listmyaddresses', Cpanel::JSON::XS::false)->_rpc_result;
 ok($list->{$address},        "listmyaddresses(false): own address listed");
 ok(!$list->{$watch_address}, "listmyaddresses(false): watch-only address not listed");
 
@@ -121,8 +121,8 @@ my ($listed) = grep { $_->{addr} eq "10.1.2.3:9555" } @{rpc('listpeers')->_rpc_r
 ok($listed, "listpeers: known peer listed") or BAIL_OUT("peer not listed");
 is($listed->{protocol},        "QBitcoin",      "listpeers: protocol");
 is($listed->{failed_connects}, 3,               "listpeers: failed connects counted");
-is($listed->{connected},       JSON::XS::false, "listpeers: not connected");
-is($listed->{connect_allowed}, JSON::XS::false, "listpeers: in failed-connects backoff");
+is($listed->{connected},       Cpanel::JSON::XS::false, "listpeers: not connected");
+is($listed->{connect_allowed}, Cpanel::JSON::XS::false, "listpeers: in failed-connects backoff");
 ok($listed->{last_fail_time},                   "listpeers: last fail time set");
 
 my $reset = rpc('resetpeer', "10.1.2.3");
