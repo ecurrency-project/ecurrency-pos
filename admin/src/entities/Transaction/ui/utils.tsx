@@ -1,6 +1,5 @@
 import {Link} from "react-router-dom";
 import { formatNumber } from "@/shared/utils";
-import { brand } from '@/brand';
 import { TokenValue } from '@/entities/Token';
 import type { Prevout, Vin, Vout } from '../model/types/ITransaction.ts';
 import { satToNativeString } from '@/shared/lib/fmtbtc';
@@ -41,7 +40,7 @@ export const formatOutAmount = (vout: Prevout | Vout, assetLabel: string) => {
 export const isRbf = (vins: Vin[]) => vins.some(vin => vin.sequence < 0xfffffffe);
 export const isAllUnconfidential = (vouts: Vout[]) => vouts.every(vout => vout.value != null);
 
-export const isNativeOut = (vout: Vout | Prevout) => (!vout.asset && !vout.assetcommitment) || vout.asset === brand.assetId
+export const isNativeOut = (vout: Vout | Prevout) => !vout.asset && !vout.assetcommitment
 export const isAllNative = (vouts: Vout[]) => vouts.every(isNativeOut);
 export const outTotal = (vouts: Vout[]): bigint =>
     vouts.reduce((total, vout) => total + (toBaseUnits(vout.value) ?? 0n), 0n);
