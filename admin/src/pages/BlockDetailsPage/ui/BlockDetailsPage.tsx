@@ -115,11 +115,11 @@ const BlockDetailsPage = (props: BlockDetailsPageProps) => {
                 </HStack>
                 <HStack justify="space-between" className={cls.statsTableItem}>
                     <span>Block weight</span>
-                    <span>{formatNumber(block.block_weight / UNITS_PER_GW)} GW</span>
+                    <span>{formatNumber(Number(block.block_weight) / UNITS_PER_GW)} GW</span>
                 </HStack>
                 <HStack justify="space-between" className={cls.statsTableItem}>
                     <span>Branch units</span>
-                    <span>{formatNumber(block.weight / UNITS_PER_GW)} GW</span>
+                    <span>{formatNumber(Number(block.weight) / UNITS_PER_GW)} GW</span>
                 </HStack>
                 {expanded && (
                     <HStack justify="space-between" className={cls.statsTableItem}>

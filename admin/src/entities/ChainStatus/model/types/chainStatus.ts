@@ -1,3 +1,5 @@
+import type { BaseUnits } from '@/shared/lib/baseUnits';
+
 export interface WalletStatus {
     password_set: boolean;
     keys_encrypted: boolean;
@@ -9,13 +11,13 @@ export interface WalletStatus {
 export interface ChainStatus {
     btc_scanned: number;
     btc_headers: number;
-    weight: number;
+    weight: BaseUnits;
     mempool_size: number;
-    total_coins: number;
+    total_coins: BaseUnits;
     blocks: number;
     bestblocktime: number;
     genesistime: number;
-    reward: number;
+    reward: BaseUnits;
     btc_synced: boolean;
     bestblockhash: string;
     chain: string;

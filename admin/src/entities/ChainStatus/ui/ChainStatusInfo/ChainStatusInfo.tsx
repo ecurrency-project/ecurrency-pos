@@ -97,7 +97,7 @@ export const ChainStatusInfo = memo(function ChainStatusInfo(props: ChainStatusI
                                 </span>
                             )}
                             value={status.weight}
-                            formatter={(value) => value.toLocaleString()}
+                            formatter={(value) => Number(value).toLocaleString()}
                             valueStyle={{ color: '#1890ff' }}
                         />
                     </div>

@@ -25,7 +25,7 @@ export const BlockItem = memo(function BlockItem(props: BlockItemProps) {
                 <div className={cls.blockSell} data-label='Timestamp'>{formatTime(block.timestamp, false)}</div>
                 <div className={cls.blockSell} data-label='Transactions'>{formatNumber(block.tx_count)}</div>
                 <div className={cls.blockSell} data-label='Size (KB)'>{formatNumber(block.size / 1000)}</div>
-                <div className={cls.blockSell} data-label='Weight (KWU)'>{formatNumber(block.weight / 1000)}</div>
+                <div className={cls.blockSell} data-label='Weight (KWU)'>{formatNumber(Number(block.weight) / 1000)}</div>
             </Link>
         </div>
     );
