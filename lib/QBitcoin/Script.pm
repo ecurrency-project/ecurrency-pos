@@ -36,10 +36,17 @@ use constant QBT_SEQUENCE_LOCKTIME_TYPE_FLAG => 1 << 27;
 
 use constant MAX_SCRIPT_EXEC_DEPTH => 16;
 
-# Allow attributes "in1", "in2", etc
+# Allow attributes "in1", "in2", etc; store them so attributes::get() can fetch them back
+my %CODE_ATTRS;
 sub MODIFY_CODE_ATTRIBUTES {
     my ($class, $code, @attrs) = @_;
+    push @{$CODE_ATTRS{$code}}, grep { /^in[0-9]+$/ } @attrs;
     return grep { !/^in[0-9]+$/ } @attrs;
+}
+
+sub FETCH_CODE_ATTRIBUTES {
+    my ($class, $code) = @_;
+    return @{$CODE_ATTRS{$code} // []};
 }
 
 my %INT_2_1 = (
@@ -68,18 +75,18 @@ my %PUSH_CONST = (
 my %COMMON_CMD = (
     drop    => sub :in1 { pop },
     dup     => sub :in1 { push @_, $_[-1] },
-    equal   => sub :in2 { push @_, pop eq pop },
+    equal   => sub :in2 { push @_, pop eq pop ? TRUE : FALSE },
     '2drop' => sub :in2 { splice(@_,-2) },
     '2dup'  => sub :in2 { push @_, @_[-2,-1] },
     '3dup'  => sub :in3 { push @_, @_[-3,-2,-1] },
     '2over' => sub :in4 { push @_, @_[-4,-3] },
     '2rot'  => sub :in6 { push @_, splice(@_,-6,2) },
     '2swap' => sub :in4 { push @_, splice(@_,-4,2) },
-    ifdup   => sub :in4 { push @_, $_[-1] if is_true($_[-1]) },
-    depth   => sub :in4 { push @_, pack_int(scalar @_) },
+    ifdup   => sub :in1 { push @_, $_[-1] if is_true($_[-1]) },
+    depth   => sub { push @_, pack_int(scalar @_) },
     nip     => sub :in2 { splice(@_,-2,1) },
     over    => sub :in2 { push @_, $_[-2] },
-    rot     => sub :in2 { push @_, splice(@_,-3,1) },
+    rot     => sub :in3 { push @_, splice(@_,-3,1) },
     swap    => sub :in2 { push @_, splice(@_,-2,1) },
     tuck    => sub :in2 { splice(@_,-2,0,$_[-1]) },
     size    => sub :in1 { push @_, pack_int(length($_[-1])) },
