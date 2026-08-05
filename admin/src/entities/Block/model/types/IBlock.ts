@@ -1,15 +1,17 @@
 import type { EntityState } from '@reduxjs/toolkit';
 
+import type { BaseUnits } from '@/shared/lib/baseUnits';
+
 export interface IBlock {
     id: string;
     size: number;
 
-    block_weight: number;
+    block_weight: BaseUnits;
 
     previousblockhash: string;
     height: number;
     merkle_root: string;
-    weight: number;
+    weight: BaseUnits;
     tx_count: number;
     timestamp: number;
 }
