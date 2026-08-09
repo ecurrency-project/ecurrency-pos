@@ -2310,7 +2310,11 @@ sub cmd_stakeaddress {
     if ($my_address->staked) {
         return $self->response_ok("Address $address is already using for staking");
     }
-    $my_address->set_stake(1);
+    if ($my_address->is_delegation) {
+        return $self->response_error("Address $address is delegated for staking; staking it here as well would equivocate and lead to slashing", ERR_INVALID_ADDRESS_OR_KEY);
+    }
+    $my_address->set_stake(1)
+        or return $self->response_error("Cannot set address $address for staking", ERR_INTERNAL_ERROR);
     return $self->response_ok("Address $address set for staking");
 }
 
