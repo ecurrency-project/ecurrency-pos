@@ -35,9 +35,11 @@ sub script_type {
     my ($script) = @_;
 
     # TODO: make proper check (multisig etc)
-    # P2PKH: OP_DUP OP_HASH160 <public_key_hash> OP_EQUALVERIFY OP_CHECKSIG
-    # P2PK:  <public_key> OP_CHECKSIG
-    return substr($script, 0, 1) eq OP_DUP ? "P2PKH" : "P2PK";
+    # P2PKH:      OP_DUP OP_HASH160 <public_key_hash> OP_EQUALVERIFY OP_CHECKSIG
+    # P2PK:       <public_key> OP_CHECKSIG
+    # DELEGATION: OP_IF ... OP_ELSE ... OP_ENDIF (see QBitcoin::Script::Delegation)
+    return substr($script, 0, 1) eq OP_DUP ? "P2PKH" :
+           substr($script, 0, 1) eq OP_IF  ? "DELEGATION" : "P2PK";
 }
 
 1;
