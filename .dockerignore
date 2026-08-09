@@ -2,3 +2,5 @@ Dockerfile
 .dockerignore
 .git/
 .gitignore
+.claude/
+admin/node_modules/
