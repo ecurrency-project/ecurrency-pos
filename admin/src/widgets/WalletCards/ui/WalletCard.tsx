@@ -112,13 +112,27 @@ export const WalletCard = (props: WalletCardProps) => {
                         </span>
                         <span className={cls.stakePill}>
                             <span className={cls.stakeLabel}>Staking</span>
-                            <Switch
-                                size="small"
-                                checked={!!myAddress.staked}
-                                loading={stakedLoading}
-                                onChange={(checked) => onStakedChange(address, checked)}
-                            />
+                            <Tooltip
+                                title={myAddress.delegation
+                                    ? myAddress.delegation === 'both'
+                                        ? 'Staked by this node\'s staking key (delegated address)'
+                                        : 'Delegated: staked by the delegate node'
+                                    : undefined}
+                            >
+                                <Switch
+                                    size="small"
+                                    checked={!!myAddress.staked}
+                                    loading={stakedLoading}
+                                    disabled={!!myAddress.delegation}
+                                    onChange={(checked) => onStakedChange(address, checked)}
+                                />
+                            </Tooltip>
                         </span>
+                        {myAddress.delegation && (
+                            <Tooltip title="Delegated staking address: the delegate can only stake the coins, spending needs your key">
+                                <span className={cls.delegPill}>Delegated</span>
+                            </Tooltip>
+                        )}
                     </div>
                 </div>
                 <div className={cls.actions}>

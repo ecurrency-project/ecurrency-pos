@@ -1,12 +1,12 @@
 import { memo, useCallback, useState } from 'react';
-import { Button, Modal, Typography, message } from 'antd';
-import { PlusOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
+import { Alert, Button, Dropdown, Form, Input, Modal, Typography, message } from 'antd';
+import { PlusOutlined, EyeOutlined, EyeInvisibleOutlined, DownOutlined } from '@ant-design/icons';
 
 import {
     useGenerateNewAddressMutation,
     useAddAddressMutation,
 } from '@/entities/MyAddress';
-import type { AddAddressParams } from '@/entities/MyAddress';
+import type { GeneratedAddress } from '@/entities/MyAddress';
 
 import cls from './GenerateAddressButton.module.css';
 
@@ -16,10 +16,12 @@ export const GenerateAddressButton = memo(function GenerateAddressButton() {
     const [generateNewAddress, { isLoading: isGenerating }] = useGenerateNewAddressMutation();
     const [addAddress] = useAddAddressMutation();
 
-    const [generatedAddress, setGeneratedAddress] = useState<AddAddressParams | null>(null);
+    const [generatedAddress, setGeneratedAddress] = useState<GeneratedAddress | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isKeyVisible, setIsKeyVisible] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isDelegateModalOpen, setIsDelegateModalOpen] = useState(false);
+    const [delegateForm] = Form.useForm();
 
     const handleGenerate = useCallback(async () => {
         try {
@@ -31,6 +33,27 @@ export const GenerateAddressButton = memo(function GenerateAddressButton() {
             message.error('Failed to generate address');
         }
     }, [generateNewAddress]);
+
+    const handleGenerateDelegated = useCallback(async () => {
+        let values;
+        try {
+            values = await delegateForm.validateFields();
+        } catch {
+            return; // validation errors are shown by the form
+        }
+        try {
+            const result = await generateNewAddress({
+                delegate_pubkeyhash: values.delegate_pubkeyhash.trim(),
+            }).unwrap();
+            setIsDelegateModalOpen(false);
+            delegateForm.resetFields();
+            setGeneratedAddress(result);
+            setIsKeyVisible(false);
+            setIsModalOpen(true);
+        } catch {
+            message.error('Failed to generate address: check the delegate pubkeyhash');
+        }
+    }, [delegateForm, generateNewAddress]);
 
     const handleSave = useCallback(async () => {
         if (!generatedAddress) return;
@@ -57,17 +80,44 @@ export const GenerateAddressButton = memo(function GenerateAddressButton() {
 
     return (
         <>
-            <Button
+            <Dropdown.Button
                 type="primary"
-                icon={<PlusOutlined/>}
+                icon={<DownOutlined/>}
                 onClick={handleGenerate}
                 loading={isGenerating}
+                menu={{
+                    items: [{
+                        key: 'delegated',
+                        label: 'Delegated staking address…',
+                        onClick: () => setIsDelegateModalOpen(true),
+                    }],
+                }}
             >
-                Generate New
-            </Button>
+                <PlusOutlined/> Generate New
+            </Dropdown.Button>
 
             <Modal
-                title='Generated Address'
+                title='Generate Delegated Staking Address'
+                open={isDelegateModalOpen}
+                onOk={handleGenerateDelegated}
+                onCancel={() => setIsDelegateModalOpen(false)}
+                confirmLoading={isGenerating}
+                okText='Generate'
+            >
+                <Form form={delegateForm} layout="vertical">
+                    <Form.Item
+                        name="delegate_pubkeyhash"
+                        label='Delegate staking pubkeyhash'
+                        extra='Published by the delegate who will stake the coins for you'
+                        rules={[{ required: true, message: 'Please enter the delegate pubkeyhash' }]}
+                    >
+                        <Input placeholder='Staking pubkeyhash'/>
+                    </Form.Item>
+                </Form>
+            </Modal>
+
+            <Modal
+                title={generatedAddress?.pubkeyhash ? 'Generated Delegated Address' : 'Generated Address'}
                 open={isModalOpen}
                 onCancel={handleClose}
                 width={600}
@@ -113,6 +163,26 @@ export const GenerateAddressButton = memo(function GenerateAddressButton() {
                                 />
                             </div>
                         </div>
+                        {generatedAddress.pubkeyhash && (
+                            <>
+                                <div className={cls.generatedField}>
+                                    <Text type="secondary">Your pubkeyhash (send it to the delegate)</Text>
+                                    <Text copyable className={cls.generatedValue}>
+                                        {generatedAddress.pubkeyhash}
+                                    </Text>
+                                </div>
+                                <Alert
+                                    type="warning"
+                                    showIcon
+                                    message="Delegated staking address"
+                                    description="The delegate can only stake the coins and must always return the
+                                        full value back to this address; only your private key can spend them.
+                                        Send your pubkeyhash to the delegate so their node starts staking.
+                                        Give the delegation to ONE delegate only: staking the same address from
+                                        two nodes is equivocation, and the slashing penalty is paid from your coins."
+                                />
+                            </>
+                        )}
                     </div>
                 )}
             </Modal>

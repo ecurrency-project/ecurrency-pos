@@ -1,4 +1,4 @@
-export type { IMyAddress, AddAddressParams } from './model/types/myAddress';
+export type { IMyAddress, AddAddressParams, GenerateAddressParams, GeneratedAddress } from './model/types/myAddress';
 export {
     useGetMyAddressesQuery,
     useGenerateNewAddressMutation,

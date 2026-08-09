@@ -1,0 +1,79 @@
+.DelegatedStaking {
+    margin-top: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.headerLeft {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--font-size-l);
+    font-weight: var(--font-weight-l, 600);
+}
+
+.headerTitle {
+    font-weight: 600;
+}
+
+.count {
+    color: var(--dc-text-secondary);
+}
+
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.description {
+    margin: 0;
+    color: var(--dc-text-secondary);
+    max-width: 720px;
+}
+
+.noKey {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.noKeyHint {
+    color: var(--dc-text-secondary);
+}
+
+.keys {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.keyRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.keyValue {
+    font-family: var(--font-family-mono, monospace);
+    word-break: break-all;
+}
+
+.table {
+    margin-top: 4px;
+}
+
+.addAlert {
+    margin-bottom: 16px;
+}

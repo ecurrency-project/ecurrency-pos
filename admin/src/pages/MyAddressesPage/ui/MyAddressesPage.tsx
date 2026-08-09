@@ -11,6 +11,7 @@ import {
 import { GenerateAddressButton } from '@/features/GenerateAddress';
 import { ImportAddressButton } from '@/features/ImportAddress';
 import { WalletCards } from '@/widgets/WalletCards';
+import { DelegatedStaking } from '@/widgets/DelegatedStaking';
 import { Button } from '@/shared/ui/Button';
 import { RouterPath, RoutersApp } from '@/shared/config/router/router';
 
@@ -72,6 +73,8 @@ const MyAddressesPage = () => {
                     onStakedChange={handleStakedChange}
                 />
             )}
+
+            <DelegatedStaking/>
         </div>
     );
 };
