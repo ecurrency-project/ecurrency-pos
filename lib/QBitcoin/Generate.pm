@@ -15,6 +15,8 @@ use QBitcoin::TXO;
 use QBitcoin::Coinbase;
 use QBitcoin::Address qw(scripthash_by_address);
 use QBitcoin::MyAddress qw(my_address stake_address);
+use QBitcoin::Delegation;
+use QBitcoin::Wallet::UTXO ();
 use QBitcoin::Transaction;
 use QBitcoin::Crypto qw(hash256);
 use QBitcoin::Slashing;
@@ -27,13 +29,23 @@ sub load_utxo {
     foreach my $my_address (my_address()) {
         $class->load_address_utxo($my_address);
     }
+    foreach my $delegation (QBitcoin::Delegation->list) {
+        $class->load_address_utxo($delegation);
+    }
 }
 
+# Accepts a QBitcoin::MyAddress or a QBitcoin::Delegation (both provide
+# address and scripthash); which utxo registry buckets the outputs go to is
+# decided by the object we load for, so the caller stays the single authority
+# on wallet membership
 sub load_address_utxo {
     my $class = shift;
     my ($my_address) = @_;
     my $count = 0;
     my $value = 0;
+    my $roles = $my_address->isa('QBitcoin::Delegation') ? QBitcoin::Wallet::UTXO::UTXO_DELEGATED
+        : $my_address->can('staked') && $my_address->staked ? QBitcoin::Wallet::UTXO::UTXO_STAKED
+        : QBitcoin::Wallet::UTXO::UTXO_MY;
     my $scripthash = $my_address->scripthash;
     my $chain_utxo = get_address_utxo($my_address->address, 1000);
     foreach my $txid (keys %$chain_utxo) {
@@ -47,7 +59,7 @@ sub load_address_utxo {
                 data       => $utxo_data->{data} // "",
                 defined($utxo_data->{token_id}) ? ( token_hash => $utxo_data->{token_id} ) : (),
             });
-            $utxo->add_my_utxo();
+            QBitcoin::Wallet::UTXO::myutxo_add($utxo, $roles);
             $count++;
             $value += $utxo->value;
         }

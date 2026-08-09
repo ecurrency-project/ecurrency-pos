@@ -18,6 +18,7 @@ use QBitcoin::ORM qw(find delete :types);
 use QBitcoin::Address qw(scripthash_by_address);
 use QBitcoin::Script::Delegation qw(delegation_script delegation_address);
 use QBitcoin::StakingKey;
+use QBitcoin::Wallet::UTXO ();
 
 use constant TABLE => 'delegation';
 
@@ -90,9 +91,19 @@ sub create {
 
 sub remove {
     my $self = shift;
+    my $scripthash = $self->scripthash;
     $self->delete;
     @$DELEGATIONS = grep { $_ != $self } @$DELEGATIONS if $DELEGATIONS;
-    delete $HASHES->{$self->scripthash} if $HASHES;
+    delete $HASHES->{$scripthash} if $HASHES;
+    # Re-add with the remaining roles: the owner key of the same address may be
+    # in this wallet too
+    foreach my $utxo (QBitcoin::Wallet::UTXO::myutxo_delegated()) {
+        next unless $utxo->scripthash eq $scripthash;
+        QBitcoin::Wallet::UTXO::myutxo_del($utxo);
+        if (my $roles = $utxo->my_roles) {
+            QBitcoin::Wallet::UTXO::myutxo_add($utxo, $roles);
+        }
+    }
     Warningf("Removed delegation address %s", $self->address);
     return;
 }

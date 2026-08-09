@@ -24,7 +24,7 @@ my $generate_module = Test::MockModule->new('QBitcoin::Generate');
 $generate_module->mock('stake_address', sub { $my_address });
 $generate_module->mock('txo_confirmed', sub { 1 });
 my $txo_module = Test::MockModule->new('QBitcoin::TXO');
-$txo_module->mock('is_staked', sub { 1 });
+$txo_module->mock('my_roles', sub { QBitcoin::Wallet::UTXO::UTXO_STAKED });
 my $timeslot = timeslot(time);
 my $transaction_module = Test::MockModule->new('QBitcoin::Transaction');
 $transaction_module->mock('txo_time', sub { $_[1]->tx_in =~ /age_\d+:(\d+)/ ? $timeslot - $1*10 : 0 });

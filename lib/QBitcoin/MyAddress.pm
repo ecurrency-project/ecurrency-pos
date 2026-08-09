@@ -92,7 +92,7 @@ sub update_my_utxo {
     my %scripthash = map { $_ => 1 } $address->scripthash;
     foreach my $utxo (grep { exists $scripthash{$_->scripthash} } myutxo_list()) {
         myutxo_del($utxo);
-        myutxo_add($utxo, $address->staked);
+        myutxo_add($utxo, $utxo->my_roles);
     }
 }
 
@@ -316,11 +316,6 @@ sub remove {
     if (my $pubkey = eval { $self->pubkey }) {
         %pubkeyhash = (hash160($pubkey) => 1, hash256($pubkey) => 1);
     }
-    foreach my $utxo (myutxo_list()) {
-        if ($scripthash{$utxo->scripthash} || $pubkeyhash{substr($utxo->data // "", 0, 32)}) {
-            myutxo_del($utxo);
-        }
-    }
     $self->delete;
     @$WATCHED_ADDRESS = grep { $_ != $self } @$WATCHED_ADDRESS if $WATCHED_ADDRESS;
     @$MY_ADDRESS      = grep { $_ != $self } @$MY_ADDRESS      if $MY_ADDRESS;
@@ -329,6 +324,16 @@ sub remove {
         foreach my $hash (keys %scripthash) {
             delete $MY_HASHES->{$hash};
             delete $WATCH_HASHES->{$hash};
+        }
+    }
+    # Re-add with the remaining roles: the same address may still be delegated
+    # to this node for staking
+    foreach my $utxo (myutxo_list()) {
+        if ($scripthash{$utxo->scripthash} || $pubkeyhash{substr($utxo->data // "", 0, 32)}) {
+            myutxo_del($utxo);
+            if (my $roles = $utxo->my_roles) {
+                myutxo_add($utxo, $roles);
+            }
         }
     }
     Warningf("Removed my address %s", $self->address);
