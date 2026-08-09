@@ -85,9 +85,31 @@ sub txo_confirmed {
     return $block_height >= 0 && $block_height <= $max_height;
 }
 
+# Config "reward_addr <address> [<share>]": the share of the block reward sent
+# to the reward address; the remainder is distributed to the staking addresses
+# by weight, so a delegate keeps the share as its fee and the rest goes to the
+# owners of the delegated addresses (under their covenant). No share means the
+# whole reward goes to the reward address (the historic behavior).
+# Returns [scripthash, share] or undef.
+my %REWARD_CONF;
+sub reward_conf {
+    my $value = $config->{reward_addr}
+        or return undef;
+    return $REWARD_CONF{$value} //= do {
+        my ($address, $share) = grep { length } split /\s+/, $value;
+        $share //= 1;
+        if ($share !~ /^(?:\d+\.?\d*|\.\d+)$/ || $share <= 0 || $share > 1) {
+            Errf("Incorrect reward share %s in reward_addr config, sending the whole reward to %s", $share, $address);
+            $share = 1;
+        }
+        [ scripthash_by_address($address), $share ];
+    };
+}
+
 sub reward_addr {
-    state $reward_addr = $config->{reward_addr} ? scripthash_by_address($config->{reward_addr}) : undef;
-    return $reward_addr;
+    my $conf = reward_conf()
+        or return undef;
+    return $conf->[0];
 }
 
 sub make_out_join {
@@ -108,24 +130,10 @@ sub make_out_join {
     $my_address //= (stake_address())[0]
         or return ();
     my $my_amount = sum0 map { $_->value } @$my_txo;
-    if (reward_addr) {
-        return (
-            QBitcoin::TXO->new_txo(
-                value      => $my_amount,
-                scripthash => scalar($my_address->scripthash),
-            ),
-            QBitcoin::TXO->new_txo(
-                value      => $reward,
-                scripthash => reward_addr,
-            ),
-        );
-    }
-    else {
-        return QBitcoin::TXO->new_txo(
-            value      => $my_amount + $reward,
-            scripthash => scalar($my_address->scripthash),
-        );
-    }
+    return QBitcoin::TXO->new_txo(
+        value      => $my_amount + $reward,
+        scripthash => scalar($my_address->scripthash),
+    );
 }
 
 sub my_txo_by_address {
@@ -155,24 +163,10 @@ sub make_out_separate {
     @$my_txo or return make_out_join($reward, $my_txo);
     my ($my_best) = my_txo_by_address($my_txo, $timeslot);
     @$my_txo = grep { $_->scripthash eq $my_best->[0] } @$my_txo;
-    if (reward_addr) {
-        return (
-            QBitcoin::TXO->new_txo(
-                value      => $my_best->[1],
-                scripthash => $my_best->[0],
-            ),
-            QBitcoin::TXO->new_txo(
-                value      => $reward,
-                scripthash => reward_addr,
-            ),
-        );
-    }
-    else {
-        return QBitcoin::TXO->new_txo(
-            value      => $my_best->[1] + $reward,
-            scripthash => $my_best->[0],
-        );
-    }
+    return QBitcoin::TXO->new_txo(
+        value      => $my_best->[1] + $reward,
+        scripthash => $my_best->[0],
+    );
 }
 
 sub make_out_union {
@@ -186,39 +180,25 @@ sub make_out_union {
         @my = my_txo_by_address($my_txo, $timeslot);
     }
     my @out;
-    if (reward_addr) {
-        @out = map {
-            QBitcoin::TXO->new_txo(
-                value      => $_->[1],
-                scripthash => $_->[0],
-            )
-        } @my;
+    my $total_weight = sum0 map { $_->[2] } @my;
+    my $reward_remain = $reward;
+    my %remove_scripthash;
+    for (my $i = $#my; $i >= 0; $i--) {
+        my $reward_part = $i > 0 ? int($reward * $my[$i]->[2] / $total_weight + 0.5) : $reward_remain;
+        if ($reward > 0 && $reward_part == 0) {
+            # Remove utxo related to this address from the @$my_txo list
+            $remove_scripthash{$my[$i]->[0]} = 1;
+            next;
+        }
+        $reward_remain -= $reward_part;
         push @out, QBitcoin::TXO->new_txo(
-            value      => $reward,
-            scripthash => reward_addr,
+            value      => $my[$i]->[1] + $reward_part,
+            scripthash => $my[$i]->[0],
         );
     }
-    else {
-        my $total_weight = sum0 map { $_->[2] } @my;
-        my $reward_remain = $reward;
-        my %remove_scripthash;
-        for (my $i = $#my; $i >= 0; $i--) {
-            my $reward_part = $i > 0 ? int($reward * $my[$i]->[2] / $total_weight + 0.5) : $reward_remain;
-            if ($reward > 0 && $reward_part == 0) {
-                # Remove utxo related to this address from the @$my_txo list
-                $remove_scripthash{$my[$i]->[0]} = 1;
-                next;
-            }
-            $reward_remain -= $reward_part;
-            push @out, QBitcoin::TXO->new_txo(
-                value      => $my[$i]->[1] + $reward_part,
-                scripthash => $my[$i]->[0],
-            );
-        }
-        if (%remove_scripthash) {
-            # Remove utxo related to this address from the @$my_txo list
-            @$my_txo = grep { !$remove_scripthash{$_->scripthash} } @$my_txo;
-        }
+    if (%remove_scripthash) {
+        # Remove utxo related to this address from the @$my_txo list
+        @$my_txo = grep { !$remove_scripthash{$_->scripthash} } @$my_txo;
     }
     return @out;
 }
@@ -238,23 +218,58 @@ sub make_stake_tx {
         txo_confirmed($_, $prev_height) && !QBitcoin::Generate::Control->is_utxo_published($timeslot, $_->key)
     } QBitcoin::TXO->staked_utxo();
     my $reward_to = $config->{reward_to} // "union";
-    my @out;
-    if ($reward_to eq "join") {
-        @out = make_out_join($reward, \@my_txo);
-    }
-    elsif ($reward_to eq "separate") {
-        @out = make_out_separate($reward, \@my_txo, $timeslot);
-    }
-    elsif ($reward_to eq "union") {
-        @out = make_out_union($reward, \@my_txo, $timeslot);
-    }
-    elsif ($reward_to eq "none") {
+    if ($reward_to eq "none") {
         return undef;
     }
-    else {
+    elsif ($reward_to ne "join" && $reward_to ne "separate" && $reward_to ne "union") {
         Errf("Unknown reward_to %s, disable block validation", $reward_to);
         $config->{reward_to} = "none";
         return undef;
+    }
+
+    # The reward-address cut goes first; the remainder is distributed to the
+    # staking addresses. Union and separate need no delegation special-casing:
+    # each address gets a single output of its full input value plus its part
+    # of the remainder, which satisfies the delegation covenant by itself.
+    my @out;
+    my $reward_rest = $reward;
+    if (my $reward_conf = reward_conf()) {
+        my ($reward_scripthash, $share) = @$reward_conf;
+        my $reward_cut = $share >= 1 ? $reward : int($reward * $share + 0.5);
+        push @out, QBitcoin::TXO->new_txo(
+            value      => $reward_cut,
+            scripthash => $reward_scripthash,
+        );
+        $reward_rest = $reward - $reward_cut;
+    }
+
+    if ($reward_to eq "join") {
+        # Delegated outputs cannot be joined: the covenant requires each
+        # delegated scripthash to receive its full input value back
+        my @delegated_txo = grep { $_->is_delegated } @my_txo;
+        my @own_txo       = grep { !$_->is_delegated } @my_txo;
+        my @join_out = make_out_join($reward_rest, \@own_txo);
+        if (@join_out) {
+            push @out, @join_out;
+            push @out, map {
+                QBitcoin::TXO->new_txo(
+                    value      => $_->[1],
+                    scripthash => $_->[0],
+                )
+            } my_txo_by_address(\@delegated_txo, $timeslot);
+            @my_txo = (@own_txo, @delegated_txo);
+        }
+        else {
+            # No own stake address to join to; distribute the remainder over
+            # the delegated addresses so no part of the reward is lost
+            push @out, make_out_union($reward_rest, \@my_txo, $timeslot);
+        }
+    }
+    elsif ($reward_to eq "separate") {
+        push @out, make_out_separate($reward_rest, \@my_txo, $timeslot);
+    }
+    else { # union
+        push @out, make_out_union($reward_rest, \@my_txo, $timeslot);
     }
 
     my $tx = QBitcoin::Transaction->new(
