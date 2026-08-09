@@ -1,6 +1,12 @@
 import { rtkApi } from '@/shared/api/rtkApi';
 
-import type { AddAddressParams, EditStakedParams, IMyAddress } from '../model/types/myAddress';
+import type {
+    AddAddressParams,
+    EditStakedParams,
+    GenerateAddressParams,
+    GeneratedAddress,
+    IMyAddress,
+} from '../model/types/myAddress';
 
 const myAddressApi = rtkApi
     .enhanceEndpoints({ addTagTypes: ['MyAddresses'] })
@@ -10,10 +16,11 @@ const myAddressApi = rtkApi
                 query: () => '/wallet/my_addresses',
                 providesTags: ['MyAddresses'],
             }),
-            generateNewAddress: build.mutation<AddAddressParams, void>({
-                query: () => ({
+            generateNewAddress: build.mutation<GeneratedAddress, GenerateAddressParams | void>({
+                query: (params) => ({
                     url: '/wallet/my_address/new',
                     method: 'POST',
+                    ...(params?.delegate_pubkeyhash ? { body: params } : {}),
                 }),
             }),
             addAddress: build.mutation<IMyAddress, AddAddressParams>({

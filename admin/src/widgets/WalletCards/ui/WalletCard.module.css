@@ -57,6 +57,18 @@
     border-radius: 7px;
 }
 
+.delegPill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    background: var(--dc-fill-tertiary);
+    border-radius: 7px;
+    font-size: var(--font-size-m);
+    font-weight: var(--font-weight-m);
+    color: var(--dc-text-secondary);
+    cursor: help;
+}
+
 .stakeLabel {
     font-size: var(--font-size-m);
     font-weight: var(--font-weight-m);
