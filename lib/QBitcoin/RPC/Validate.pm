@@ -9,7 +9,7 @@ use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
-use QBitcoin::Address qw(wif_to_pk);
+use QBitcoin::Address qw(wif_to_pk pubkeyhash_by_str);
 use QBitcoin::Password;
 use QBitcoin::Accessors qw(mk_accessors);
 
@@ -38,6 +38,7 @@ my %SPEC = (
     privatekeys    => \&validate_privkeys,
     privkey        => \&validate_privkey,
     address_type   => \&validate_address_type,
+    pubkeyhash     => \&validate_pubkeyhash,
     tag            => qr/^(?:[a-zA-Z][a-zA-Z0-9_.-]{0,63})?\z/,
     password       => \&validate_password,
     node           => qr/^[0-9A-Za-z\[\]:.\-]{1,255}\z/,
@@ -269,6 +270,16 @@ sub validate_password {
     my $value = $_[0];
     return 0 if ref($value);
     return 0 unless defined($value) && length($value) >= 1 && length($value) <= QBitcoin::Password::MAX_LEN();
+    return 1;
+}
+
+# The base58 form of hash256(pubkey) used in delegated staking; the validated
+# argument is replaced with the binary hash
+sub validate_pubkeyhash {
+    return 0 if !defined($_[0]) || ref($_[0]);
+    my $pubkeyhash = eval { pubkeyhash_by_str($_[0]) }
+        or return 0;
+    $_[0] = $pubkeyhash;
     return 1;
 }
 
