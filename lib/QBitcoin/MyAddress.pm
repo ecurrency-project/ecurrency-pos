@@ -8,7 +8,8 @@ use QBitcoin::Accessors qw(mk_accessors new);
 use QBitcoin::Const;
 use QBitcoin::ORM qw(find update delete :types);
 use QBitcoin::Crypto qw(hash160 hash256 pk_import pk_alg);
-use QBitcoin::Address qw(wif_to_pk address_by_pubkey script_by_pubkey script_by_pubkeyhash addresses_by_pubkey scripthash_by_address);
+use QBitcoin::Address qw(wif_to_pk wif_delegation_hash address_by_pubkey address_by_hash script_by_pubkey script_by_pubkeyhash addresses_by_pubkey scripthash_by_address);
+use QBitcoin::Script::Delegation qw(delegation_script);
 use QBitcoin::Wallet::UTXO qw(myutxo_add myutxo_del myutxo_list);
 use QBitcoin::Tag;
 use QBitcoin::Wallet::Crypt qw(is_encrypted_pk decrypt_pk unlocked);
@@ -19,17 +20,37 @@ our @EXPORT_OK = qw(my_address stake_address watched_address);
 use constant TABLE => 'my_address';
 
 use constant FIELDS => {
-    address     => STRING,
-    private_key => STRING,
-    pubkey      => BINARY,
-    staked      => NUMERIC,
-    algo        => NUMERIC,
-    tag_id      => NUMERIC,
+    address          => STRING,
+    private_key      => STRING,
+    pubkey           => BINARY,
+    staked           => NUMERIC,
+    algo             => NUMERIC,
+    tag_id           => NUMERIC,
+    deleg_pubkeyhash => BINARY,
 };
 
 use constant PRIMARY_KEY => 'address';
 
 mk_accessors(qw(private_key staked tag_id));
+
+# hash256 of the delegate staking pubkey for a delegated-staking address (the
+# owner side of the covenant, see QBitcoin::Script::Delegation); undef for
+# ordinary addresses. The stored (database) value when present, otherwise
+# derived from a plaintext delegation WIF, so ad-hoc objects created as
+# new(private_key => ...) work too. Setter form is used by update().
+sub deleg_pubkeyhash {
+    my $self = shift;
+    return $self->{deleg_pubkeyhash} = $_[0] if @_;
+    return $self->{deleg_pubkeyhash} //= do {
+        my $private_key = $self->private_key;
+        $private_key && !is_encrypted_pk($private_key) ? wif_delegation_hash($private_key) : undef;
+    };
+}
+
+sub is_delegation {
+    my $self = shift;
+    return defined($self->deleg_pubkeyhash);
+}
 
 # Primary algorithm for this address; the stored (database) value when present,
 # otherwise lazily derived from the private key, so ad-hoc objects created as
@@ -80,6 +101,12 @@ sub set_stake {
     my ($value) = @_;
     return 1 if ($self->staked ? 1 : 0) == ($value ? 1 : 0);
     return 0 unless $self->private_key;
+    if ($value && $self->is_delegation) {
+        # The owner branch could stake, but staking the same address from two
+        # nodes (here and on the delegate) is equivocation and leads to slashing
+        Errf("Address %s is delegated for staking; staking it here as well would equivocate", $self->address);
+        return 0;
+    }
     $self->update(staked => $value ? 1 : 0);
     update_my_utxo($self);
     if ($STAKE_ADDRESS) {
@@ -195,6 +222,7 @@ sub create {
                 $address->update(
                     private_key => $attr->{private_key},
                     $attr->{pubkey} ? (pubkey => $attr->{pubkey}) : (),
+                    $attr->{deleg_pubkeyhash} ? (deleg_pubkeyhash => $attr->{deleg_pubkeyhash}) : (),
                 );
                 push @$MY_ADDRESS, $address if $MY_ADDRESS;
                 if ($attr->{staked}) {
@@ -241,12 +269,14 @@ sub create {
     return $self;
 }
 
-# Fill $attr->{pubkey} from a plaintext private key (callers storing an encrypted
-# key must pass the pubkey explicitly)
+# Fill $attr->{pubkey} and $attr->{deleg_pubkeyhash} from a plaintext private key
+# (callers storing an encrypted key must pass them explicitly)
 sub _derive_pubkey {
     my $class = shift;
     my ($attr) = @_;
-    return if $attr->{pubkey} || is_encrypted_pk($attr->{private_key});
+    return if is_encrypted_pk($attr->{private_key});
+    $attr->{deleg_pubkeyhash} //= wif_delegation_hash($attr->{private_key});
+    return if $attr->{pubkey};
     my $tmp = $class->new({
         private_key => $attr->{private_key},
         address     => $attr->{address},
@@ -313,6 +343,9 @@ sub is_watchonly {
 sub address {
     my $self = shift;
     return $self->{address} if $self->is_watchonly;
+    if ($self->is_delegation) {
+        return $self->{addr} //= address_by_hash(scalar $self->scripthash);
+    }
     if (!$self->{addr}) {
         my $algo = $self->_pk_alg // return undef;
         $self->{addr} = address_by_pubkey($self->pubkey // (return undef), $algo);
@@ -330,6 +363,10 @@ sub address {
 
 sub redeem_script {
     my $self = shift;
+    if (my $deleg_pubkeyhash = $self->deleg_pubkeyhash) {
+        my $script = delegation_script(hash256($self->pubkey), $deleg_pubkeyhash);
+        return wantarray ? ($script) : $script;
+    }
     my $main_script = script_by_pubkey($self->pubkey);
     return wantarray ? (
         $main_script,
@@ -340,6 +377,10 @@ sub redeem_script {
 sub scripthash {
     my $self = shift;
     return scripthash_by_address($self->address) if $self->is_watchonly;
+    if ($self->is_delegation) {
+        my $scripthash = hash256(scalar $self->redeem_script);
+        return wantarray ? ($scripthash) : $scripthash;
+    }
     return map { hash160($_), hash256($_) } $self->redeem_script if wantarray;
     return ($self->_pk_alg // 0) & CRYPT_ALGO_POSTQUANTUM ? hash256(scalar $self->redeem_script) : hash160(scalar $self->redeem_script);
 }

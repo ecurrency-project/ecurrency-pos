@@ -17,6 +17,7 @@ use QBitcoin::Config;
 use QBitcoin::Log;
 use QBitcoin::Password;
 use QBitcoin::MyAddress;
+use QBitcoin::StakingKey;
 use QBitcoin::Wallet::Crypt qw(
     unlock_master_key
     wipe_master_key
@@ -47,7 +48,17 @@ sub lock {
     # Drop decrypted key objects cached on the address objects; the pubkey-derived
     # caches (scripthash maps etc.) are not secret and stay valid.
     delete $_->{privkey} foreach QBitcoin::MyAddress->my_address;
+    delete $_->{privkey} foreach QBitcoin::StakingKey->list;
     return 1;
+}
+
+# The ciphertext of each key is bound to its table row: my_address keys to the
+# address string, staking keys to their base58 pubkeyhash string
+sub _encryptable {
+    return (
+        (map { [ $_, $_->address           ] } QBitcoin::MyAddress->watched_address),
+        (map { [ $_, $_->pubkeyhash_string ] } QBitcoin::StakingKey->list),
+    );
 }
 
 # Encrypt all plaintext private keys with $master; also stores the pubkey so a
@@ -57,12 +68,13 @@ sub encrypt_all {
     my $class = shift;
     my ($master) = @_;
     my $count = 0;
-    foreach my $address (QBitcoin::MyAddress->watched_address) {
-        my $stored = $address->private_key;
+    foreach my $record ($class->_encryptable) {
+        my ($obj, $bind) = @$record;
+        my $stored = $obj->private_key;
         next if !$stored || $class->is_encrypted_pk($stored);
-        my $pubkey = $address->pubkey; # derive from the plaintext key before replacing it
-        $address->update(
-            private_key => $class->encrypt_pk($stored, $address->address, $master),
+        my $pubkey = $obj->pubkey; # derive from the plaintext key before replacing it
+        $obj->update(
+            private_key => $class->encrypt_pk($stored, $bind, $master),
             defined($pubkey) ? (pubkey => $pubkey) : (),
         );
         $count++;
@@ -77,15 +89,16 @@ sub decrypt_all {
     my $class = shift;
     my ($master) = @_;
     my @decrypted;
-    foreach my $address (QBitcoin::MyAddress->watched_address) {
-        my $stored = $address->private_key;
+    foreach my $record ($class->_encryptable) {
+        my ($obj, $bind) = @$record;
+        my $stored = $obj->private_key;
         next if !$stored || !$class->is_encrypted_pk($stored);
-        my $wif = $class->decrypt_pk($stored, $address->address, $master);
+        my $wif = $class->decrypt_pk($stored, $bind, $master);
         if (!defined $wif) {
-            Errf("Cannot decrypt private key for address %s", $address->address);
+            Errf("Cannot decrypt private key for %s", $bind);
             return undef;
         }
-        push @decrypted, [ $address, $wif ];
+        push @decrypted, [ $obj, $wif ];
     }
     $_->[0]->update(private_key => $_->[1]) foreach @decrypted;
     return scalar @decrypted;
@@ -93,8 +106,8 @@ sub decrypt_all {
 
 sub encrypted_count {
     my $class = shift;
-    return scalar grep { $_->private_key && $class->is_encrypted_pk($_->private_key) }
-        QBitcoin::MyAddress->watched_address;
+    return scalar grep { $_->[0]->private_key && $class->is_encrypted_pk($_->[0]->private_key) }
+        $class->_encryptable;
 }
 
 # Set or change the wallet password and converge the key-encryption state to the
@@ -149,9 +162,9 @@ sub change_password {
 sub reset_destroy {
     my $class = shift;
     my ($new) = @_;
-    my @encrypted = grep { $_->private_key && $class->is_encrypted_pk($_->private_key) }
-        QBitcoin::MyAddress->watched_address;
-    $_->remove foreach @encrypted;
+    my @encrypted = grep { $_->[0]->private_key && $class->is_encrypted_pk($_->[0]->private_key) }
+        $class->_encryptable;
+    $_->[0]->remove foreach @encrypted;
     store_master_key(undef);
     wipe_master_key();
     QBitcoin::Password->set_password($new);
