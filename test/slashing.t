@@ -191,15 +191,40 @@ is(QBitcoin::Slashing->banned_height_in_best(), undef,
     my $s2   = make_stake([$coin], "\x77" x 32, "\xd2" x 32);
     my $sl   = QBitcoin::Slashing->new_tx($s1, $s2);
     QBitcoin::Slashing->ban_from_tx($sl);
-    # simulate the equivocating stake confirmed at height 5 in the best branch
+    # simulate the equivocating stake confirmed at height 5 in the best branch (a stake
+    # is confirmed in the block it signed, so its block_time is in the banned timeslot)
     my $spender = QBitcoin::Transaction->new(
         in => [], out => [], tx_type => TX_TYPE_STAKE, fee => -1, hash => pack("H*", "99" x 32),
     );
     $spender->block_height(5);
+    $spender->block_time($timeslot);
     $spender->add_to_cache;
     $coin->tx_out = $spender->hash;
     is(QBitcoin::Slashing->banned_height_in_best(), 5,
         "banned_height_in_best returns the equivocating block's height");
+
+    # regression: the confirmed slashing tx itself spends the banned UTXO (that is the
+    # penalty, not equivocation) - its block must NOT be dropped as equivocated
+    my $slasher = QBitcoin::Transaction->new(
+        in => [], out => [], tx_type => TX_TYPE_SLASHING, fee => 100, hash => pack("H*", "9a" x 32),
+    );
+    $slasher->block_height(7);
+    $slasher->block_time($timeslot + 2 * BLOCK_INTERVAL);
+    $slasher->add_to_cache;
+    $coin->tx_out = $slasher->hash;
+    is(QBitcoin::Slashing->banned_height_in_best(), undef,
+        "confirmed slashing tx spending the banned UTXO does not poison its branch");
+
+    # a legitimate re-stake of the same UTXO in a different timeslot is not equivocation
+    my $restake = QBitcoin::Transaction->new(
+        in => [], out => [], tx_type => TX_TYPE_STAKE, fee => -1, hash => pack("H*", "9b" x 32),
+    );
+    $restake->block_height(9);
+    $restake->block_time($timeslot + BLOCK_INTERVAL);
+    $restake->add_to_cache;
+    $coin->tx_out = $restake->hash;
+    is(QBitcoin::Slashing->banned_height_in_best(), undef,
+        "re-stake of the banned UTXO in a different timeslot does not poison the branch");
 }
 
 done_testing();
