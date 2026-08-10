@@ -430,14 +430,21 @@ sub banned_height_in_best {
     my $class = shift;
     my $min;
     foreach my $key (keys %BANNED) {
-        my $txo = $BANNED{$key}->{txo}
+        my $b = $BANNED{$key};
+        my $txo = $b->{txo}
             or next;
         my $out = $txo->tx_out
             or next; # not spent in the best branch (already dropped / never confirmed)
         my $sp = QBitcoin::Transaction->get($out)
             or next;
+        # Punishable is only the equivocated stake itself: the confirmed slashing tx
+        # spends the same UTXO (that is the penalty, not equivocation), and the UTXO
+        # may be legitimately staked in a different timeslot. A stake is confirmed in
+        # the block it signed, so the block time identifies the stake's timeslot.
+        next unless $sp->is_stake;
         my $h = $sp->block_height;
         next unless defined $h; # spender not confirmed in the best branch
+        next unless defined($sp->block_time) && timeslot($sp->block_time) == $b->{timeslot};
         $min = $h if !defined($min) || $h < $min;
     }
     return $min;
