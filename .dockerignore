@@ -4,3 +4,4 @@ Dockerfile
 .gitignore
 .claude/
 admin/node_modules/
+LICENSE

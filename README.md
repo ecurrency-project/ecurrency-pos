@@ -107,8 +107,10 @@ you will see your balance increase over time.
 
 ---
 
-
 **QBitcoin Project** — https://github.com/qbitcoin-project
 
+---
 
+## License
 
+[Apache-2.0](./LICENSE)
