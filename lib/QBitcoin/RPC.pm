@@ -77,9 +77,10 @@ sub process_request {
         Warningf("Incorrect rpc method [%s]", $body->{method});
         return $self->response_error("Unknown method", ERR_UNKNOWN_METHOD);
     }
+    # Workaround: boolean values does not encode without "allow_nonref" by Cpanel::JSON::XS version before 4.42
     Debugf("RPC request %s %s from %s:%u", $body->{method},
         $self->sensitive($body->{method}) ? "***"
-            : join(" ", map { ref($_) ? $JSON->encode($_) : $_ } @{$body->{params}}),
+            : join(" ", map { ref($_) ? $JSON->allow_nonref->encode($_) : $_ } @{$body->{params}}),
         $self->connection->ip, $self->connection->port);
     $self->args = $body->{params};
     $self->cmd  = $body->{method};
