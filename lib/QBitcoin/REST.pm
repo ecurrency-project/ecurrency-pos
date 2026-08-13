@@ -1014,7 +1014,7 @@ sub node_status {
         bestblockhash        => $best_block ? unpack("H*", $best_block->hash) : undef,
         weight               => $best_block ? $best_block->weight+0   : -1,
         bestblocktime        => $best_block ? $best_block->time       : -1,
-        reward               => $best_block ? int($best_block->reward_fund / REWARD_DIVIDER) : 0,
+        reward               => $best_block ? QBitcoin::Block->reward($best_block, 0, $best_block->time + BLOCK_INTERVAL) : 0,
         initialblockdownload => blockchain_synced() ? FALSE : TRUE,
         mempool_size         => @mempool + 0,
         mempool_bytes        => sum0(map { $_->size } @mempool) + 0,
