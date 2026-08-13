@@ -214,9 +214,10 @@ export const DelegatedStaking = () => {
                     className={cls.addAlert}
                     type="warning"
                     showIcon
-                    message="The address must be staked by one node only. If the owner gave the
-                        same delegation to someone else too, staking it here leads to equivocation
-                        and the slashing penalty."
+                    message="A delegated address must be staked by one node only. If your staking
+                        key runs on another node too, both will stake the same outputs - that is
+                        equivocation, and the slashing penalty is paid from the owner's coins
+                        entrusted to you."
                 />
                 <Form form={addForm} layout="vertical">
                     <Form.Item

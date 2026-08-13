@@ -1320,6 +1320,11 @@ importstakingkey "privkey" ( address_type )
 Adds a staking key for delegated staking (as returned by dumpstakingkey) to
 the wallet. See getnewstakingkey.
 
+WARNING: a staking key must run on exactly ONE node. If the node you exported
+it from is still staking, two nodes will stake the same delegated outputs -
+that is equivocation, and the slashing penalty is paid from the owners' coins
+entrusted to you. Stop the old node before importing the key here.
+
 Arguments:
 1. privkey        (string, required) The staking private key (an ordinary WIF)
 2. address_type   (string, optional, default from the key) The key type. Options are "ecdsa", "schnorr", "falcon".
@@ -1383,6 +1388,10 @@ dumpstakingkey "staking_pubkeyhash"
 Reveals the staking private key for the given staking pubkeyhash.
 Then the importstakingkey can be used with this output.
 Enabled by 'allow_dumpprivkey' config option.
+
+A staking key must run on exactly ONE node: when moving it, stop this node
+before the new one starts staking, otherwise both will stake the same
+delegated outputs (equivocation, slashed from the owners' coins).
 
 Arguments:
 1. staking_pubkeyhash    (string, required) The staking pubkeyhash (see liststakingkeys)
@@ -1487,9 +1496,10 @@ value back to the address; the block reward is distributed according to the
 reward_addr config option ("reward_addr <address> <share>" keeps the share as
 this node's fee and sends the remainder to the delegated address).
 
-WARNING: a delegated address must be staked by ONE node only. If the owner
-gave the same delegation to someone else too, staking it here leads to
-equivocation and the slashing penalty.
+WARNING: a delegated address must be staked by ONE node only. If this staking
+key runs on another node too (a hot spare, an old node left running after a
+migration), both will stake the same outputs - that is equivocation, and the
+slashing penalty is paid from the owner's coins entrusted to you.
 
 Arguments:
 1. owner_pubkeyhash      (string, required) The owner pubkeyhash received from the coins owner
@@ -2201,9 +2211,11 @@ contains the delegate pubkeyhash, so it alone is enough to import or restore
 the address; the returned "pubkeyhash" is your side of the covenant - send it
 to the delegate so their node can register the address for staking (see
 adddelegationaddress).
-WARNING: give the delegation to ONE delegate only. Staking the same address
-from two nodes is equivocation, and the slashing penalty is paid from the
-address's coins.
+WARNING: the delegate can never spend your coins, but they are the slashing
+collateral: if the delegate's node equivocates (e.g. runs its staking key on
+two nodes at once), the penalty is paid from the address's coins. Choose a
+delegate you trust to operate a single node - the covenant does not protect
+against this, only reputation does.
 
 Arguments:
 1. address_type          (string, optional, default="ecdsa") The address type to use. Options are "ecdsa", "schnorr", "falcon".
