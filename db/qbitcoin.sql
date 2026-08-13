@@ -79,7 +79,7 @@ CREATE TABLE `my_address` (
   algo        int unsigned NOT NULL DEFAULT 1,
   staked      int unsigned NOT NULL DEFAULT 0,
   tag_id      integer DEFAULT NULL,
-  deleg_pubkeyhash binary(32) DEFAULT NULL, -- hash256 of the delegate staking pubkey for delegated-staking addresses
+  deleg_pubkeyhash varbinary(32) DEFAULT NULL, -- hash of the delegate staking pubkey for delegated-staking addresses (20 bytes hash160 pre-quantum, 32 bytes hash256 post-quantum)
   FOREIGN KEY (tag_id) REFERENCES `tag` (id) ON DELETE SET NULL
 );
 
@@ -98,7 +98,7 @@ CREATE TABLE `staking_key` (
 CREATE TABLE `delegation` (
   address          varchar(255) NOT NULL PRIMARY KEY,
   staking_key_id   integer      NOT NULL,
-  owner_pubkeyhash binary(32)   NOT NULL,
+  owner_pubkeyhash varbinary(32) NOT NULL, -- 20 bytes hash160 pre-quantum, 32 bytes hash256 post-quantum
   FOREIGN KEY (staking_key_id) REFERENCES `staking_key` (id) ON DELETE CASCADE
 );
 

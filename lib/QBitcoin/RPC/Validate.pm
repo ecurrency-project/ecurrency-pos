@@ -273,8 +273,9 @@ sub validate_password {
     return 1;
 }
 
-# The base58 form of hash256(pubkey) used in delegated staking; the validated
-# argument is replaced with the binary hash
+# The base58 form of the pubkey hash used in delegated staking (hash160 for
+# pre-quantum keys, hash256 for post-quantum ones); the validated argument is
+# replaced with the binary hash
 sub validate_pubkeyhash {
     return 0 if !defined($_[0]) || ref($_[0]);
     my $pubkeyhash = eval { pubkeyhash_by_str($_[0]) }

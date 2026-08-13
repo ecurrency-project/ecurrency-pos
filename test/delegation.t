@@ -24,8 +24,8 @@ use QBitcoin::Block;
 use QBitcoin::TXO;
 use QBitcoin::Transaction;
 use QBitcoin::Generate;
-use QBitcoin::Crypto qw(generate_keypair hash256);
-use QBitcoin::Address qw(wallet_import_format addresses_by_pubkey scripthash_by_address address_by_hash pubkeyhash_str);
+use QBitcoin::Crypto qw(generate_keypair);
+use QBitcoin::Address qw(wallet_import_format addresses_by_pubkey scripthash_by_address address_by_hash pubkeyhash_str pubkeyhash_by_pubkey);
 use QBitcoin::Script qw(script_eval op_pushdata);
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 use QBitcoin::MyAddress;
@@ -114,7 +114,7 @@ ok($res->{$deleg_address}{stakeonly}, "listmyaddresses: stakeonly flag");
 # Owner-only case on the same node: another delegation address whose owner key
 # is imported here, but no delegation row exists (some other node stakes it)
 my $foreign_staking = generate_keypair(CRYPT_ALGO_ECDSA);
-my $foreign_pkh_str = pubkeyhash_str(hash256($foreign_staking->pubkey_by_privkey));
+my $foreign_pkh_str = pubkeyhash_str(pubkeyhash_by_pubkey($foreign_staking->pubkey_by_privkey, CRYPT_ALGO_ECDSA));
 $res = rpc("getnewaddress", "ecdsa", $foreign_pkh_str)->_rpc_result;
 my $owner_only_address = $res->{address};
 $res = rpc("importprivkey", $res->{private_key})->_rpc_result;

@@ -13,8 +13,12 @@ use QBitcoin::Crypto qw(hash160 hash256 checksum32);
 use QBitcoin::Script qw(op_pushdata);
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 
-use constant CHECKSUM_LEN   => 4;
-use constant PUBKEYHASH_LEN => 32; # hash256(pubkey), used by the delegated-staking covenant
+use constant CHECKSUM_LEN => 4;
+# Pubkey hashes used by the delegated-staking covenant follow the address rule:
+# hash160(pubkey) for pre-quantum keys, hash256(pubkey) for post-quantum ones,
+# so the length of a pubkeyhash tells the key family
+use constant PUBKEYHASH_LEN_PQ  => 32;
+use constant PUBKEYHASH_LEN_PRE => 20;
 
 use Exporter qw(import);
 our @EXPORT_OK = qw(
@@ -32,6 +36,7 @@ our @EXPORT_OK = qw(
     scripthash_by_address
     pubkeyhash_str
     pubkeyhash_by_str
+    pubkeyhash_by_pubkey
 );
 
 sub wallet_import_format($) {
@@ -42,14 +47,16 @@ sub wallet_import_format($) {
 }
 
 # WIF for the owner key of a delegated-staking address; carries the private key
-# together with hash256 of the delegate staking pubkey, so this WIF alone is
-# enough to rebuild the covenant script, the address, and to spend from it
+# together with the hash of the delegate staking pubkey, so this WIF alone is
+# enough to rebuild the covenant script, the address, and to spend from it.
+# The version byte tells the length of the embedded hash
 sub delegation_import_format($$) {
     my ($private_key, $delegate_pubkeyhash) = @_;
 
-    length($delegate_pubkeyhash) == PUBKEYHASH_LEN
-        or die "Incorrect delegate pubkeyhash length\n";
-    my $data = DELEG_KEY_VER . $private_key . $delegate_pubkeyhash;
+    my $version = length($delegate_pubkeyhash) == PUBKEYHASH_LEN_PQ  ? DELEG_KEY_VER256 :
+                  length($delegate_pubkeyhash) == PUBKEYHASH_LEN_PRE ? DELEG_KEY_VER160 :
+                  die "Incorrect delegate pubkeyhash length\n";
+    my $data = $version . $private_key . $delegate_pubkeyhash;
     return encode_base58('0x' . unpack('H*', $data . checksum32($data)), 'bitcoin');
 }
 
@@ -62,10 +69,12 @@ sub wif_decode($) {
     checksum32($bin) eq $crc
         or die "Incorrect checksum";
     my $version = substr($bin, 0, 1, "");
-    if ($version eq DELEG_KEY_VER) {
-        length($bin) > PUBKEYHASH_LEN
+    my $hash_len = $version eq DELEG_KEY_VER256 ? PUBKEYHASH_LEN_PQ  :
+                   $version eq DELEG_KEY_VER160 ? PUBKEYHASH_LEN_PRE : 0;
+    if ($hash_len) {
+        length($bin) > $hash_len
             or die "Incorrect delegation key length";
-        my $delegate_pubkeyhash = substr($bin, -PUBKEYHASH_LEN, PUBKEYHASH_LEN, "");
+        my $delegate_pubkeyhash = substr($bin, -$hash_len, $hash_len, "");
         return ($bin, $delegate_pubkeyhash);
     }
     $version eq ADDRESS_VER
@@ -137,13 +146,20 @@ sub validate_address($) {
     return substr($bin, 0, length(ADDR_MAGIC)) eq ADDR_MAGIC;
 }
 
-# Compact base58 form of hash256(pubkey) exchanged between the owner and the
+# The pubkey commitment used by the delegated-staking covenant; the same rule
+# as for addresses: hash160 for pre-quantum keys, hash256 for post-quantum ones
+sub pubkeyhash_by_pubkey($$) {
+    my ($pubkey, $alg) = @_;
+    return $alg & CRYPT_ALGO_POSTQUANTUM ? hash256($pubkey) : hash160($pubkey);
+}
+
+# Compact base58 form of the pubkey hash exchanged between the owner and the
 # delegate when setting up delegated staking; magic prefix and checksum protect
 # against confusing it with an address and against typos
 sub pubkeyhash_str($) {
     my ($pubkeyhash) = @_;
 
-    length($pubkeyhash) == PUBKEYHASH_LEN
+    length($pubkeyhash) == PUBKEYHASH_LEN_PQ || length($pubkeyhash) == PUBKEYHASH_LEN_PRE
         or die "Incorrect pubkeyhash length\n";
     my $data = PKH_MAGIC . $pubkeyhash;
     return encode_base58("0x" . unpack("H*", $data . checksum32($data)), "bitcoin");
@@ -160,7 +176,7 @@ sub pubkeyhash_by_str($) {
         or die "Incorrect pubkeyhash checksum\n";
     substr($bin, 0, length(PKH_MAGIC), "") eq PKH_MAGIC
         or die "Incorrect pubkeyhash version\n";
-    length($bin) == PUBKEYHASH_LEN
+    length($bin) == PUBKEYHASH_LEN_PQ || length($bin) == PUBKEYHASH_LEN_PRE
         or die "Incorrect pubkeyhash length\n";
     return $bin;
 }

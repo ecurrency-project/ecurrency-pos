@@ -14,10 +14,10 @@ use QBitcoin::Script::Delegation qw(
     delegation_script delegation_scripthash delegation_address
     SELECTOR_OWNER SELECTOR_DELEGATE
 );
-use QBitcoin::Crypto qw(signature hash256 generate_keypair);
+use QBitcoin::Crypto qw(signature hash160 hash256 generate_keypair);
 use QBitcoin::Address qw(
     wallet_import_format delegation_import_format wif_to_pk wif_delegation_hash
-    validate_address pubkeyhash_str pubkeyhash_by_str
+    validate_address pubkeyhash_str pubkeyhash_by_str pubkeyhash_by_pubkey
 );
 use QBitcoin::MyAddress;
 
@@ -27,12 +27,15 @@ my $owner_pk    = generate_keypair(CRYPT_ALGO_ECDSA);
 my $delegate_pk = generate_keypair(CRYPT_ALGO_ECDSA);
 my $owner    = QBitcoin::MyAddress->new( private_key => wallet_import_format($owner_pk->pk_serialize) );
 my $delegate = QBitcoin::MyAddress->new( private_key => wallet_import_format($delegate_pk->pk_serialize) );
-my $owner_hash    = hash256($owner->pubkey);
-my $delegate_hash = hash256($delegate->pubkey);
+# Pre-quantum keys commit as hash160, so an all-pre-quantum covenant gets a
+# hash160 scripthash and a pre-quantum-looking address
+my $owner_hash    = pubkeyhash_by_pubkey($owner->pubkey, CRYPT_ALGO_ECDSA);
+my $delegate_hash = pubkeyhash_by_pubkey($delegate->pubkey, CRYPT_ALGO_ECDSA);
+is(length($owner_hash), 20, "pre-quantum pubkeyhash is hash160");
 
 my $script     = delegation_script($owner_hash, $delegate_hash);
 my $scripthash = delegation_scripthash($owner_hash, $delegate_hash);
-is($scripthash, hash256($script), "scripthash");
+is($scripthash, hash160($script), "all-pre-quantum scripthash is hash160");
 ok(validate_address(delegation_address($owner_hash, $delegate_hash)), "address valid");
 
 my $sh_other  = "\x22" x 32;
@@ -86,12 +89,15 @@ ok(!script_eval([ $sig_delegate, $owner->pubkey, SELECTOR_DELEGATE ], $script, $
     "signature must match the pubkey");
 
 # Post-quantum delegate key: the script commits to hash256(pubkey), the full
-# pubkey travels in the siglist and funds its own sigops budget
+# pubkey travels in the siglist and funds its own sigops budget; a mixed
+# covenant hashes to a post-quantum-style (hash256) scripthash
 my $falcon_pk = generate_keypair(CRYPT_ALGO_FALCON);
 my $falcon    = QBitcoin::MyAddress->new( private_key => wallet_import_format($falcon_pk->pk_serialize) );
-my $falcon_hash    = hash256($falcon->pubkey);
+my $falcon_hash    = pubkeyhash_by_pubkey($falcon->pubkey, CRYPT_ALGO_FALCON);
+is($falcon_hash, hash256($falcon->pubkey), "post-quantum pubkeyhash is hash256");
 my $script_pq      = delegation_script($owner_hash, $falcon_hash);
 my $scripthash_pq  = delegation_scripthash($owner_hash, $falcon_hash);
+is($scripthash_pq, hash256($script_pq), "mixed covenant scripthash is hash256");
 my $tx_stake_pq = TestTx->new(
     tx_type   => TX_TYPE_STAKE,
     sign_data => $sign_data,
@@ -102,18 +108,29 @@ my $sig_falcon = signature($sign_data, $falcon, CRYPT_ALGO_FALCON, SIGHASH_ALL);
 ok(script_eval([ $sig_falcon, $falcon->pubkey, SELECTOR_DELEGATE ], $script_pq, $tx_stake_pq, 0),
     "post-quantum delegate stakes");
 
-# Delegation WIF: carries the private key and the delegate pubkeyhash
-my $deleg_wif = delegation_import_format($owner_pk->pk_serialize, $delegate_hash);
-is(wif_to_pk($deleg_wif), $owner_pk->pk_serialize, "wif_to_pk on delegation wif");
-is(wif_delegation_hash($deleg_wif), $delegate_hash, "wif_delegation_hash");
+# A covenant with hash256 slots for pre-quantum keys is not produced by the
+# wallet any more, but remains valid at consensus level
+my $script_legacy = delegation_script(hash256($owner->pubkey), hash256($delegate->pubkey));
+ok(script_eval($owner_branch, $script_legacy, $tx_spend, 0), "legacy all-hash256 covenant still evaluates");
+
+# Delegation WIF: carries the private key and the delegate pubkeyhash;
+# the version byte encodes the hash length (hash160 or hash256)
+foreach my $case ([ $delegate_hash, "hash160" ], [ $falcon_hash, "hash256" ]) {
+    my ($hash, $name) = @$case;
+    my $deleg_wif = delegation_import_format($owner_pk->pk_serialize, $hash);
+    is(wif_to_pk($deleg_wif), $owner_pk->pk_serialize, "wif_to_pk on $name delegation wif");
+    is(wif_delegation_hash($deleg_wif), $hash, "wif_delegation_hash ($name)");
+}
 is(wif_delegation_hash(wallet_import_format($owner_pk->pk_serialize)), undef, "plain wif has no delegation hash");
 # A MyAddress object built from the delegation WIF signs as usual
+my $deleg_wif = delegation_import_format($owner_pk->pk_serialize, $delegate_hash);
 my $owner2 = QBitcoin::MyAddress->new( private_key => $deleg_wif );
 is($owner2->pubkey, $owner->pubkey, "pubkey from delegation wif");
 
-# base58 pubkeyhash exchange format
+# base58 pubkeyhash exchange format, both hash lengths
 my $pkh_str = pubkeyhash_str($delegate_hash);
-is(pubkeyhash_by_str($pkh_str), $delegate_hash, "pubkeyhash_str round trip");
+is(pubkeyhash_by_str($pkh_str), $delegate_hash, "pubkeyhash_str round trip (hash160)");
+is(pubkeyhash_by_str(pubkeyhash_str($falcon_hash)), $falcon_hash, "pubkeyhash_str round trip (hash256)");
 my $corrupted = $pkh_str;
 substr($corrupted, 10, 1) = substr($corrupted, 10, 1) eq "2" ? "3" : "2";
 ok(!eval { pubkeyhash_by_str($corrupted); 1 }, "corrupted pubkeyhash string rejected");
