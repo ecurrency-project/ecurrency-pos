@@ -25,6 +25,7 @@ use QBitcoin::Wallet;
 use QBitcoin::RPC;
 use QBitcoin::REST;
 use QBitcoin::Fork;
+use QBitcoin::Resolver;
 
 sub bind_addr {
     my $class = shift;
@@ -223,6 +224,7 @@ sub main_loop {
 
     while () {
         QBitcoin::Fork->reap();
+        QBitcoin::Resolver->process(); # kill overdue hostname checks, start queued ones
         QBitcoin::Block->store_blocks();
         my $timeout = SELECT_TIMEOUT;
         if (!$config->{genesis} && !QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN)) {

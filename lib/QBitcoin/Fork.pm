@@ -97,12 +97,32 @@ sub finish {
     POSIX::_exit(0);
 }
 
+my %WORKER_CALLBACKS;
+sub register_worker {
+    my $class = shift;
+    my ($pid, $callback) = @_;
+    $WORKER_CALLBACKS{$pid} = $callback;
+}
+
+sub worker_child_init {
+    $IS_CHILD = 1;
+    $SIG{TERM} = $SIG{INT} = 'DEFAULT';
+    close($_) foreach @LISTEN_SOCKETS;
+    # Plain close of our copies of the descriptors; shutdown() would act on the shared
+    # file descriptions and break the parent's connections
+    close($_->socket) foreach grep { $_->socket } QBitcoin::ConnectionList->list;
+    QBitcoin::ORM::reset_dbh_after_fork();
+}
+
 # Called periodically from the main loop; no global SIGCHLD handler to avoid
 # surprising EINTR and waitpid interference elsewhere
 sub reap {
     my $class = shift;
     while ((my $pid = waitpid(-1, WNOHANG)) > 0) {
         delete $CHILDREN{$pid};
+        if (my $callback = delete $WORKER_CALLBACKS{$pid}) {
+            $callback->($?);
+        }
     }
 }
 

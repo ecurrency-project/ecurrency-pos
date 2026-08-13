@@ -14,6 +14,7 @@ our @EXPORT_OK = qw(
     sockaddr_to_ip_port
     pack_sockaddr_by_ip
     host_to_ips
+    is_ip_literal
 );
 
 use Socket qw(:DEFAULT getaddrinfo inet_ntop inet_pton pack_sockaddr_in6 unpack_sockaddr_in6 sockaddr_family AF_INET6 PF_INET6 SOCK_STREAM);
@@ -80,6 +81,11 @@ sub host_to_ips {
         map { $_->{family} == AF_INET6 ?
             (unpack_sockaddr_in6($_->{addr}))[1] :
             IPV6_V4_PREFIX . (unpack_sockaddr_in($_->{addr}))[1] } @res;
+}
+
+sub is_ip_literal {
+    my ($str) = @_;
+    return defined(inet_pton(AF_INET, $str)) || defined(inet_pton(AF_INET6, $str));
 }
 
 # Build ($family, packed sockaddr) for connect()/bind() from a 16-byte packed address

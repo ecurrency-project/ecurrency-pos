@@ -5,12 +5,14 @@ use strict;
 # TCP exchange with a peer
 # Single connection
 # Commands:
-# >> version <version:4 features:8 time:8 my_address:26 nonce:8 software:1+n>
+# >> version <version:4 features:8 time:8 my_address:26 nonce:8 software:1+n hostname:1+n>
 #    my_address: features:8 addr:16 port:2 (port is the node's listening port, to dial it back
 #    and to announce it to other peers; 0 means the node does not accept incoming connections)
 #    nonce: random session id, used to detect duplicate connections with the same node
 #    software: 1-byte length + string, name and version of the node software (see SOFTWARE, as BIP14)
-#    nonce and software are optional (old nodes do not send them), unknown trailing data must be ignored
+#    hostname: 1-byte length + string, the node's self-announced host name ("hostname" config option);
+#    purely informational (getpeerinfo), never used in any logic; empty if not configured
+#    nonce, software and hostname are optional (old nodes do not send them), unknown trailing data must be ignored
 # << verack <options>
 # >> ihave <time> <weight> <hash>
 # << sendblock <hash>
@@ -55,6 +57,7 @@ use QBitcoin::Block;
 use QBitcoin::Transaction;
 use QBitcoin::TXO;
 use QBitcoin::Peer;
+use QBitcoin::Resolver;
 use QBitcoin::Generate::Control;
 use Bitcoin::Serialized;
 
@@ -87,9 +90,16 @@ sub my_nonce {
 
 sub startup {
     my $self = shift;
-    my $version = pack("VQ<Q<a26a8C/a*", PROTOCOL_VERSION, PROTOCOL_FEATURES, time(), $self->pack_my_address, my_nonce(), SOFTWARE);
+    my $version = pack("VQ<Q<a26a8C/a*C/a*", PROTOCOL_VERSION, PROTOCOL_FEATURES, time(), $self->pack_my_address,
+        my_nonce(), SOFTWARE, my_hostname());
     $self->send_message("version", $version);
     return 0;
+}
+
+sub my_hostname {
+    my $hostname = $config->{hostname} // return "";
+    $hostname =~ tr/\x20-\x7e//cd;
+    return substr($hostname, 0, HOSTNAME_MAX_LENGTH);
 }
 
 # The port on which this node accepts incoming connections, advertised to peers in the
@@ -141,13 +151,23 @@ sub cmd_version {
         $nonce = substr($data, 20 + 26, 8);
     }
     # Optional software name and version (see SOFTWARE), 1-byte length + string after the nonce
-    my $software;
+    my ($software, $hostname);
     if (length($data) >= 20 + 26 + 8 + 1) {
         my $len = unpack("C", substr($data, 54, 1));
         if (length($data) >= 55 + $len) {
             $software = substr($data, 55, $len);
             # the string is written to logs and to the database, keep only printable ascii
             $software =~ tr/\x20-\x7e//cd;
+            # Optional self-announced hostname (see my_hostname), 1-byte length + string after the software
+            my $offset = 55 + $len;
+            if (length($data) >= $offset + 1) {
+                my $hlen = unpack("C", substr($data, $offset, 1));
+                if (length($data) >= $offset + 1 + $hlen) {
+                    $hostname = substr($data, $offset + 1, $hlen);
+                    $hostname =~ tr/\x20-\x7e//cd;
+                    $hostname = substr($hostname, 0, HOSTNAME_MAX_LENGTH);
+                }
+            }
         }
     }
     if ($self->check_duplicate_connection($nonce) != 0) {
@@ -187,6 +207,7 @@ sub cmd_version {
     if (defined($software) && ($self->peer->software // "") ne $software) {
         $self->peer->update(software => $software);
     }
+    $self->update_peer_hostname($hostname) if defined($hostname);
     $self->request_btc_blocks() if UPGRADE_POW && !UPGRADE_FINISHED && !btc_synced();
     $self->request_mempool if blockchain_synced() && !mempool_synced() && !$self->wait_btc_sync;
     $self->announce_best_btc_block() if UPGRADE_POW && !UPGRADE_FINISHED;
@@ -201,6 +222,27 @@ sub cmd_verack {
     my $self = shift;
     $self->request_peer_addresses;
     return 0;
+}
+
+sub update_peer_hostname {
+    my $self = shift;
+    my ($hostname) = @_;
+    my $peer = $self->peer;
+    if ($hostname eq "") {
+        # explicitly announced empty name (removed from the remote config): forget the stored one
+        $peer->update(hostname => undef, hostname_verified => 0) if defined($peer->hostname);
+        return;
+    }
+    if (($peer->hostname // "") ne $hostname) {
+        $peer->update(hostname => $hostname, hostname_verified => 0, hostname_check_time => undef);
+    }
+    my $stale = ($peer->hostname_check_time // 0) + HOSTNAME_CHECK_PERIOD <= time();
+    if (defined($peer->config_name) && $peer->config_name eq $hostname) {
+        $peer->update(hostname_verified => 1, hostname_check_time => time()) if !$peer->hostname_verified || $stale;
+    }
+    elsif ($stale) {
+        QBitcoin::Resolver->verify_hostname($peer);
+    }
 }
 
 # Request peer addresses if we don't have enough peers;
