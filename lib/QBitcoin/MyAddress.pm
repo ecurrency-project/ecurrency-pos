@@ -8,8 +8,8 @@ use QBitcoin::Accessors qw(mk_accessors new);
 use QBitcoin::Const;
 use QBitcoin::ORM qw(find update delete :types);
 use QBitcoin::Crypto qw(hash160 hash256 pk_import pk_alg);
-use QBitcoin::Address qw(wif_to_pk wif_delegation_hash address_by_pubkey address_by_hash script_by_pubkey script_by_pubkeyhash addresses_by_pubkey scripthash_by_address);
-use QBitcoin::Script::Delegation qw(delegation_script);
+use QBitcoin::Address qw(wif_to_pk wif_delegation_hash address_by_pubkey address_by_hash script_by_pubkey script_by_pubkeyhash addresses_by_pubkey scripthash_by_address pubkeyhash_by_pubkey);
+use QBitcoin::Script::Delegation qw(delegation_script delegation_scripthash);
 use QBitcoin::Wallet::UTXO qw(myutxo_add myutxo_del myutxo_list);
 use QBitcoin::Tag;
 use QBitcoin::Wallet::Crypt qw(is_encrypted_pk decrypt_pk unlocked);
@@ -33,9 +33,10 @@ use constant PRIMARY_KEY => 'address';
 
 mk_accessors(qw(private_key staked tag_id));
 
-# hash256 of the delegate staking pubkey for a delegated-staking address (the
-# owner side of the covenant, see QBitcoin::Script::Delegation); undef for
-# ordinary addresses. The stored (database) value when present, otherwise
+# Hash of the delegate staking pubkey (hash160 pre-quantum, hash256
+# post-quantum) for a delegated-staking address (the owner side of the
+# covenant, see QBitcoin::Script::Delegation); undef for ordinary addresses.
+# The stored (database) value when present, otherwise
 # derived from a plaintext delegation WIF, so ad-hoc objects created as
 # new(private_key => ...) work too. Setter form is used by update().
 sub deleg_pubkeyhash {
@@ -369,7 +370,7 @@ sub address {
 sub redeem_script {
     my $self = shift;
     if (my $deleg_pubkeyhash = $self->deleg_pubkeyhash) {
-        my $script = delegation_script(hash256($self->pubkey), $deleg_pubkeyhash);
+        my $script = delegation_script(pubkeyhash_by_pubkey($self->pubkey, $self->algo // 0), $deleg_pubkeyhash);
         return wantarray ? ($script) : $script;
     }
     my $main_script = script_by_pubkey($self->pubkey);
@@ -383,7 +384,7 @@ sub scripthash {
     my $self = shift;
     return scripthash_by_address($self->address) if $self->is_watchonly;
     if ($self->is_delegation) {
-        my $scripthash = hash256(scalar $self->redeem_script);
+        my $scripthash = delegation_scripthash(pubkeyhash_by_pubkey($self->pubkey, $self->algo // 0), $self->deleg_pubkeyhash);
         return wantarray ? ($scripthash) : $scripthash;
     }
     return map { hash160($_), hash256($_) } $self->redeem_script if wantarray;

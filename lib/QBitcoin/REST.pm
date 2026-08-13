@@ -21,7 +21,7 @@ use QBitcoin::Log;
 use QBitcoin::IP qw(ip_port_str);
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ORM qw(dbh);
-use QBitcoin::Address qw(address_by_hash address_by_pubkey wallet_import_format wif_to_pk wif_decode delegation_import_format pubkeyhash_str pubkeyhash_by_str);
+use QBitcoin::Address qw(address_by_hash address_by_pubkey wallet_import_format wif_to_pk wif_decode delegation_import_format pubkeyhash_str pubkeyhash_by_str pubkeyhash_by_pubkey);
 use QBitcoin::Script::Delegation qw(delegation_address);
 use QBitcoin::MyAddress;
 use QBitcoin::StakingKey;
@@ -32,7 +32,7 @@ use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::TXO;
 use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info create_txo estimate_fees check_tx_tokens_balance);
-use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160 hash256);
+use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Generate;
 use QBitcoin::Generate::Control;
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
@@ -364,7 +364,7 @@ sub process_request {
                         # delegate's staking key can only stake it (see QBitcoin::Script::Delegation)
                         my $delegate_pubkeyhash = eval { pubkeyhash_by_str($delegate_str) }
                             or return $self->http_response(400, "Invalid delegate pubkeyhash");
-                        my $pubkeyhash = hash256($keypair->pubkey_by_privkey);
+                        my $pubkeyhash = pubkeyhash_by_pubkey($keypair->pubkey_by_privkey, $algo);
                         return $self->http_ok({
                             address     => delegation_address($pubkeyhash, $delegate_pubkeyhash),
                             private_key => delegation_import_format($keypair->pk_serialize, $delegate_pubkeyhash),
@@ -393,7 +393,7 @@ sub process_request {
                         my $privkey = pk_import($private_key, $algo) or next;
                         my $pub = $privkey->pubkey_by_privkey or next;
                         my $addr = $delegate_pubkeyhash
-                            ? delegation_address(hash256($pub), $delegate_pubkeyhash)
+                            ? delegation_address(pubkeyhash_by_pubkey($pub, $algo), $delegate_pubkeyhash)
                             : address_by_pubkey($pub, $algo);
                         if ($content->{address} eq $addr) {
                             $pk_alg = $algo;
@@ -1141,7 +1141,7 @@ sub new_staking_key {
     my $keypair = generate_keypair($algo);
     my $pubkey = $keypair->pubkey_by_privkey
         or return $self->http_response(500, "Cannot generate a staking key");
-    my $pubkeyhash_str = pubkeyhash_str(hash256($pubkey));
+    my $pubkeyhash_str = pubkeyhash_str(pubkeyhash_by_pubkey($pubkey, $algo));
     my $store = wallet_import_format($keypair->pk_serialize);
     my $warning;
     if (QBitcoin::Wallet->is_encrypted) {

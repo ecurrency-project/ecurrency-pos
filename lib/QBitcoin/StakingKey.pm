@@ -4,10 +4,11 @@ use strict;
 
 # Long-lived staking keys of a delegate node. One key serves any number of
 # delegated-staking addresses (see QBitcoin::Delegation): the delegate
-# publishes the base58 form of hash256(pubkey) once, and each owner builds a
-# covenant address from it and their own key. A staking key can only sign the
-# stake branch of the delegation covenant - it never controls money - so these
-# keys live in their own table, separate from my_address.
+# publishes the base58 form of its pubkeyhash (hash160 for pre-quantum keys,
+# hash256 for post-quantum ones) once, and each owner builds a covenant
+# address from it and their own key. A staking key can only sign the stake
+# branch of the delegation covenant - it never controls money - so these keys
+# live in their own table, separate from my_address.
 #
 # The private key is stored as WIF, encrypted with the wallet master key when
 # the wallet is encrypted; the ciphertext is bound to the base58 pubkeyhash
@@ -16,8 +17,8 @@ use strict;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors new);
 use QBitcoin::ORM qw(find update delete :types);
-use QBitcoin::Crypto qw(hash256 pk_import pk_alg);
-use QBitcoin::Address qw(wif_to_pk pubkeyhash_str);
+use QBitcoin::Crypto qw(pk_import pk_alg);
+use QBitcoin::Address qw(wif_to_pk pubkeyhash_str pubkeyhash_by_pubkey);
 use QBitcoin::Wallet::Crypt qw(is_encrypted_pk decrypt_pk unlocked);
 
 use constant TABLE => 'staking_key';
@@ -50,7 +51,7 @@ sub get_by_pubkeyhash {
 
 sub pubkeyhash {
     my $self = shift;
-    return $self->{pubkeyhash} //= hash256($self->pubkey);
+    return $self->{pubkeyhash} //= pubkeyhash_by_pubkey($self->pubkey, $self->algo);
 }
 
 sub pubkeyhash_string {
@@ -79,9 +80,9 @@ sub privkey {
 sub create {
     my $class = shift;
     my $attr = @_ == 1 ? $_[0] : { @_ };
-    $attr->{private_key} && $attr->{pubkey}
-        or die "Missing private_key or pubkey for staking key";
-    if (my $existing = $class->get_by_pubkeyhash(hash256($attr->{pubkey}))) {
+    $attr->{private_key} && $attr->{pubkey} && $attr->{algo}
+        or die "Missing private_key, pubkey or algo for staking key";
+    if (my $existing = $class->get_by_pubkeyhash(pubkeyhash_by_pubkey($attr->{pubkey}, $attr->{algo}))) {
         Errf("Staking key %s already exists", $existing->pubkeyhash_string);
         return undef;
     }

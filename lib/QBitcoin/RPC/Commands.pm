@@ -11,14 +11,14 @@ use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::IP qw(ip_port_str parse_addr_port host_to_ips);
 use QBitcoin::ORM qw(dbh);
-use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160 hash256);
+use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
 use QBitcoin::Block;
 use QBitcoin::Coins;
 use QBitcoin::Transaction;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced);
 use QBitcoin::Transaction;
 use QBitcoin::TXO;
-use QBitcoin::Address qw(wif_to_pk wif_decode scripthash_by_address address_by_pubkey wallet_import_format delegation_import_format address_by_hash pubkeyhash_str);
+use QBitcoin::Address qw(wif_to_pk wif_decode scripthash_by_address address_by_pubkey wallet_import_format delegation_import_format address_by_hash pubkeyhash_str pubkeyhash_by_pubkey);
 use QBitcoin::Script::Delegation qw(delegation_script delegation_address);
 use QBitcoin::MyAddress;
 use QBitcoin::StakingKey;
@@ -1200,7 +1200,7 @@ sub cmd_importprivkey {
     my $pubkey = $privkey->pubkey_by_privkey
         or return $self->response_error("This type of private key is not supported for my_address", ERR_INVALID_ADDRESS_OR_KEY);
     my $address = $delegate_pubkeyhash
-        ? delegation_address(hash256($pubkey), $delegate_pubkeyhash)
+        ? delegation_address(pubkeyhash_by_pubkey($pubkey, $pk_alg), $delegate_pubkeyhash)
         : address_by_pubkey($pubkey, $pk_alg);
     if (grep { $address eq $_->address } QBitcoin::MyAddress->my_address()) {
         return $self->response_ok("Private key for address $address already imported");
@@ -1357,8 +1357,9 @@ sub cmd_importstakingkey {
 sub _store_staking_key {
     my $self = shift;
     my ($private_key, $pubkey, $algo) = @_;
-    my $pubkeyhash_str = pubkeyhash_str(hash256($pubkey));
-    if (QBitcoin::StakingKey->get_by_pubkeyhash(hash256($pubkey))) {
+    my $pubkeyhash = pubkeyhash_by_pubkey($pubkey, $algo);
+    my $pubkeyhash_str = pubkeyhash_str($pubkeyhash);
+    if (QBitcoin::StakingKey->get_by_pubkeyhash($pubkeyhash)) {
         return $self->response_ok({ pubkeyhash => $pubkeyhash_str });
     }
     my $wif = wallet_import_format($private_key);
@@ -2097,7 +2098,7 @@ Result:
   "staked" : true|false,        (boolean, optional) whether the address is used for staking (wallet addresses only)
   "tag" : "str"|null,           (string or null, optional) notification tag for the address (wallet addresses only)
   "pubkey" : "hex",             (string, optional) The hex value of the raw public key (if known)
-  "pubkeyhash" : "str",         (string, optional) base58 hash256 of the public key (wallet addresses with a private key)
+  "pubkeyhash" : "str",         (string, optional) base58 hash of the public key (wallet addresses with a private key)
   "delegation" : "str",         (string, optional) delegated-staking role of this wallet: "owner", "delegate" or "both"
   "stakeonly" : true,           (boolean, optional) only the staking key is here: staked for a foreign owner, not counted in getbalance
   "delegate_pubkeyhash" : "str",(string, optional) the delegate staking pubkeyhash (delegation owner side)
@@ -2129,7 +2130,7 @@ sub cmd_getaddressinfo {
         # pubkey derivation dies for an encrypted key without a stored pubkey while the wallet is locked
         if (my $pubkey = eval { $my_address->pubkey }) {
             $res->{pubkey} = unpack("H*", $pubkey);
-            $res->{pubkeyhash} = pubkeyhash_str(hash256($pubkey)) unless $my_address->is_watchonly;
+            $res->{pubkeyhash} = pubkeyhash_str(pubkeyhash_by_pubkey($pubkey, $my_address->algo // 0)) unless $my_address->is_watchonly;
         }
         if (!$my_address->is_watchonly && $my_address->is_delegation) {
             $res->{delegation} = $delegation ? "both" : "owner";
@@ -2225,7 +2226,7 @@ sub cmd_getnewaddress {
     my $algo = $self->args->[0] // CRYPT_ALGO_ECDSA;
     my $keypair = generate_keypair($algo);
     if (defined(my $delegate_pubkeyhash = $self->args->[1])) {
-        my $pubkeyhash = hash256($keypair->pubkey_by_privkey);
+        my $pubkeyhash = pubkeyhash_by_pubkey($keypair->pubkey_by_privkey, $algo);
         return $self->response_ok({
             address     => delegation_address($pubkeyhash, $delegate_pubkeyhash),
             private_key => delegation_import_format($keypair->pk_serialize, $delegate_pubkeyhash),
