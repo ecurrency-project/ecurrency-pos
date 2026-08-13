@@ -178,8 +178,9 @@ export const GenerateAddressButton = memo(function GenerateAddressButton() {
                                     description="The delegate can only stake the coins and must always return the
                                         full value back to this address; only your private key can spend them.
                                         Send your pubkeyhash to the delegate so their node starts staking.
-                                        Give the delegation to ONE delegate only: staking the same address from
-                                        two nodes is equivocation, and the slashing penalty is paid from your coins."
+                                        Note that the coins are the slashing collateral: if the delegate's node
+                                        equivocates (e.g. runs its staking key on two nodes at once), the penalty
+                                        is paid from them - choose a delegate you trust to operate a single node."
                                 />
                             </>
                         )}
