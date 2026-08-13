@@ -1681,6 +1681,10 @@ Result:
   {                                   (json object)
     "addr" : "str",                   (string) (host:port) The IP address and port of the peer
     "addrlocal" : "str",              (string) (ip:port) Bind address of the connection to the peer
+    "hostname" : "str",               (string) Human-readable host name of the peer: self-announced in the greeting,
+                                      or the name the peer is configured by. Informational only, never used in any
+                                      logic; an unverified name is an arbitrary claim of the peer, do not trust it
+    "hostname_verified" : true|false, (boolean) The hostname resolves to the peer address (forward-confirmed DNS)
     "network" : "str",                (string) Network (ipv4, ipv6, onion, i2p, not_publicly_routable)
     "createtime" : n,                 (numeric) The connection create time in seconds since epoch
     "bytessent" : n,                  (numeric) The total bytes sent
@@ -1707,6 +1711,8 @@ sub cmd_getpeerinfo {
         push @peers, {
             addr        => ip_port_str($connection->addr, $connection->port),
             addrlocal   => ip_port_str($connection->my_addr, $connection->my_port),
+            hostname    => $peer->display_hostname // "",
+            hostname_verified => $peer->display_hostname_verified ? TRUE : FALSE,
             inbound     => $connection->direction == DIR_IN ? TRUE : FALSE,
             protocol    => $connection->type,
             software    => $peer->software // "",
@@ -1734,6 +1740,8 @@ Result:
 [                                     (json array)
   {                                   (json object)
     "addr" : "str",                   (string) (host:port) The IP address and port of the peer
+    "hostname" : "str",               (string) Human-readable host name of the peer (see getpeerinfo); do not trust an unverified name
+    "hostname_verified" : true|false, (boolean) The hostname resolves to the peer address (forward-confirmed DNS)
     "protocol" : "str",               (string) Protocol (QBitcoin, Bitcoin)
     "connected" : true|false,         (boolean) Whether the peer is currently connected
     "connect_allowed" : true|false,   (boolean) Whether an outgoing connection to the peer is allowed now (not disabled, not in failed-connects backoff and the same node is not already connected via another address)
@@ -1762,6 +1770,8 @@ sub cmd_listpeers {
         foreach my $peer (sort { $b->reputation <=> $a->reputation || $a->id cmp $b->id } QBitcoin::Peer->get_all($type_id)) {
             push @peers, {
                 addr              => ip_port_str($peer->ip, $peer->port),
+                hostname          => $peer->display_hostname // "",
+                hostname_verified => $peer->display_hostname_verified ? TRUE : FALSE,
                 protocol          => $peer->type,
                 connected         => $peer->conn_state == STATE_CONNECTED ? TRUE : FALSE,
                 connect_allowed   => $peer->is_connect_allowed ? TRUE : FALSE,
