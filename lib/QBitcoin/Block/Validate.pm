@@ -31,7 +31,7 @@ sub validate {
     # Block time must be exactly on a timeslot boundary: the stake signature commits to
     # timeslot($block->time) (see Block::sign_data), so a sub-slot time would make the
     # signed slot ambiguous and break slashing's "same timeslot" attribution.
-    $block->time == timeslot($block->time)
+    $block->time == timeslot($block->time) || $block->time < SLASHING_START
         or return "Block time " . $block->time . " is not aligned to a timeslot";
     my $merkle_root = $block->calculate_merkle_root;
     $block->merkle_root eq $merkle_root
