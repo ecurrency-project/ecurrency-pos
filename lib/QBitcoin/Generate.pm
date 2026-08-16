@@ -291,7 +291,8 @@ sub make_stake_tx {
 # block, so we build a sibling only when one is pending.
 sub _have_weight_tx {
     foreach my $tx (QBitcoin::Transaction->mempool_list()) {
-        return 1 if $tx->is_coinbase || $tx->is_slashing;
+        return 1 if $tx->is_coinbase;
+        return 1 if $tx->is_slashing && !grep { $_->{txo}->tx_out } @{$tx->in};
     }
     return 0;
 }
