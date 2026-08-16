@@ -225,6 +225,7 @@ sub main_loop {
     while () {
         QBitcoin::Fork->reap();
         QBitcoin::Resolver->process(); # kill overdue hostname checks, start queued ones
+        QBitcoin::Fork->maintain_db_pool();
         QBitcoin::Block->store_blocks();
         my $timeout = SELECT_TIMEOUT;
         if (!$config->{genesis} && !QBitcoin::ConnectionList->connected(PROTOCOL_QBITCOIN)) {
@@ -539,6 +540,8 @@ sub main_loop {
             }
         }
     }
+    # Do not let global destruction disconnect a pooled connection which a forked child is still using
+    QBitcoin::Fork->close_db_pool();
     return 0;
 }
 
