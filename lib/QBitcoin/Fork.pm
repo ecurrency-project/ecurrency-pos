@@ -30,6 +30,16 @@ sub enabled {
     return $config->{fork_requests} // 1;
 }
 
+sub max_children {
+    return $config->{max_fork_children} // MAX_FORK_CHILDREN;
+}
+
+# One pre-opened database connection per possible child, so that a forked handler
+# never has to open its own; see the pool description in QBitcoin::ORM
+sub db_pool_size {
+    return $config->{db_pool_size} // max_children();
+}
+
 # The child must close its copies of the listening sockets, otherwise the port
 # stays bound while the child is alive even if the parent exits
 sub register_listen_socket {
@@ -46,18 +56,23 @@ sub spawn {
 
     enabled()
         or return undef;
-    if (keys %CHILDREN >= ($config->{max_fork_children} // MAX_FORK_CHILDREN)) {
+    if (keys %CHILDREN >= max_children()) {
         Debugf("Too many forked request handlers (%u), process request inline", scalar keys %CHILDREN);
         return undef;
     }
+    # Reserve the connection before fork(): the master must know which one belongs to the child
+    my $db_entry = QBitcoin::ORM::db_pool_take();
     my $pid = fork();
     if (!defined $pid) {
         Warningf("Cannot fork request handler: %s, process request inline", $!);
+        QBitcoin::ORM::db_pool_release($db_entry) if $db_entry;
         return undef;
     }
     if ($pid) {
+        QBitcoin::ORM::db_pool_loaned($db_entry, $pid) if $db_entry;
         $CHILDREN{$pid} = 1;
         $connection->detach();
+        $class->register_worker(\&QBitcoin::ORM::db_pool_returned);
         return 0;
     }
     $IS_CHILD = 1;
@@ -70,8 +85,9 @@ sub spawn {
         close($other->socket) if $other->socket;
     }
     # The inherited database handle belongs to the parent; drop it without disconnect
-    # and let the first query in the child open a fresh connection
-    QBitcoin::ORM::reset_dbh_after_fork();
+    # and use the connection lent to us from the master's pool (if there was a free one,
+    # otherwise the first query in the child opens a fresh connection)
+    QBitcoin::ORM::reset_dbh_after_fork($db_entry);
     return 1;
 }
 
@@ -91,8 +107,11 @@ sub finish {
         $connection->sendbuf = substr($connection->sendbuf, $n);
     }
     $connection->disconnect() if $connection->socket;
-    # _exit() skips destructors, so the database connection opened in this child
-    # must be closed explicitly; otherwise the server logs an aborted connection
+    # _exit() skips destructors, so a database connection opened by this child must be
+    # closed explicitly; otherwise the server logs an aborted connection. A connection
+    # lent from the master's pool is marked InactiveDestroy and is left open: the master
+    # keeps its own descriptor of the same socket, so closing ours on exit is invisible
+    # to the server, and the master lends the connection to the next child
     QBitcoin::ORM::disconnect_dbh();
     POSIX::_exit(0);
 }
@@ -121,9 +140,22 @@ sub reap {
     while ((my $pid = waitpid(-1, WNOHANG)) > 0) {
         delete $CHILDREN{$pid};
         if (my $callback = delete $WORKER_CALLBACKS{$pid}) {
-            $callback->($?);
+            $callback->($pid, $?);
         }
     }
+}
+
+# Called from the main loop, never during the request processing: pre-open the database
+# connections for the next requests, keep the open ones alive and release the extra ones
+sub maintain_db_pool {
+    my $class = shift;
+    QBitcoin::ORM::db_pool_maintain(enabled() ? db_pool_size() : 0);
+}
+
+# Called on shutdown, while the pooled connections still may be in use by children
+sub close_db_pool {
+    my $class = shift;
+    QBitcoin::ORM::db_pool_close();
 }
 
 1;

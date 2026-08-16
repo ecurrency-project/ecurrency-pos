@@ -57,7 +57,7 @@ sub start_check {
     }
     if ($pid) {
         $RUNNING{$pid} = { peer => $peer, deadline => time() + HOSTNAME_CHECK_TIMEOUT };
-        QBitcoin::Fork->register_worker($pid, sub { $class->finish_check($pid, $_[0]) });
+        QBitcoin::Fork->register_worker($pid, \&finish_check);
         return;
     }
     QBitcoin::Fork->worker_child_init();
@@ -67,7 +67,6 @@ sub start_check {
 }
 
 sub finish_check {
-    my $class = shift;
     my ($pid, $status) = @_;
     my $check = delete $RUNNING{$pid}
         or return;
@@ -83,7 +82,7 @@ sub finish_check {
     if (defined $peer->hostname) {
         $peer->update($exit_code >= 0 ? (hostname_verified => $exit_code == RESOLVED_MATCH ? 1 : 0) : (), hostname_check_time => time());
     }
-    $class->process(); # a child slot got free
+    __PACKAGE__->process(); # a child slot got free
 }
 
 1;
