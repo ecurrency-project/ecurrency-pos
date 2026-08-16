@@ -67,15 +67,23 @@ sub myutxo_del {
     }
 }
 
+# NB: these return a named array, not the bare "values(%a), values(%b)" list. Callers use
+# them in boolean and numeric context too ("do we have anything to stake with?"), and a list
+# in scalar context is the comma operator: it yields only its LAST element, i.e. the size of
+# the second hash alone. A node staking its own coins with no delegations then looked like it
+# had no stake sources at all.
+#
 # Own coins: the wallet balance and spendable-output selection
 sub myutxo_list {
-    return (values(%MY_UTXO), values(%STAKED_UTXO));
+    my @utxo = (values(%MY_UTXO), values(%STAKED_UTXO));
+    return @utxo;
 }
 
 # Stake sources: own staked coins plus coins delegated to this node.
 # An output present in both MY and DELEGATED is returned once (as delegated).
 sub myutxo_staked {
-    return (values(%STAKED_UTXO), values(%DELEGATED_UTXO));
+    my @utxo = (values(%STAKED_UTXO), values(%DELEGATED_UTXO));
+    return @utxo;
 }
 
 sub myutxo_delegated {
