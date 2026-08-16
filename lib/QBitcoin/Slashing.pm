@@ -429,6 +429,7 @@ sub is_banned_stake {
 sub banned_height_in_best {
     my $class = shift;
     my $min;
+    my $max_db_height = QBitcoin::Block->max_db_height;
     foreach my $key (keys %BANNED) {
         my $b = $BANNED{$key};
         my $txo = $b->{txo}
@@ -444,6 +445,7 @@ sub banned_height_in_best {
         next unless $sp->is_stake;
         my $h = $sp->block_height;
         next unless defined $h; # spender not confirmed in the best branch
+        next if $h <= $max_db_height;
         next unless defined($sp->block_time) && timeslot($sp->block_time) == $b->{timeslot};
         $min = $h if !defined($min) || $h < $min;
     }
