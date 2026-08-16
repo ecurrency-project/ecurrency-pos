@@ -303,6 +303,9 @@ sub observe {
         foreach my $s (keys %SEEN) {
             delete $SEEN{$s} if $s < $cutoff;
         }
+        foreach my $key (keys %BANNED) {
+            delete $BANNED{$key} if $BANNED{$key}->{timeslot} < $cutoff;
+        }
     }
     my $slot = $SEEN{$timeslot} //= {};
     my $conflict;
@@ -401,10 +404,6 @@ sub ban_from_tx {
     }
     if ($timeslot > $MAX_SLOT) {
         $MAX_SLOT = $timeslot;
-    }
-    my $cutoff = $MAX_SLOT - SLASHING_WINDOW * BLOCK_INTERVAL;
-    foreach my $key (keys %BANNED) {
-        delete $BANNED{$key} if $BANNED{$key}->{timeslot} < $cutoff;
     }
 }
 
