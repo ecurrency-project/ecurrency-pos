@@ -91,6 +91,9 @@ sub finish {
         $connection->sendbuf = substr($connection->sendbuf, $n);
     }
     $connection->disconnect() if $connection->socket;
+    # _exit() skips destructors, so the database connection opened in this child
+    # must be closed explicitly; otherwise the server logs an aborted connection
+    QBitcoin::ORM::disconnect_dbh();
     POSIX::_exit(0);
 }
 
