@@ -76,6 +76,20 @@ sub reset_dbh_after_fork {
     }
 }
 
+# Close the connection opened by this process, if any. Needed before POSIX::_exit()
+# which skips destructors, otherwise the connection is dropped without COM_QUIT and
+# the server logs "Aborted connection ... (Got an error reading communication packets)"
+sub disconnect_dbh {
+    my $handle = $dbh
+        or return;
+    undef $dbh;
+    return if $handle->{InactiveDestroy}; # inherited from the parent, not ours to close
+    $handle->{Warn} = 0; # do not complain about statement handles still active
+    eval { $handle->disconnect(); 1 }
+        or Debugf("Error on database disconnect: %s", $@ =~ s/\s+$//r);
+    return;
+}
+
 sub for_log {
     my ($data) = @_;
     defined($data) || return "undef";
