@@ -1736,7 +1736,7 @@ Result:
     "addr" : "str",                   (string) (host:port) The IP address and port of the peer
     "protocol" : "str",               (string) Protocol (QBitcoin, Bitcoin)
     "connected" : true|false,         (boolean) Whether the peer is currently connected
-    "connect_allowed" : true|false,   (boolean) Whether an outgoing connection to the peer is allowed now (not disabled and not in failed-connects backoff)
+    "connect_allowed" : true|false,   (boolean) Whether an outgoing connection to the peer is allowed now (not disabled, not in failed-connects backoff and the same node is not already connected via another address)
     "reputation" : n,                 (numeric) The peer reputation
     "failed_connects" : n,            (numeric) Number of failed outgoing connects since the last success (see resetpeer)
     "last_success_time" : n,          (numeric) Time of the last successful outgoing handshake, or null if the peer was never verified reachable

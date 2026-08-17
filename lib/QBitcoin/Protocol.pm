@@ -181,6 +181,7 @@ sub cmd_version {
             $peer->update(port => $adv_port_trusted) if $adv_port_trusted && $peer->port != $adv_port_trusted;
         }
     }
+    $self->peer->nonce($nonce) if defined $nonce;
     Infof("Peer %s greeted: version %u, features 0x%x, software %s",
         $self->peer->id, $protocol_version, $protocol_features, $software // "unknown");
     if (defined($software) && ($self->peer->software // "") ne $software) {
@@ -250,6 +251,7 @@ sub check_duplicate_connection {
             }
             if ($drop_this) {
                 Infof("Duplicate connection with peer %s, closing this one", $self->peer->id);
+                $self->peer->nonce($nonce);
                 # the handshake did succeed, closing a duplicate is not a failed connect
                 $self->greeted = 1;
                 $self->peer->connect_success() if $connection->direction == DIR_OUT;

@@ -40,6 +40,7 @@ use constant FIELDS => {
 
 mk_accessors(grep { $_ ne "reputation" } keys %{FIELDS()});
 mk_accessors(qw(in_db)); # true when the peer is stored in the database (not a transient incoming-connection peer)
+mk_accessors(qw(nonce));
 
 my @PEERS; # by type_id and ip
 
@@ -229,9 +230,25 @@ sub conn_state {
     }
 }
 
+# True if we already have a connection with the node, established via another of its addresses
+sub node_connected {
+    my $self = shift;
+    my $nonce = $self->nonce
+        or return 0;
+    foreach my $connection (QBitcoin::ConnectionList->list()) {
+        next if $connection->type_id != $self->type_id;
+        next if $connection->addr eq $self->ip; # this address, it is handled by conn_state
+        my $protocol = $connection->protocol
+            or next;
+        return 1 if defined($protocol->remote_nonce) && $protocol->remote_nonce eq $nonce;
+    }
+    return 0;
+}
+
 sub is_connect_allowed {
     my $self = shift;
     return 0 if $self->conn_state != STATE_DISCONNECTED;
+    return 0 if $self->node_connected;
     return 0 if $self->status & PEER_STATUS_NOCALL;
     if ($self->failed_connects) {
         my $period = $self->failed_connects >= 10 ? 10 * 2**10 : 10 * 2**$self->failed_connects;
