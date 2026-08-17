@@ -120,4 +120,28 @@ is(recv_version($conn_old3), 0, "old node behind the same IP as new nodes greete
 is($conn_a2->state, STATE_CONNECTED, "new node sessions are not affected");
 is($conn_b->state, STATE_CONNECTED, "new node sessions are not affected");
 
+# One node reachable by two addresses (IPv4 and IPv6, several interfaces, NAT): each address has
+# its own peer record, so the connection established via one of them is invisible to conn_state of
+# the other. Without the node-level check we would dial the second address in every loop iteration,
+# drop the duplicate right after the handshake (which is not a failed connect, so no backoff) and
+# repeat it forever.
+my $node_ip1 = ip4("198.51.100.40"); # the address the node connected to us from
+my $node_ip2 = ip4("198.51.100.41"); # another address of the same node, known to us as a peer
+my $nonce_e = "\x00" x 8; # less than any realistic my_nonce: the tie-break keeps our incoming
+my $conn_e = make_connection(ip => $node_ip1, direction => DIR_IN, port => 50010);
+is(recv_version($conn_e, nonce => $nonce_e), 0, "node connected via its first address");
+my $peer_e1 = $conn_e->peer;
+my $peer_e2 = QBitcoin::Peer->get_or_create(ip => $node_ip2, type_id => PROTOCOL_QBITCOIN); # known peer record
+ok(!$peer_e1->is_connect_allowed, "connected address is not dialed again");
+ok($peer_e2->is_connect_allowed, "another address of the node is dialed while the node is unknown there");
+my $conn_e2 = make_connection(ip => $node_ip2, direction => DIR_OUT, port => PORT);
+is(recv_version($conn_e2, nonce => $nonce_e), -1, "connect to another address of the connected node is a duplicate");
+$conn_e2->disconnect(); # as the network loop does after cmd_version failure
+is($peer_e2->failed_connects, 0, "duplicate is not counted as a failed connect");
+is($peer_e2->conn_state, STATE_DISCONNECTED, "no connection with the second address itself");
+ok(!$peer_e2->is_connect_allowed, "second address of the connected node is not dialed again");
+is($conn_e->state, STATE_CONNECTED, "the existing connection with the node is kept");
+$conn_e->disconnect();
+ok($peer_e2->is_connect_allowed, "second address is dialable again when the node disconnects");
+
 done_testing();
