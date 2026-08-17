@@ -29,6 +29,7 @@ my $delegation_module = Test::MockModule->new('QBitcoin::Delegation');
 $delegation_module->mock('list', sub { () });
 my $timeslot = timeslot(time);
 my $transaction_module = Test::MockModule->new('QBitcoin::Transaction');
+$transaction_module->mock('txo_stakeable', sub { 1 });
 $transaction_module->mock('txo_time', sub { $_[1]->tx_in =~ /age_\d+:(\d+)/ ? $timeslot - $1*10 : 0 });
 $transaction_module->mock('sign_transaction',
     sub {

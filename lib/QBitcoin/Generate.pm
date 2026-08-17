@@ -214,8 +214,11 @@ sub make_stake_tx {
     # so outputs confirmed there (e.g. our own just-published stake outputs) do not
     # exist in the branch being built. Including them also broke the reward split:
     # their age in the block's own slot is 0, making the total stake weight 0.
+    # Slashing refunds are not stakeable (consensus, see Transaction::txo_stakeable): a
+    # slashed node must stop staking these coins instead of building invalid blocks.
     my @my_txo = grep {
-        txo_confirmed($_, $prev_height) && !QBitcoin::Generate::Control->is_utxo_published($timeslot, $_->key)
+        QBitcoin::Transaction->txo_stakeable($_) && txo_confirmed($_, $prev_height)
+            && !QBitcoin::Generate::Control->is_utxo_published($timeslot, $_->key)
     } QBitcoin::TXO->staked_utxo();
     my $reward_to = $config->{reward_to} // "union";
     if ($reward_to eq "none") {
