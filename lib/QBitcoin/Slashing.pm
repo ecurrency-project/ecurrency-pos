@@ -26,6 +26,16 @@ use strict;
 # becomes the transaction fee (into the reward fund). Refund outputs are plain outputs
 # at the owner's scripthash and so are subject to the same STAKE_MATURITY spend lock as
 # stake outputs (enforced for the spender in check_input_script).
+#
+# A refund can be spent ONLY by a standard (or tokens) transaction: staking it again is
+# consensus-invalid (Transaction::validate), and so is slashing it again
+# (Transaction::validate_slashing). Equivocation means the staking setup is broken or a
+# delegate is dishonest, so the punished coins are fail-stopped until the owner
+# deliberately moves them. For delegated coins this is a hard stop for the delegate:
+# the covenant's delegate branch only allows spending into a stake, so after one fine
+# the delegate can neither keep staking the refund nor fabricate further conflicting
+# stake signatures on it to grind the owner's coins down fine by fine - only the
+# owner's key can free the coins.
 
 use QBitcoin::Accessors qw(new mk_accessors);
 use QBitcoin::Log;

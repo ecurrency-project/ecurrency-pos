@@ -1158,6 +1158,16 @@ sub validate {
                 $self->hash_str, $self->fee);
             return -1;
         }
+        if (!skip_scripts()) {
+            # A slashing refund can never be staked (see txo_stakeable)
+            foreach my $in (@{$self->in}) {
+                if (!$class->txo_stakeable($in->{txo})) {
+                    Warningf("Stake transaction %s spends slashing refund %s:%u",
+                        $self->hash_str, $in->{txo}->tx_in_str, $in->{txo}->num);
+                    return -1;
+                }
+            }
+        }
     }
     elsif ($self->is_standard || $self->is_tokens) {
         if ($self->fee < 0) {
@@ -1225,6 +1235,18 @@ sub validate_slashing {
         my $s = $shared->{$txo->key};
         if (!$s) {
             Warningf("Slashing transaction %s spends non-equivocated input %s:%u",
+                $self->hash_str, $txo->tx_in_str, $txo->num);
+            return -1;
+        }
+        # A slashed UTXO must be a stakeable one, so a slashing refund can never be
+        # slashed again. The evidence only proves double-signing, not that the signed
+        # stakes could enter a valid block - so without this rule a malicious delegate
+        # (whose covenant branch only allows spending into a stake) could fabricate
+        # conflicting stake signatures on the refund and grind the owner's coins down
+        # SLASHING_FINE at a time. Together with the stake-input rule above this makes
+        # an owner's standard spend the only way out for a refund.
+        if (!(ref $self)->txo_stakeable($txo)) {
+            Warningf("Slashing transaction %s spends slashing refund %s:%u",
                 $self->hash_str, $txo->tx_in_str, $txo->num);
             return -1;
         }
@@ -1324,6 +1346,19 @@ sub type_by_hash {
     else {
         return undef;
     }
+}
+
+# Can this output be an input of a stake transaction? A slashing refund cannot:
+# equivocation means the staking setup is broken (or a delegate is dishonest), so the
+# punished coins are banned from staking and from repeated slashing (both enforced in
+# validate()) until the owner moves them with a standard spend. An unknown creating tx
+# passes: a real txo implies its transaction is known, only synthetic txos in tests
+# resolve to undef. Memoized on the txo: the answer never changes for a given output.
+sub txo_stakeable {
+    my $class = shift;
+    my ($txo) = @_;
+    return $txo->{stakeable} //=
+        ($class->type_by_hash($txo->tx_in) // 0) == TX_TYPE_SLASHING ? 0 : 1;
 }
 
 sub announce {
