@@ -10,6 +10,10 @@ export interface BrandConfig {
     logoSize: { width: number; height: number };
     accent?: { light: string; dark: string };
     CoinIcon?: ComponentType<SVGProps<SVGSVGElement>>;
+    powChain?: {
+        label: string;
+        explorerTxUrl: { main: string; testnet: string };
+    };
 }
 
 // Generic base58 address regex as a stub.

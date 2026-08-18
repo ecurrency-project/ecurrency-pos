@@ -6,7 +6,7 @@ import { Tooltip } from 'antd';
 import { Transactions } from '@/widgets/Transactions';
 
 import { useGetTipHeightQuery } from '@/entities/TipHeight';
-import { useGetTransactionQuery } from '@/entities/Transaction';
+import { hasFeeRate, txAmountRowLabel, txTypeLabel, useGetTransactionQuery } from '@/entities/Transaction';
 
 import { Clipboard } from '@/shared/ui/Clipboard';
 import { HStack, VStack } from '@/shared/ui/Stack';
@@ -45,7 +45,9 @@ const TxDetailsPage = (props: TxDetailsPageProps) => {
         : confirmations > 0
             ? `${confirmations} Confirmations`
             : 'Confirmed';
-    const feerate = transaction && transaction.fee ? Number(transaction.fee) / transaction.size : null;
+    const feerate = transaction && hasFeeRate(transaction.tx_type) && transaction.fee
+        ? Number(transaction.fee) / transaction.size
+        : null;
 
     if (isLoading) {
         return <div className={classNames(cls.TxDetailsPage, 'container', className)}>Loading...</div>
@@ -70,6 +72,10 @@ const TxDetailsPage = (props: TxDetailsPageProps) => {
                     <span>Status</span>
                     <span>{confirmationText}</span>
                 </HStack>
+                <HStack justify='space-between' className={cls.statsTableItem}>
+                    <span>Type</span>
+                    <span>{txTypeLabel(transaction.tx_type)}</span>
+                </HStack>
                 {transaction.status.confirmed && (
                     <>
                         <HStack justify='space-between' className={cls.statsTableItem}>
@@ -90,8 +96,11 @@ const TxDetailsPage = (props: TxDetailsPageProps) => {
                 )}
 
                 <HStack justify="space-between" className={cls.statsTableItem}>
-                    <span>Transaction fees</span>
-                    <span className="amount">{formatSat(transaction.fee, assetLabel)} ({feerate?.toFixed(1) || 0} sat/B)</span>
+                    <span>{txAmountRowLabel(transaction.tx_type)}</span>
+                    <span className="amount">
+                        {formatSat(transaction.fee, assetLabel)}
+                        {feerate !== null && ` (${feerate.toFixed(1)} sat/B)`}
+                    </span>
                 </HStack>
 
                 <HStack justify="space-between" className={cls.statsTableItem}>

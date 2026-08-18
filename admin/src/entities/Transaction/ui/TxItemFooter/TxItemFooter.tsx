@@ -43,7 +43,8 @@ export const TxItemFooter = memo(function TxItemFooter(props: TransactionBoxProp
                 <span>{confirmationText} {!txStatus.confirmed && isRbf(vin) ? '(RBF)' : ''}</span>
             )}
             <span>
-                {!isAllUnconfidential(vout) ? 'Confidential' : isAllNative(vout) ? formatSat(outTotal(vout), assetLabel) : ''}
+                {!isAllUnconfidential(vout) ? 'Confidential'
+                    : vout.length > 0 && isAllNative(vout) ? formatSat(outTotal(vout), assetLabel) : ''}
             </span>
         </HStack>
     );

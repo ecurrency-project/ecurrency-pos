@@ -11,6 +11,10 @@ import type { BaseUnits } from '@/shared/lib/baseUnits';
 
 import ExpandMoreIcon from "@/shared/assets/icons/expand_more.svg?react";
 
+import { txAmountRowLabel } from '../../lib/txType';
+import type { TxType } from '../../lib/txType';
+import { TxTypeBadge } from '../TxTypeBadge/TxTypeBadge';
+
 import cls from './TxBoxHeader.module.css';
 
 interface TxBoxHeaderProps {
@@ -20,6 +24,7 @@ interface TxBoxHeaderProps {
     expanded: boolean;
     date?: number
     fee: BaseUnits
+    txType?: TxType | (string & {});
 }
 
 export const TxBoxHeader = memo(function TxBoxHeader(props: TxBoxHeaderProps) {
@@ -30,6 +35,7 @@ export const TxBoxHeader = memo(function TxBoxHeader(props: TxBoxHeaderProps) {
         expanded,
         date,
         fee,
+        txType,
     } = props;
     const [useUTC, setUseUTC] = useState(false);
     const assetLabel = useAssetLabel();
@@ -37,8 +43,11 @@ export const TxBoxHeader = memo(function TxBoxHeader(props: TxBoxHeaderProps) {
     return (
         <HStack className={classNames(cls.TxBoxHeader, className)} justify="space-between">
             <VStack maxWidth>
-                <Link to={`/tx/${txid}`} className={cls.link}>{txid}</Link>
-                <span className={cls.commission}>Commission fee: {formatSat(fee, assetLabel)}</span>
+                <HStack gap="xs" className={cls.titleRow}>
+                    <Link to={`/tx/${txid}`} className={cls.link}>{txid}</Link>
+                    <TxTypeBadge type={txType} />
+                </HStack>
+                <span className={cls.commission}>{txAmountRowLabel(txType)}: {formatSat(fee, assetLabel)}</span>
                 {date && <Tooltip title={useUTC ? 'Show local time' : 'Show UTC time'} placement="top">
                     <span className={cls.time} onClick={() => setUseUTC(!useUTC)} style={{cursor: 'pointer'}}>{formatTime(date, useUTC)}</span>
                 </Tooltip>}

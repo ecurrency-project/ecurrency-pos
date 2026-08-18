@@ -1,0 +1,9 @@
+.badge {
+    flex: 0 0 auto;
+    margin-inline-end: 0;
+    border-radius: 999px;
+    padding-inline: 9px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 22px;
+}

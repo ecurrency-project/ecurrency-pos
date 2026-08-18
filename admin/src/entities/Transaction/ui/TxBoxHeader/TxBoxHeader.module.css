@@ -14,6 +14,12 @@
     }
 }
 
+.titleRow {
+    @media only screen and (max-width: 850px) {
+        width: 100%;
+    }
+}
+
 .link {
     font-size: 16px;
     font-weight: 600;
@@ -24,6 +30,7 @@
         align-self: flex-start;
         word-wrap: break-word;
         width: 100%;
+        min-width: 0;
     }
 }
 

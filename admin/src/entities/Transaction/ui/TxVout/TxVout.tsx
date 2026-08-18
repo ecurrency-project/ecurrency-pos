@@ -74,6 +74,29 @@ export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
                 <div className="mono">{vout.scripthash}</div>
             </div>
 
+            { vout.downgrade &&
+                <>
+                    <div className={cls.voutBodyRow}>
+                        <div>reclaim</div>
+                        <div className="mono">
+                            {vout.downgrade.reclaim}
+                        </div>
+                    </div>
+                    { vout.downgrade.reclaim_address &&
+                        <div className={cls.voutBodyRow}>
+                            <div>reclaim address</div>
+                            <div className="mono">{linkToAddr(vout.downgrade.reclaim_address)}</div>
+                        </div>
+                    }
+                    { vout.downgrade.btc_address &&
+                        <div className={cls.voutBodyRow}>
+                            <div>target chain address</div>
+                            <div className="mono">{vout.downgrade.btc_address}</div>
+                        </div>
+                    }
+                </>
+            }
+
             { vout.assetcommitment &&
                 <div className={cls.voutBodyRow}>
                     <div>Asset commitment</div>
