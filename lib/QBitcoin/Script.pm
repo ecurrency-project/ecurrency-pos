@@ -516,7 +516,10 @@ sub cmd_exec {
     my $script = pop @$stack;
     my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->sigops);
     $new_state->execdepth = $state->execdepth + 1;
-    return execute($new_state);
+    my $res = execute($new_state);
+    return $res if defined $res;
+    $state->sigops = $new_state->sigops;
+    return undef;
 }
 
 # Params: <leaf_hash> <merkle_path> <merkle_root>
