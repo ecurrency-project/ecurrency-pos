@@ -38,11 +38,18 @@ sub checkmultisig($) {
     my $stack = $state->stack;
     @$stack >= 1 or return undef;
     my $nkeys = unpack_int(pop @$stack) // return undef;
+    $nkeys >= 0 or return undef;
     @$stack >= $nkeys+1 or return undef;
-    my @pubkeys = splice(@$stack, -$nkeys-1);
+    my @pubkeys;
+    @pubkeys = splice(@$stack, -$nkeys) if $nkeys;
     my $nsig = unpack_int(pop @$stack) // return undef;
+    $nsig >= 0 or return undef;
     @$stack >= $nsig or return undef;
-    my @sig = splice(@$stack, -$nsig-1);
+    my @sig;
+    @sig = splice(@$stack, -$nsig) if $nsig;
+    # Bitcoin compatibility: pop an extra value off the stack (which is CHECKMULTISIG's bug)
+    # @$stack >= 1 or return undef;
+    # pop @$stack eq "" or return undef;
     $nkeys >= $nsig or return 0;
     ($state->sigops -= $nsig) >= 0 or return undef;
     foreach my $sig (@sig) {
