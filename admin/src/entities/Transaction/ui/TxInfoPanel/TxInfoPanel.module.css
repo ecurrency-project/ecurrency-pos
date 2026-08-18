@@ -1,0 +1,99 @@
+.TxInfoPanel {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.8fr) minmax(0, 2fr);
+    gap: 24px;
+    width: 100%;
+    padding: 18px 8px;
+    border-block: 1px solid var(--stats-border-color);
+    font-size: 13px;
+    line-height: 20px;
+
+    @media only screen and (max-width: 850px) {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding-inline: 0;
+    }
+}
+
+.summary {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: var(--dc-primary);
+    background: var(--dc-primary-bg);
+    font-size: 16px;
+}
+
+.title {
+    display: block;
+    color: var(--text-color-primary);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.description {
+    max-width: 46ch;
+    margin: 4px 0 0;
+    color: var(--text-color-secondary);
+    line-height: 1.45;
+    text-wrap: pretty;
+}
+
+.facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 24px;
+    min-width: 0;
+    margin: 0;
+
+    @media only screen and (max-width: 550px) {
+        grid-template-columns: 1fr;
+    }
+}
+
+.fact {
+    min-width: 0;
+}
+
+.fact dt {
+    margin-bottom: 2px;
+    color: var(--text-color-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 16px;
+    text-transform: uppercase;
+}
+
+.fact dd {
+    margin: 0;
+    color: var(--text-color-primary);
+    font-family: var(--font-family-secondary);
+    overflow-wrap: anywhere;
+}
+
+.fact a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+.fact a:hover {
+    text-decoration: underline;
+}
+
+.fact a:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid var(--dc-primary);
+    outline-offset: 2px;
+}

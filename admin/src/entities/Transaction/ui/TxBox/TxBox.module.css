@@ -43,3 +43,47 @@
 .footer {
     width: 100%;
 }
+
+.infoPanel {
+    margin-bottom: 4px;
+}
+
+.noOutputs {
+    display: flex;
+    gap: 8px;
+    min-height: 46px;
+    padding: 12px;
+    border: 1px solid var(--tx-border-color);
+    border-radius: 5px;
+    background-color: var(--tx-bg-color-secondary);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.emptyIndex {
+    flex: 0 0 auto;
+    color: #c3cbd3;
+    font-size: 0.9em;
+}
+
+.emptyOutputBody {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 12px;
+    width: 100%;
+    min-width: 0;
+}
+
+.emptyOutputTitle {
+    color: var(--text-color-primary);
+}
+
+.emptyOutputAmount {
+    color: var(--text-color-primary);
+    white-space: nowrap;
+}
+
+.emptyOutputDescription {
+    grid-column: 1 / -1;
+    color: var(--text-color-secondary);
+}

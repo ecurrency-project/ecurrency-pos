@@ -2,6 +2,8 @@ import type { EntityState } from '@reduxjs/toolkit';
 
 import type { BaseUnits } from '@/shared/lib/baseUnits';
 
+import type { BurnInfo, CoinbaseInfo, DowngradeInfo, TxType } from '../../lib/txType';
+
 export interface Prevout {
     scripthash_address: string;
     scripthash: string;
@@ -75,6 +77,11 @@ export interface Vout {
     token_amount?: BaseUnits;
     token_permissions?: number;
     token_decimals?: number;
+    downgrade?: {
+        reclaim: string;
+        reclaim_address?: string;
+        btc_address?: string;
+    };
 }
 
 export interface ITxStatus {
@@ -97,6 +104,9 @@ export interface ITransaction {
     is_coinbase: boolean;
     status: ITxStatus;
     token_id?: string;
+    tx_type?: TxType | (string & {});
+    coinbase_info?: CoinbaseInfo;
+    downgrade_info?: DowngradeInfo | BurnInfo;
 }
 
 export interface TxShort {
@@ -104,6 +114,7 @@ export interface TxShort {
     fee: BaseUnits;
     size: number;
     value: BaseUnits;
+    tx_type?: TxType | (string & {});
 }
 
 export interface ITransactionBoxSchema extends EntityState<ITransaction, string>{
