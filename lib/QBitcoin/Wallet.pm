@@ -54,11 +54,13 @@ sub lock {
 
 # The ciphertext of each key is bound to its table row: my_address keys to the
 # address string, staking keys to their base58 pubkeyhash string
+# Use named variable to avoid perl trap with return (list1, list2) in scalar context
 sub _encryptable {
-    return (
+    my @records = (
         (map { [ $_, $_->address           ] } QBitcoin::MyAddress->watched_address),
         (map { [ $_, $_->pubkeyhash_string ] } QBitcoin::StakingKey->list),
     );
+    return @records;
 }
 
 # Encrypt all plaintext private keys with $master; also stores the pubkey so a
