@@ -89,7 +89,7 @@ Main commands:
 | Command | Description |
 |----------|-------------|
 | `getnewaddress`                                       | Generates a new address and its private key |
-| `importkey <private-key>`                             | Imports an existing private key |
+| `importprivkey <private-key>`                         | Imports an existing private key |
 | `getaddressbalance <address>`                         | Shows the balance of the specified address |
 | `listunspent <address>`                               | Lists unspent outputs (UTXOs) for an address |
 | `createrawtransaction <inputs> <outputs>`             | Creates a new transaction |
