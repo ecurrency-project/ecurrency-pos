@@ -95,13 +95,10 @@ sub create {
 }
 
 # Delete the key from the database (delegations cascade in the DB) and drop the
-# in-memory caches, including the delegations built on this key
+# in-memory caches; delegations stored in the DB will be removed by the cascade
+# NB: the in-memory cached delegations built on this key should be removed outside of this class
 sub remove {
     my $self = shift;
-    require QBitcoin::Delegation;
-    foreach my $delegation (grep { $_->staking_key_id == $self->id } QBitcoin::Delegation->list) {
-        $delegation->remove;
-    }
     $self->delete;
     @$STAKING_KEYS = grep { $_ != $self } @$STAKING_KEYS if $STAKING_KEYS;
     Warningf("Removed staking key %s", $self->pubkeyhash_string);

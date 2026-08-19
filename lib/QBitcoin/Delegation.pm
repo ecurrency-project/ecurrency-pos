@@ -108,4 +108,10 @@ sub remove {
     return;
 }
 
+sub reset_cache {
+    my $class = shift;
+    undef $HASHES;
+    undef $DELEGATIONS;
+}
+
 1;
