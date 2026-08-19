@@ -18,6 +18,7 @@ use QBitcoin::Log;
 use QBitcoin::Password;
 use QBitcoin::ORM::Transaction;
 use QBitcoin::MyAddress;
+use QBitcoin::Delegation;
 use QBitcoin::StakingKey;
 use QBitcoin::Wallet::Crypt qw(
     unlock_master_key
@@ -173,6 +174,9 @@ sub reset_destroy {
         $class->_encryptable;
     my $db_transaction = QBitcoin::ORM::Transaction->new;
     $_->[0]->remove foreach @encrypted;
+    # Stored delegations reference the removed staked keys are removed by foreign-key cascade,
+    # but in-memory caches still hold the deleted objects, so clear them to avoid stale references
+    QBitcoin::Delegation->reset_cache if @encrypted;
     store_master_key(undef);
     QBitcoin::Password->set_password($new);
     $db_transaction->commit;
