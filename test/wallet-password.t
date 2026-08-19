@@ -33,7 +33,7 @@ $config->{allow_dumpprivkey} = 1;
     use QBitcoin::Accessors qw(mk_accessors);
     use Role::Tiny::With;
     with 'QBitcoin::RPC::Commands';
-    mk_accessors(qw(cmd args auth_password force _rpc_result _rpc_error _rpc_error_code));
+    mk_accessors(qw(cmd args auth_password force hide_response _rpc_result _rpc_error _rpc_error_code));
     sub new { bless {}, shift }
     sub response_ok    { $_[0]->_rpc_result($_[1] // "ok"); 0 }
     sub response_error { $_[0]->_rpc_error($_[1]); $_[0]->_rpc_error_code($_[2]); -1 }

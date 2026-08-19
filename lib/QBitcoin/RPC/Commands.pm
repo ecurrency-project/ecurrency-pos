@@ -1419,6 +1419,7 @@ sub cmd_dumpstakingkey {
     }
     my $wif = QBitcoin::Wallet->decrypt_pk($stored, $staking_key->pubkeyhash_string, $master)
         or return $self->response_error("Cannot decrypt the private key", ERR_INTERNAL_ERROR);
+    $self->hide_response = 1;
     return $self->response_ok($wif);
 }
 
@@ -1659,6 +1660,7 @@ sub cmd_dumpprivkey {
         or return $self->response_error("The address is not correct", ERR_INVALID_ADDRESS_OR_KEY);
     my $my_address = QBitcoin::MyAddress->get_by_hash($scripthash, 0)
         or return $self->response_error("Private key is unknown for this address", ERR_INVALID_ADDRESS_OR_KEY);
+    $self->hide_response = 1;
     my $stored = $my_address->private_key;
     QBitcoin::Wallet->is_encrypted_pk($stored)
         or return $self->response_ok($stored);
@@ -2256,6 +2258,7 @@ sub cmd_getnewaddress {
         });
     }
     my $address = address_by_pubkey($keypair->pubkey_by_privkey, $algo);
+    $self->hide_response = 1;
     return $self->response_ok({ address => $address, private_key => wallet_import_format($keypair->pk_serialize) });
 }
 
