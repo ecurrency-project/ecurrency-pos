@@ -602,6 +602,9 @@ sub sign_data {
         # We do not need to sign coinbase transactions
         $$cached_data = $data;
     }
+    if ($self->is_tokens && $self->token_hash) {
+        $data .= $self->token_hash;
+    }
     if ($self->is_stake) {
         # It's stake tx which signs block, add block info
         $data .= $self->block_sign_data;
