@@ -17,7 +17,7 @@ use Role::Tiny::With;
 with 'QBitcoin::RPC::Validate';
 with 'QBitcoin::RPC::Commands';
 
-mk_accessors(qw( cmd args auth_password force ));
+mk_accessors(qw( cmd args auth_password force hide_response ));
 
 my $JSON = Cpanel::JSON::XS->new;
 
@@ -84,6 +84,7 @@ sub process_request {
         $self->connection->ip, $self->connection->port);
     $self->args = $body->{params};
     $self->cmd  = $body->{method};
+    $self->hide_response = 0;
     # Optional top-level request fields (never logged), set by qbitcoin-cli on a
     # retry after ERR_WALLET_PASSWORD_REQUIRED / ERR_CONFIRMATION_REQUIRED
     $self->auth_password = ref($body->{password}) ? undef : $body->{password};
@@ -138,7 +139,7 @@ sub http_response {
     my $self = shift;
     my ($code, $message, $content) = @_;
     my $body = $JSON->encode($content);
-    Debugf("RPC response to %s:%u: %s", $self->connection->ip, $self->connection->port, $body);
+    Debugf("RPC response to %s:%u: %s", $self->connection->ip, $self->connection->port, $self->hide_response ? "***" : $body);
     my $headers = HTTP::Headers->new(
         Content_Type   => 'application/json',
         Content_Length => length($body),
