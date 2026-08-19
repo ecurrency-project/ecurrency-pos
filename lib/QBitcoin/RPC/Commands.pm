@@ -248,7 +248,7 @@ sub cmd_getblockheader {
         hash              => unpack("H*", $block->hash),
         height            => $block->height,
         time              => $block->time,
-        confirmations     => $best_height - $block->height,
+        confirmations     => $best_height - $block->height + 1,
         nTx               => @{$block->tx_hashes}+0,
         previousblockhash => unpack("H*", $block->prev_hash),
         nextblockhash     => $next_block ? unpack("H*", $next_block->hash) : undef,
@@ -332,7 +332,7 @@ sub cmd_getblock {
         hash              => unpack("H*", $block->hash),
         height            => $block->height,
         time              => $block->time,
-        confirmations     => $best_height - $block->height,
+        confirmations     => $best_height - $block->height + 1,
         previousblockhash => unpack("H*", $block->prev_hash // ZERO_HASH),
         nextblockhash     => $next_block ? unpack("H*", $next_block->hash) : undef,
         merkleroot        => unpack("H*", $block->merkle_root),
@@ -438,20 +438,20 @@ sub cmd_getrawtransaction {
     my $res = $tx->as_hashref;
     if (defined $tx->block_height) {
         my $best_height = QBitcoin::Block->blockchain_height;
-        $res->{confirmations} = $best_height - $tx->block_height;
+        $res->{confirmations} = $best_height - $tx->block_height + 1;
         $res->{block_height} = $tx->block_height;
         $res->{block_pos} = $tx->block_pos;
         my $block = QBitcoin::Block->best_block($tx->block_height) // QBitcoin::Block->find(height => $tx->block_height);
         if ($block) {
             my $best_block = QBitcoin::Block->best_block($best_height);
-            $res->{confirm_weight} = $best_block->weight - $block->weight;
+            $res->{confirm_weight} = $best_block->weight - ($block->prev_block ? $block->prev_block->weight : 0);
             $res->{blockhash} = unpack("H*", $block->hash);
             $res->{blocktime} = $block->time;
         }
     }
     else {
-        $res->{confirmations} = -1;
-        $res->{confirm_weight} = -1;
+        $res->{confirmations} = 0;
+        $res->{confirm_weight} = 0;
     }
     return $self->response_ok($res);
 }
