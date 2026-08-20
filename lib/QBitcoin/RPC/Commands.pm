@@ -255,6 +255,7 @@ sub cmd_getblockheader {
         merkleroot        => unpack("H*", $block->merkle_root),
         weight            => $block->weight,
         confirm_weight    => $best_block->weight - $block->weight,
+        UPGRADE_POW ? ( upgraded => ($block->upgraded // 0) / DENOMINATOR ) : (),
     });
 }
 
@@ -339,6 +340,7 @@ sub cmd_getblock {
         weight            => $block->weight,
         confirm_weight    => $best_block->weight - $block->weight,
     };
+    $res->{upgraded} = ($block->upgraded // 0) / DENOMINATOR if UPGRADE_POW;
     if ($verbosity == 1) {
         $res->{tx} = [ map { unpack("H*", $_) } @{$block->tx_hashes} ];
     }
