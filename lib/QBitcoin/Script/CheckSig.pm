@@ -3,10 +3,12 @@ use warnings;
 use strict;
 
 use Role::Tiny;
+use List::Util qw(sum0);
 use QBitcoin::Crypto qw(check_sig_hash);
 use QBitcoin::Script::Const;
 use QBitcoin::Script::Util qw(pack_int unpack_int);
-use List::Util qw(sum0);
+use QBitcoin::BlockchainParams;
+use QBitcoin::ProtocolState qw(blockchain_synced);
 
 # Each signature check pays the bytes of the key once and the bytes of the signature twice from the budget
 # of the input (its script plus twice its siglist, see script_eval), whatever way they came to the stack:
@@ -110,7 +112,14 @@ sub check_tx_signature {
     my $sighash_type = unpack('C', $signature);
     my $sign_hash = $tx->sign_hash($input_num, $sighash_type)
         or return 0;
-    return check_sig_hash($sign_hash, substr($signature, 1), $pubkey);
+    my $res = check_sig_hash($sign_hash, substr($signature, 1), $pubkey);
+    if (!$res && $tx->is_tokens && (time() < SIGN_TOKEN_HASH_START + BLOCK_INTERVAL*FORCED_BLOCKS || !blockchain_synced())) {
+        $sign_data = $tx->sign_data_legacy($input_num, $sighash_type)
+            or return 0;
+        $res = check_sig($sign_data, substr($signature, 1), $pubkey);
+        $tx->legacy_signature(1) if $res;
+    }
+    return $res;
 }
 
 1;

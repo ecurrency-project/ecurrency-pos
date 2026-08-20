@@ -47,6 +47,12 @@ sub choose_for_block {
             push @mempool, grep { $_->fee >= 0 } @{$block->transactions};
         }
     }
+    if ($block_time < SIGN_TOKEN_HASH_START) {
+        @mempool = grep { !$_->is_tokens || !$_->token_hash ||  $_->legacy_signature } @mempool;
+    }
+    else {
+        @mempool = grep { !$_->is_tokens || !$_->token_hash || !$_->legacy_signature } @mempool;
+    }
     return () unless @mempool;
     if (!$can_consume) {
         @mempool = grep { $_->fee == 0 || $_->coins_created } @mempool;
