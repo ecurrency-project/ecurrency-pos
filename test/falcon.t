@@ -56,5 +56,6 @@ use strict;
 
 use QBitcoin::Accessors qw(new);
 sub sign_data { $_[0]->{sign_data} };
+sub is_tokens { 0 };
 
 1;

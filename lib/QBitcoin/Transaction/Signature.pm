@@ -7,6 +7,7 @@ use QBitcoin::Delegation;
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Script qw(op_pushdata);
 use QBitcoin::Script::Delegation qw(SELECTOR_OWNER SELECTOR_DELEGATE);
 use QBitcoin::Crypto qw(signature);
@@ -58,7 +59,15 @@ sub make_sign {
         $sign_alg = $pk_alg[0];
     }
     my $sighash_type = SIGHASH_ALL;
-    my $sign_data = $self->sign_data($input_num, $sighash_type)
+    my $sign_data;
+    if (time() < SIGN_TOKEN_HASH_START - BLOCK_INTERVAL*FORCE_BLOCKS && $self->is_tokens) {
+        $sign_data = $self->sign_data_legacy($input_num, $sighash_type);
+        $self->legacy_signature(1);
+    }
+    else {
+        $sign_data = $self->sign_data($input_num, $sighash_type);
+    }
+    $sign_data
         or die "Can't get sign data for input $input_num";
     my $signature = signature($sign_data, $address, $sign_alg, $sighash_type);
     $in->{txo}->set_redeem_script($redeem_script);
