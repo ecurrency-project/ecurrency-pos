@@ -63,6 +63,7 @@ use constant ATTR => qw(
     upgrade_level
     token_hash
     slashing
+    legacy_signature
 );
 
 mk_accessors(keys %{&FIELDS}, ATTR);
@@ -490,6 +491,14 @@ sub cleanup_mempool {
                 Infof("Drop slashing tx %s: target buried beyond the slashing window", $tx->hash_str);
             }
             next;
+        }
+        if ($tx->is_tokens && time() >= SIGN_TOKEN_HASH_START) {
+            if ($tx->legacy_signature && $tx->token_hash) {
+                if ($tx->drop()) {
+                    Infof("Drop legacy-signature token tx %s", $tx->hash_str);
+                }
+                next;
+            }
         }
         my $spent_txo;
         foreach my $in (@{$tx->in}) {
@@ -1361,6 +1370,14 @@ sub valid_for_block {
                 or return -1;
         }
     }
+    if ($self->is_tokens && $self->token_hash) {
+        if (timeslot($block->time) < SIGN_TOKEN_HASH_START) {
+            return -1 if !$self->legacy_signature;
+        }
+        else {
+            return -1 if $self->legacy_signature;
+        }
+    }
     if (!skip_scripts()) {
         ( $self->min_tx_time // "Inf" ) <= timeslot($block->time)
             or return -1;
@@ -1543,6 +1560,7 @@ sub on_load {
                 $self->hash_str, $self->size // "undef", length($tx_raw_data));
             die "Incorrect size for loaded transaction " . $self->hash_str . ": " . ($self->size // "undef") . " != " . length($tx_raw_data) . "\n";
         }
+        # TODO: set $self->legacy_signature for token transactions confirmed before SIGN_TOKEN_HASH_START
     }
 
     return $self;

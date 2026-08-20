@@ -7,6 +7,7 @@ use QBitcoin::Delegation;
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Config;
+use QBitcoin::BlockchainParams;
 use QBitcoin::Script qw(op_pushdata);
 use QBitcoin::Script::Delegation qw(SELECTOR_OWNER SELECTOR_DELEGATE);
 use QBitcoin::Crypto qw(signature_hash);
