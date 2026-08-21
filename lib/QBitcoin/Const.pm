@@ -2,7 +2,7 @@ package QBitcoin::Const;
 use warnings;
 use strict;
 
-use constant VERSION            => "0.4.4";
+use constant VERSION => "0.4.5";
 
 use constant QBITCOIN_CONST => {
     VERSION                 => VERSION,
