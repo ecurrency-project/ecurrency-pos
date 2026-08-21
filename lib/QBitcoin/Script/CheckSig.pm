@@ -4,7 +4,8 @@ use strict;
 
 use Role::Tiny;
 use List::Util qw(sum0);
-use QBitcoin::Crypto qw(check_sig_hash);
+use QBitcoin::Const;
+use QBitcoin::Crypto qw(check_sig check_sig_hash);
 use QBitcoin::Script::Const;
 use QBitcoin::Script::Util qw(pack_int unpack_int);
 use QBitcoin::BlockchainParams;
@@ -113,7 +114,7 @@ sub check_tx_signature {
     my $sign_hash = $tx->sign_hash($input_num, $sighash_type)
         or return 0;
     my $res = check_sig_hash($sign_hash, substr($signature, 1), $pubkey);
-    if (!$res && $tx->is_tokens && (time() < SIGN_TOKEN_HASH_START + BLOCK_INTERVAL*FORCED_BLOCKS || !blockchain_synced())) {
+    if (!$res && $tx->is_tokens && (time() < SIGN_TOKEN_HASH_START + BLOCK_INTERVAL*FORCE_BLOCKS || !blockchain_synced())) {
         $sign_data = $tx->sign_data_legacy($input_num, $sighash_type)
             or return 0;
         $res = check_sig($sign_data, substr($signature, 1), $pubkey);
