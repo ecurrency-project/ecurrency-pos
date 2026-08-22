@@ -16,6 +16,7 @@ use strict;
 use QBitcoin::Config;
 use QBitcoin::Log;
 use QBitcoin::Password;
+use QBitcoin::ORM qw(wal_checkpoint_truncate);
 use QBitcoin::ORM::Transaction;
 use QBitcoin::MyAddress;
 use QBitcoin::Delegation;
@@ -162,6 +163,7 @@ sub change_password {
             QBitcoin::Password->set_password($new);
         }
     }
+    wal_checkpoint_truncate();
     return undef;
 }
 
@@ -181,6 +183,7 @@ sub reset_destroy {
     QBitcoin::Password->set_password($new);
     $db_transaction->commit;
     wipe_master_key();
+    wal_checkpoint_truncate();
     Warningf("Wallet password reset: %u encrypted private keys destroyed", scalar @encrypted);
     return scalar @encrypted;
 }

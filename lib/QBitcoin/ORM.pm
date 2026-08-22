@@ -20,7 +20,7 @@ use constant DB_TYPES;
 use constant DEBUG_ORM => 0;
 
 use parent 'Exporter';
-our @EXPORT_OK = qw(dbh find fetch create replace update delete delete_by IGNORE DEBUG_ORM for_log);
+our @EXPORT_OK = qw(dbh find fetch create replace update delete delete_by IGNORE DEBUG_ORM for_log wal_checkpoint_truncate);
 push @EXPORT_OK, keys %{&DB_TYPES};
 our %EXPORT_TAGS = ( types => [ keys %{&DB_TYPES} ] );
 
@@ -87,6 +87,7 @@ sub _connect {
         # WAL allows forked read-only request handlers to read while the main process writes
         $handle->do("PRAGMA journal_mode = WAL");
         $handle->do("PRAGMA busy_timeout = 5000");
+        $handle->do("PRAGMA secure_delete = ON");
     };
     return $handle;
 }
@@ -131,6 +132,20 @@ sub disconnect_dbh {
     undef $dbh;
     _disconnect($handle);
     return;
+}
+
+# Move all WAL content into the main database file and truncate the WAL file
+sub wal_checkpoint_truncate {
+    my $handle = dbh();
+    return 1 if $handle->get_info(17) ne "SQLite";
+    my ($busy, $log, $checkpointed) = $handle->selectrow_array("PRAGMA wal_checkpoint(TRUNCATE)");
+    if ($busy) {
+        # A concurrent reader (forked request handler) blocked the truncation
+        Warningf("WAL file not truncated (%d of %d pages checkpointed), replaced data remains there until the next checkpoint cycle",
+            $checkpointed, $log);
+        return 0;
+    }
+    return 1;
 }
 
 # Pooling makes sense only for a connection to a database server; an SQLite connection is
