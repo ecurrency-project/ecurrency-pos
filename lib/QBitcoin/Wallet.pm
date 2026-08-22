@@ -56,11 +56,13 @@ sub lock {
 }
 
 # The ciphertext of each key is bound to its table row: my_address keys to the
-# address string, staking keys to their base58 pubkeyhash string
+# raw address column (the primary key, same AAD as MyAddress::wif; the derived
+# address() method would tie the ciphertext to the pubkey/algo/deleg_pubkeyhash
+# columns and the derivation code), staking keys to their base58 pubkeyhash string
 # Use named variable to avoid perl trap with return (list1, list2) in scalar context
 sub _encryptable {
     my @records = (
-        (map { [ $_, $_->address           ] } QBitcoin::MyAddress->watched_address),
+        (map { [ $_, $_->address_raw       ] } QBitcoin::MyAddress->watched_address),
         (map { [ $_, $_->pubkeyhash_string ] } QBitcoin::StakingKey->list),
     );
     return @records;
