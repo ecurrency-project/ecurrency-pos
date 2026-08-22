@@ -3,6 +3,7 @@ use warnings;
 use strict;
 
 use Crypt::PQClean::Sign qw(falcon512_keypair falcon512_sign falcon512_verify);
+use Crypt::PRNG qw(random_bytes);
 
 use constant PRIVATE_KEY_LENGTH => 1281;
 use constant PUBLIC_KEY_LENGTH  => 897;
@@ -58,7 +59,16 @@ sub import_private_key {
     my ($pk, $algo) = @_;
     $class->is_valid_pk($pk)
         or return undef;
-    return $class->new(substr($pk, 0, PRIVATE_KEY_LENGTH), substr($pk, PRIVATE_KEY_LENGTH));
+    my $self = $class->new(substr($pk, 0, PRIVATE_KEY_LENGTH), substr($pk, PRIVATE_KEY_LENGTH));
+    # The serialized key is a plain concatenation of the private and public keys,
+    # and the public key cannot be derived from the private one to compare them;
+    # prove the halves match by a sign/verify roundtrip
+    my $message = random_bytes(32);
+    my $signature = eval { falcon512_sign($message, $self->[0]) }
+        or die "Invalid falcon512 private key\n";
+    falcon512_verify($signature, $message, $self->[1])
+        or die "Falcon512 private key does not match the public key\n";
+    return $self;
 }
 
 1;

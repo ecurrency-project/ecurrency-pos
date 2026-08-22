@@ -93,7 +93,12 @@ sub pk_import {
         Warningf("Unsupported crypto module %s for private key", CRYPT_ALGO_NAMES->{$algo} // "unknown");
         return undef;
     }
-    return eval { $module->import_private_key($private_key) };
+    my $pk = eval { $module->import_private_key($private_key) };
+    if (!$pk && $@) {
+        (my $err = $@) =~ s/\s+\z//;
+        Warningf("Cannot import %s private key: %s", CRYPT_ALGO_NAMES->{$algo} // "unknown", $err);
+    }
+    return $pk;
 }
 
 sub pk_alg {

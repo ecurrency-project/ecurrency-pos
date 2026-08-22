@@ -40,6 +40,14 @@ my $private_key = "2Ha9HXWeaemt4enETPZ8WJnH8GqJg1DvbUdoj6g8mLrKZu6aF94UT93nr3Vrc
 my $sign = "813961c32c0fcc6132c89b74f34894091d4d598c53d284597e7fcf2bace22a41460fb99436f82c151b73836a237a164acde34ff0080eee10be36bcc8545168c22d99deca8d0e25c8e7732f51c419679e05c19670c8497a9760670e3b07f88ad2f850abe77243c0d495f5bf9265a5d887af8da8705712417adee252d1911aebae398f42e9059e7deaec77c87f6648400e2e0115c3891bd71da1c18c1acdcafc5f6b52a6cd929e191546cea1dc22383f44f22b45da68323e8912d994e1c3f2aa4d0dae68358eb1e773f7a99d8babc6954bd1fa03a7d1475fae6542dff0efeedf4fb481706ae35f328b44435b6e124de7d510cb6dcb8ca9e8130712171021e959a542d6a44b759643a8ccc3f32a6a6b1da9aaf4bf5e5a7625b877b208da9c7915aa4f70cff19e475a1e8edc546464ab12f8eeb509b0996c72f1173d8fdebb6102294d833d3cfa3e0bac1378c68cb5271492c85f47cf6e61312ad73c468d013172312771509dd3a26a0511f0b56b86f35a92b950de779525b7b96b1105fec1f35f0cbd362708fcd9b273578530483632c98936939954e6c3f0a0ece0ac7af99b814ec838ffd0464348a05a71e536778358555cb9ba444d32fd3a711a64417080fedbc3facad575c4ca81b3a7a755ea74579977b3d454adf7e0d0d577b11edd6f5aae3105c7796f5418febf4a1692bea6a4678e62af16ce9bc8a118adaa6b52c68ee5513b00c6b2f0620133346ccd85387cf32fbf5ea9a449684645d9dfe65a59732465081045f2736e1bc9b9f5fa06a095676d26cd706ce4ee8fb6dedab308be4b8f6651137728c6e439fb8359c0d2a1397cb24cc899fd5532b3a5b8bf792890b2a1426bffd13a113d3989db5be80a3fd7b4c234031ecfd112ae556682d9cc696cc3a8a3956419ae991bb40aa8aba7fbe7659b92c0";
 my $pk1 = pk_import(wif_to_pk($private_key), CRYPT_ALGO_FALCON);
 ok(check_sig($sign_data, pack("H*", $sign), $pk1->pubkey_by_privkey), "falcon signature verification");
+
+# import must reject a serialized pair whose private and public halves do not match
+my $sk_half = substr($pk->pk_serialize, 0, QBitcoin::Crypto::PQ::Falcon512::PRIVATE_KEY_LENGTH());
+ok(!defined pk_import($sk_half . $pk2->pubkey_by_privkey, CRYPT_ALGO_FALCON), "import mismatched keypair rejected");
+my $corrupted = $pk->pk_serialize;
+substr($corrupted, 640, 1) ^= "\xff";
+ok(!defined pk_import($corrupted, CRYPT_ALGO_FALCON), "import corrupted private key rejected");
+ok(defined pk_import($pk->pk_serialize, CRYPT_ALGO_FALCON), "import valid keypair accepted");
 done_testing();
 
 package TestTx;
