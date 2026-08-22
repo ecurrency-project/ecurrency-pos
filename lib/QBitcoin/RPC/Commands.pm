@@ -1675,7 +1675,7 @@ sub cmd_dumpprivkey {
         $master = QBitcoin::Wallet->master_key_with_password($self->auth_password // "")
             or return $self->response_error("Cannot unlock the wallet master key with this password", ERR_WALLET_PASSWORD_INCORRECT);
     }
-    my $wif = QBitcoin::Wallet->decrypt_pk($stored, $my_address->address, $master)
+    my $wif = QBitcoin::Wallet->decrypt_pk($stored, $my_address->address_raw, $master)
         or return $self->response_error("Cannot decrypt the private key", ERR_INTERNAL_ERROR);
     return $self->response_ok($wif);
 }

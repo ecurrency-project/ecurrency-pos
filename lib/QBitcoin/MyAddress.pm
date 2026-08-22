@@ -138,7 +138,7 @@ sub wif {
         or return $private_key;
     unlocked()
         or die "Wallet is locked\n";
-    return decrypt_pk($private_key, $self->{address})
+    return decrypt_pk($private_key, $self->address_raw)
         // die "Cannot decrypt private key for address $self->{address}\n";
 }
 
@@ -329,6 +329,13 @@ sub remove {
 sub is_watchonly {
     my $self = shift;
     return !$self->private_key;
+}
+
+# Raw address column (the primary key) without the derivation and validation
+# of address(); the encrypted private_key AAD is bound to this value
+sub address_raw {
+    my $self = shift;
+    return $self->{address};
 }
 
 sub address {
