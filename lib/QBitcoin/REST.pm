@@ -420,6 +420,9 @@ sub process_request {
                     elsif (!QBitcoin::Password->is_set) {
                         $warning = "the key is stored unencrypted; set a wallet password to encrypt the wallet keys";
                     }
+                    elsif ($config->{encrypted_private_keys} // 1) {
+                        $warning = "the key is stored unencrypted; change a wallet password to encrypt the wallet keys";
+                    }
                     else {
                         $warning = "the key is stored unencrypted ('encrypted_private_keys' is disabled)";
                     }
