@@ -126,6 +126,15 @@ is(wif_delegation_hash(wallet_import_format($owner_pk->pk_serialize)), undef, "p
 my $deleg_wif = delegation_import_format($owner_pk->pk_serialize, $delegate_hash);
 my $owner2 = QBitcoin::MyAddress->new( private_key => $deleg_wif );
 is($owner2->pubkey, $owner->pubkey, "pubkey from delegation wif");
+# deleg_pubkeyhash is a pure accessor: the WIF payload is never consulted, so
+# an ad-hoc delegation object needs the hash passed explicitly
+ok(!$owner2->is_delegation, "no delegation without explicit deleg_pubkeyhash");
+my $owner3 = QBitcoin::MyAddress->new(
+    private_key      => $deleg_wif,
+    deleg_pubkeyhash => wif_delegation_hash($deleg_wif),
+);
+ok($owner3->is_delegation, "delegation with explicit deleg_pubkeyhash");
+is(scalar $owner3->scripthash, $scripthash, "covenant scripthash from ad-hoc delegation object");
 
 # base58 pubkeyhash exchange format, both hash lengths
 my $pkh_str = pubkeyhash_str($delegate_hash);

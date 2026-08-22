@@ -18,7 +18,7 @@ use QBitcoin::Transaction;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced);
 use QBitcoin::Transaction;
 use QBitcoin::TXO;
-use QBitcoin::Address qw(wif_to_pk wif_decode scripthash_by_address address_by_pubkey wallet_import_format delegation_import_format address_by_hash pubkeyhash_str pubkeyhash_by_pubkey);
+use QBitcoin::Address qw(wif_to_pk wif_decode wif_delegation_hash scripthash_by_address address_by_pubkey wallet_import_format delegation_import_format address_by_hash pubkeyhash_str pubkeyhash_by_pubkey);
 use QBitcoin::Script::Delegation qw(delegation_script delegation_address);
 use QBitcoin::MyAddress;
 use QBitcoin::StakingKey;
@@ -662,7 +662,8 @@ sub cmd_signrawtransactionwithkey {
     if ($tx->is_pending) {
         return $self->response_error("Some inputs unknown.", ERR_DESERIALIZATION_ERROR);
     }
-    my @address = map { QBitcoin::MyAddress->new(private_key => $_) } @$privkeys;
+    # A dumped delegation WIF carries the delegate pubkeyhash in its payload
+    my @address = map { QBitcoin::MyAddress->new(private_key => $_, deleg_pubkeyhash => wif_delegation_hash($_)) } @$privkeys;
     my @errors;
     my $input_amount = 0;
     foreach my $num (0 .. $#{$tx->in}) {

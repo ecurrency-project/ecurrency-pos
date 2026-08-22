@@ -31,22 +31,7 @@ use constant FIELDS => {
 
 use constant PRIMARY_KEY => 'address';
 
-mk_accessors(qw(private_key staked tag_id));
-
-# Hash of the delegate staking pubkey (hash160 pre-quantum, hash256
-# post-quantum) for a delegated-staking address (the owner side of the
-# covenant, see QBitcoin::Script::Delegation); undef for ordinary addresses.
-# The stored (database) value when present, otherwise
-# derived from a plaintext delegation WIF, so ad-hoc objects created as
-# new(private_key => ...) work too. Setter form is used by update().
-sub deleg_pubkeyhash {
-    my $self = shift;
-    return $self->{deleg_pubkeyhash} = $_[0] if @_;
-    return $self->{deleg_pubkeyhash} //= do {
-        my $private_key = $self->private_key;
-        $private_key && !is_encrypted_pk($private_key) ? wif_delegation_hash($private_key) : undef;
-    };
-}
+mk_accessors(qw(private_key staked tag_id deleg_pubkeyhash));
 
 sub is_delegation {
     my $self = shift;
