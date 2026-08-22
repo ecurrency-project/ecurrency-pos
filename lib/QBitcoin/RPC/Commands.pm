@@ -1218,6 +1218,9 @@ sub cmd_importprivkey {
     elsif (!QBitcoin::Password->is_set) {
         $warning = "; WARNING: the key is stored unencrypted, set a wallet password with setwalletpassword to encrypt the wallet keys";
     }
+    elsif ($config->{encrypted_private_keys} // 1) {
+        $warning = "; WARNING: the key is stored unencrypted, change a wallet password to encrypt the wallet keys";
+    }
     else {
         $warning = "; WARNING: the key is stored unencrypted ('encrypted_private_keys' is disabled)";
     }
