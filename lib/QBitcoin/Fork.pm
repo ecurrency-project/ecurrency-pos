@@ -72,7 +72,7 @@ sub spawn {
         QBitcoin::ORM::db_pool_loaned($db_entry, $pid) if $db_entry;
         $CHILDREN{$pid} = 1;
         $connection->detach();
-        $class->register_worker(\&QBitcoin::ORM::db_pool_returned);
+        $class->register_worker($pid, \&QBitcoin::ORM::db_pool_returned);
         return 0;
     }
     $IS_CHILD = 1;
