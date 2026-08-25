@@ -11,6 +11,7 @@ use QBitcoin::RPC::Const;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::Password;
+use QBitcoin::Password::Throttle qw(throttle_message);
 use parent qw(QBitcoin::HTTP);
 
 use Role::Tiny::With;
@@ -96,9 +97,16 @@ sub process_request {
         if (!defined $self->auth_password) {
             return $self->response_error("This command requires the wallet password", ERR_WALLET_PASSWORD_REQUIRED);
         }
+        # Brute-force limit: while the client is locked out, reject before the
+        # expensive password check, without disclosing whether the password matches
+        if (my $delay = $self->auth_throttle_delay) {
+            return $self->response_error(throttle_message($delay), ERR_WALLET_PASSWORD_INCORRECT);
+        }
         if (!QBitcoin::Password->check_password($self->auth_password)) {
+            $self->register_auth_failure;
             return $self->response_error("Incorrect wallet password", ERR_WALLET_PASSWORD_INCORRECT);
         }
+        $self->register_auth_success;
     }
     $self->validate_args == 0
         or return -1;

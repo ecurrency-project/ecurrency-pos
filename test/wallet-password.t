@@ -37,6 +37,10 @@ $config->{allow_dumpprivkey} = 1;
     sub new { bless {}, shift }
     sub response_ok    { $_[0]->_rpc_result($_[1] // "ok"); 0 }
     sub response_error { $_[0]->_rpc_error($_[1]); $_[0]->_rpc_error_code($_[2]); -1 }
+    # The brute-force limit needs a connection and is tested in password-throttle.t
+    sub auth_throttle_delay   { 0 }
+    sub register_auth_failure { }
+    sub register_auth_success { }
 }
 
 # Call a wallet RPC command; returns the TestRPC object for inspecting the result

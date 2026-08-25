@@ -17,14 +17,32 @@ use QBitcoin::Config;
 use QBitcoin::Log;
 use QBitcoin::ORM ();
 use QBitcoin::ConnectionList;
+use QBitcoin::Password::Throttle qw(throttle_key throttle_failure);
 
 use constant MAX_FORK_CHILDREN => 8;
 
+# Exit status of a child whose request failed the wallet-password check: the
+# child cannot update the master's brute-force counters (its memory is a
+# copy-on-write snapshot), so the failure is reported this way and recorded
+# by the master in reap()
+use constant EXIT_AUTH_FAILURE => 10;
+
 my @LISTEN_SOCKETS;
-my %CHILDREN; # pid => type_id of the connection whose request the child processes
+# pid => { type_id, key, ip } of the connection whose request the child processes:
+# the type for the per-protocol connection limits (forked_requests), the throttle
+# key and printable address for recording a failed wallet-password check (reap)
+my %CHILDREN;
 my $IS_CHILD = 0;
+my $AUTH_FAILURE = 0;
 
 sub is_child { $IS_CHILD }
+
+# Called (in the child) when the request failed the wallet-password check,
+# see QBitcoin::HTTP::register_auth_failure
+sub auth_failure {
+    $AUTH_FAILURE = 1;
+    return;
+}
 
 sub enabled {
     return $config->{fork_requests} // 1;
@@ -70,7 +88,11 @@ sub spawn {
     }
     if ($pid) {
         QBitcoin::ORM::db_pool_loaned($db_entry, $pid) if $db_entry;
-        $CHILDREN{$pid} = $connection->type_id;
+        $CHILDREN{$pid} = {
+            type_id => $connection->type_id,
+            key     => throttle_key($connection->addr),
+            ip      => $connection->ip,
+        };
         $connection->detach();
         $class->register_worker($pid, \&QBitcoin::ORM::db_pool_returned);
         return 0;
@@ -113,7 +135,7 @@ sub finish {
     # keeps its own descriptor of the same socket, so closing ours on exit is invisible
     # to the server, and the master lends the connection to the next child
     QBitcoin::ORM::disconnect_dbh();
-    POSIX::_exit(0);
+    POSIX::_exit($AUTH_FAILURE ? EXIT_AUTH_FAILURE : 0);
 }
 
 # Requests being processed in forked children, per connection type. spawn() detaches
@@ -122,7 +144,7 @@ sub finish {
 sub forked_requests {
     my $class = shift;
     my ($type_id) = @_;
-    return scalar grep { $_ == $type_id } values %CHILDREN;
+    return scalar grep { $_->{type_id} == $type_id } values %CHILDREN;
 }
 
 my %WORKER_CALLBACKS;
@@ -147,9 +169,17 @@ sub worker_child_init {
 sub reap {
     my $class = shift;
     while ((my $pid = waitpid(-1, WNOHANG)) > 0) {
-        delete $CHILDREN{$pid};
+        my $status = $?;
+        if (my $child = delete $CHILDREN{$pid}) {
+            if ($status == EXIT_AUTH_FAILURE << 8) {
+                # The request itself completed normally, only the wallet-password
+                # check failed: record it and treat the exit as clean
+                throttle_failure($child->{key}, $child->{ip});
+                $status = 0;
+            }
+        }
         if (my $callback = delete $WORKER_CALLBACKS{$pid}) {
-            $callback->($pid, $?);
+            $callback->($pid, $status);
         }
     }
 }
