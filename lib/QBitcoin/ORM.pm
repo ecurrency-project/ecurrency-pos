@@ -175,7 +175,7 @@ sub db_pool_maintain {
             $POOL_RETRY_AT = $time + DB_POOL_RETRY_TIME;
             return;
         }
-        Debugf("Opened pooled database connection %u of %u", ++$pool_size, $POOL_WANTED);
+        Debugf("Opened pooled database connection %u of %u", ++$pool_size, $size);
         push @DB_POOL, { dbh => $handle, checked => $time, used => $time };
     }
     while ($pool_size > $POOL_WANTED && @DB_POOL) {
