@@ -24,6 +24,7 @@ use QBitcoin::MyAddress;
 use QBitcoin::StakingKey;
 use QBitcoin::Delegation;
 use QBitcoin::Password;
+use QBitcoin::Password::Throttle qw(throttle_message);
 use QBitcoin::Wallet;
 use QBitcoin::Tag;
 use QBitcoin::Generate;
@@ -2572,11 +2573,20 @@ sub cmd_setwalletpassword {
         my $hint = $config->{allow_password_reset} ? "; leave the password input empty if it is forgotten" : "";
         return $self->response_error("Changing the wallet password requires the current one$hint", ERR_WALLET_PASSWORD_REQUIRED);
     }
-    if (defined($old) && QBitcoin::Password->check_password($old)) {
-        if (defined(my $err = QBitcoin::Wallet->change_password($old, $new))) {
-            return $self->response_error($err, ERR_MISC);
+    if (defined($old)) {
+        # Checking the current password is a brute-force oracle like any other,
+        # so it is subject to the same per-source limit (see QBitcoin::RPC)
+        if (my $delay = $self->auth_throttle_delay) {
+            return $self->response_error(throttle_message($delay), ERR_WALLET_PASSWORD_INCORRECT);
         }
-        return $self->response_ok;
+        if (QBitcoin::Password->check_password($old)) {
+            $self->register_auth_success;
+            if (defined(my $err = QBitcoin::Wallet->change_password($old, $new))) {
+                return $self->response_error($err, ERR_MISC);
+            }
+            return $self->response_ok;
+        }
+        $self->register_auth_failure;
     }
     # The current password was not provided or does not match: forgotten-password reset
     if (!$config->{allow_password_reset}) {

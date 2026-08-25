@@ -13,6 +13,7 @@ use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::Block;
 use QBitcoin::Generate;
 use QBitcoin::Fork;
+use QBitcoin::Password::Throttle qw(throttle_key throttle_delay throttle_failure throttle_success);
 
 use constant ATTR => qw(
     ip
@@ -76,6 +77,35 @@ sub receive {
 # in a forked child in parallel with the main loop; see QBitcoin::Fork.
 # Overridden in QBitcoin::REST and QBitcoin::RPC.
 sub request_is_read_only { 0 }
+
+# Brute-force limit for the wallet password, keyed by the remote address:
+# seconds until the next attempt from this client is allowed, 0 if not locked
+# out. Works in a forked child too, on the state inherited from the master
+sub auth_throttle_delay {
+    my $self = shift;
+    return throttle_delay(throttle_key($self->connection->addr));
+}
+
+# Record a failed wallet-password attempt. A forked child cannot update the
+# master's counters directly, so it flags the failure to be reported via its
+# exit status and recorded by the master in QBitcoin::Fork::reap
+sub register_auth_failure {
+    my $self = shift;
+    if (QBitcoin::Fork->is_child) {
+        QBitcoin::Fork->auth_failure;
+    }
+    else {
+        throttle_failure(throttle_key($self->connection->addr), $self->connection->ip);
+    }
+}
+
+# Reset the failure history after a successful password check. No-op in a
+# forked child (the master would never see the change); a stale counter is
+# harmless and expires by itself
+sub register_auth_success {
+    my $self = shift;
+    throttle_success(throttle_key($self->connection->addr)) unless QBitcoin::Fork->is_child;
+}
 
 sub send {
     my $self = shift;

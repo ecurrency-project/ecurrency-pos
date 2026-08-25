@@ -27,6 +27,7 @@ use QBitcoin::MyAddress;
 use QBitcoin::StakingKey;
 use QBitcoin::Delegation;
 use QBitcoin::Password;
+use QBitcoin::Password::Throttle qw(throttle_message);
 use QBitcoin::Wallet;
 use QBitcoin::Transaction;
 use QBitcoin::Block;
@@ -1085,17 +1086,28 @@ sub check_access {
     my $self = shift;
     my ($http_request) = @_;
     if (QBitcoin::Password->is_set) {
+        # Brute-force limit: while the client is locked out, reject before the
+        # expensive password check, without disclosing whether the password matches
+        if (my $delay = $self->auth_throttle_delay) {
+            return $self->http_throttled($delay);
+        }
         my $auth = $http_request->header('Authorization');
         if (defined($auth) && $auth =~ /^\s*Basic\s+(\S+)/i) {
             my $decoded = eval { decode_base64($1) };
             if (defined($decoded)) {
                 my (undef, $password) = split(/:/, $decoded, 2);
-                if (defined($password) && QBitcoin::Password->check_password($password)) {
-                    # Keep the verified plaintext password for handlers that need
-                    # it as the wallet password (unlock via the staking toggle,
-                    # key encryption on import, password change)
-                    $self->{auth_password} = $password;
-                    return undef;
+                if (defined($password)) {
+                    if (QBitcoin::Password->check_password($password)) {
+                        $self->register_auth_success;
+                        # Keep the verified plaintext password for handlers that need
+                        # it as the wallet password (unlock via the staking toggle,
+                        # key encryption on import, password change)
+                        $self->{auth_password} = $password;
+                        return undef;
+                    }
+                    # A password was presented and did not match; requests without
+                    # credentials (the browser's first request) are not counted
+                    $self->register_auth_failure;
                 }
             }
         }
@@ -1113,6 +1125,22 @@ sub http_auth_required {
         WWW_Authenticate => 'Basic realm="qbitcoin wallet"',
     );
     my $response = HTTP::Response->new(401, "Unauthorized", $headers, $body);
+    $response->protocol("HTTP/1.1");
+    return $self->send($response->as_string("\r\n"));
+}
+
+# The client exceeded the wallet-password attempt limit; sent without checking
+# the password at all, see QBitcoin::Password::Throttle
+sub http_throttled {
+    my $self = shift;
+    my ($delay) = @_;
+    my $body = throttle_message($delay);
+    my $headers = HTTP::Headers->new(
+        Content_Type   => "text/plain",
+        Content_Length => length($body),
+        Retry_After    => $delay,
+    );
+    my $response = HTTP::Response->new(429, "Too Many Requests", $headers, $body);
     $response->protocol("HTTP/1.1");
     return $self->send($response->as_string("\r\n"));
 }
