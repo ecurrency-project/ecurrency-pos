@@ -160,4 +160,29 @@ QBitcoin::Generate::Control->generate_level(7);
 send_blk(6, "f6", "e5", 700, 90, 1);
 is(QBitcoin::Generate::Control->generate_level, 6, "lower new contest target replaces a higher pending one");
 
+# A pending contest of a peer block in a PAST slot is produced immediately: the main loop
+# consults contest_pending_past() to skip the randomized in-slot delay for it (the delay
+# protects our own current-slot stake commitment, which a past-slot contest does not touch).
+# A current-slot target keeps the delay.
+my $f6_slot = GENESIS_TIME + 6 * BLOCK_INTERVAL * FORCE_BLOCKS;
+ok(QBitcoin::Generate->contest_pending_past($f6_slot + BLOCK_INTERVAL),
+    "pending past-slot contest target skips the generation delay");
+ok(!QBitcoin::Generate->contest_pending_past($f6_slot),
+    "current-slot contest target keeps the delay");
+{
+    my $f6 = QBitcoin::Block->best_block(6);
+    my $connection_saved = $f6->received_from;
+    $f6->received_from(undef);
+    ok(!QBitcoin::Generate->contest_pending_past($f6_slot + BLOCK_INTERVAL),
+        "our own block at the target height is not contested - no bypass");
+    $f6->received_from($connection_saved);
+}
+QBitcoin::Generate::Control->generate_level(undef);
+QBitcoin::Generate::Control->generate_level(42);
+ok(!QBitcoin::Generate->contest_pending_past($f6_slot + BLOCK_INTERVAL),
+    "target height without a best block - no bypass");
+QBitcoin::Generate::Control->generate_level(undef);
+ok(!QBitcoin::Generate->contest_pending_past($f6_slot + BLOCK_INTERVAL),
+    "no pending target - no bypass");
+
 done_testing();

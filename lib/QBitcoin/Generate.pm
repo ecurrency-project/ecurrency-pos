@@ -79,6 +79,22 @@ sub gen_time {
     return QBitcoin::Generate::Control->gen_time($timeslot);
 }
 
+# True if the pending contest target (generate_level) is a peer block in a slot earlier
+# than $timeslot. Reacting to it must not wait for the randomized in-slot delay: the
+# delay protects our own current-slot stake commitment from being made too early, while
+# a filled past slot only loses ground while we wait - the peer branch grows on top of
+# it, and the next received block displaces the pending (lower) target. The main loop
+# generates immediately in this case; current-slot targets keep the usual delay.
+sub contest_pending_past {
+    my $class = shift;
+    my ($timeslot) = @_;
+    defined(my $level = QBitcoin::Generate::Control->generate_level)
+        or return 0;
+    my $filled = QBitcoin::Block->best_block($level)
+        or return 0;
+    return $filled->received_from && timeslot($filled->time) < $timeslot ? 1 : 0;
+}
+
 # A new fee-paying transaction can let us claim the current slot's reward: if the best
 # block was received from a peer and carries no stake (a stake can only be the first tx),
 # or the best block is ours (the new fee may be worth a rebuild or a sibling), trigger
