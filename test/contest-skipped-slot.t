@@ -120,6 +120,9 @@ QBitcoin::Generate::Control->generate_level(undef); # ignore the flag from insta
 send_blk(2, "p3", "b2", 310, 60, 1);
 is(QBitcoin::Block->best_block->hash, "p3", "Heavier p3 became best");
 is(QBitcoin::Generate::Control->generate_level, 2, "generate_level flags p3: empty tip e3 must not raise the contest bar");
+# p3's pending target would keep the lower level through the c3 receive below (see the
+# no-displace test at the end); clear it as if generate() had consumed it.
+QBitcoin::Generate::Control->generate_level(undef);
 
 # Current-slot contest: a peer block that fills the CURRENT slot at our tip height cannot be
 # beaten by the normal generation path - that would build a stakeless block on top of it
@@ -139,5 +142,22 @@ is($gen[0][1], 3, "...at the contested height");
 is($gen[0][2], "p3", "...on p3, the block before the contested one");
 ok($gen[0][3], "...using only the contested branch's transactions (so its fee tx lets us stake)");
 is(QBitcoin::Generate::Control->generate_level, undef, "generate_level cleared after current-slot contest");
+
+# A block received on top must not displace a still-pending lower contest target: the flag
+# is only consumed by the next generate() pass, which may be a randomized in-slot delay
+# away, and the pending (lower) block is the one worth contesting. This is how a
+# hole-filler escaped its contest on 2026-08-26 (bb4caa7b h1855673: the stakeless append
+# 001d7b20 arriving 100ms later moved the target to h1855674, and the contest was wasted).
+send_blk(4, "d4", "c3", 500, 90, 1);
+is(QBitcoin::Block->best_block->hash, "d4", "d4 became best");
+is(QBitcoin::Generate::Control->generate_level, 4, "append flags d4's height");
+send_blk(5, "e5", "d4", 600, 90, 1);
+is(QBitcoin::Block->best_block->hash, "e5", "e5 became best");
+is(QBitcoin::Generate::Control->generate_level, 4, "pending lower contest target survives the e5 append");
+# ...while a LOWER new target still replaces a higher pending one
+QBitcoin::Generate::Control->generate_level(undef);
+QBitcoin::Generate::Control->generate_level(7);
+send_blk(6, "f6", "e5", 700, 90, 1);
+is(QBitcoin::Generate::Control->generate_level, 6, "lower new contest target replaces a higher pending one");
 
 done_testing();
