@@ -20,9 +20,12 @@ sub generated_time {
 # Height of a block that filled a slot empty in our branch before the current timeslot.
 # Set by QBitcoin::Block::Receive on a best-branch switch, consumed (and reset) by the
 # next QBitcoin::Generate::generate() call, which tries to contest that block on weight.
+# Keep the lowest pending target.
 sub generate_level {
     my $class = shift;
-    $GENERATE_LEVEL = $_[0] if @_;
+    if (@_ && (!defined($GENERATE_LEVEL) || !defined($_[0]) || $_[0] < $GENERATE_LEVEL)) {
+        $GENERATE_LEVEL = $_[0];
+    }
     return $GENERATE_LEVEL;
 }
 
