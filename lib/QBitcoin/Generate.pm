@@ -14,6 +14,7 @@ use QBitcoin::RedeemScript;
 use QBitcoin::TXO;
 use QBitcoin::Coinbase;
 use QBitcoin::Address qw(scripthash_by_address);
+use QBitcoin::ProtocolState qw(blockchain_synced mempool_synced btc_synced);
 use QBitcoin::MyAddress qw(my_address stake_address);
 use QBitcoin::Delegation;
 use QBitcoin::Wallet::UTXO ();
@@ -76,6 +77,29 @@ sub gen_time {
     my $class = shift;
     my ($timeslot) = @_;
     return QBitcoin::Generate::Control->gen_time($timeslot);
+}
+
+# A new fee-paying transaction can let us claim the current slot's reward: if the best
+# block was received from a peer and carries no stake (a stake can only be the first tx),
+# or the best block is ours (the new fee may be worth a rebuild or a sibling), trigger
+# regeneration via generate_new(). Must be called for every transaction admitted to the
+# mempool whatever its source: a peer (Protocol::process_tx), RPC sendrawtransaction
+# (HTTP::process_tx) or the test producer. A locally-submitted transaction is announced
+# to all peers, so every OTHER validator gets the chance to stake on it; the node it
+# entered through must not be the only one that misses it (2026-08-26, h1855673: an
+# RPC-submitted fee tx 150ms before the slot end was staked by a small validator while
+# we kept the stakeless best block).
+sub restake_for_tx {
+    my $class = shift;
+    my ($tx) = @_;
+    return unless $tx->fee > 0 || $tx->up;
+    return unless blockchain_synced() && mempool_synced();
+    return unless QBitcoin::TXO->staked_utxo;
+    my $best = QBitcoin::Block->best_block
+        or return;
+    if (!$best->received_from || !@{$best->transactions} || !$best->transactions->[0]->is_stake) {
+        QBitcoin::Generate::Control->generate_new();
+    }
 }
 
 sub txo_confirmed {

@@ -11,6 +11,7 @@ use QBitcoin::RPC::Const;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::Block;
+use QBitcoin::Generate;
 use QBitcoin::Fork;
 
 use constant ATTR => qw(
@@ -117,6 +118,9 @@ sub process_tx {
     if ($tx->fee >= 0) {
         # announce to other peers
         $tx->announce();
+        # A locally-submitted paid transaction must give this node the same chance to
+        # (re)stake the current slot as the announce just gave every peer
+        QBitcoin::Generate->restake_for_tx($tx);
     }
     elsif (!$tx->in_blocks && !$tx->block_height) {
         Debugf("Ignore stake transactions %s not related to any known block", $tx->hash_str);
