@@ -13,6 +13,7 @@ use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
 use QBitcoin::Transaction;
 use QBitcoin::TXO;
+use QBitcoin::Generate;
 use QBitcoin::RedeemScript;
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 use QBitcoin::Crypto qw(hash160 checksum32);
@@ -179,6 +180,7 @@ sub _produce_tx {
     Debugf("Produced transaction inputs:");
     Debugf("  tx_in: %s, num: %u", $_->tx_in_str, $_->num) foreach @txo;
     $tx->announce();
+    QBitcoin::Generate->restake_for_tx($tx);
     return $tx;
 }
 
