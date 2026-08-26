@@ -263,8 +263,11 @@ sub main_loop {
                         # per-slot stake to a block that is about to be outcompeted. Applies
                         # only to the current slot; a past slot (genesis catch-up / forced for
                         # elapsed time) is produced immediately, and genesis (height 0) does not
-                        # reach this path.
-                        my $gen_at = $timeslot == timeslot($time)
+                        # reach this path. A pending contest of a peer block that filled a PAST
+                        # slot is also produced immediately (contest_pending_past): waiting only
+                        # lets the peer branch grow on top of it, and the next received block
+                        # would displace the pending target.
+                        my $gen_at = $timeslot == timeslot($time) && !QBitcoin::Generate->contest_pending_past($timeslot)
                             ? QBitcoin::Generate->gen_time($timeslot) : 0;
                         if (Time::HiRes::time() >= $gen_at) {
                             QBitcoin::Generate->generate($timeslot);
