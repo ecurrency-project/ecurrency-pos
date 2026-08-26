@@ -410,6 +410,10 @@ sub generate {
                     if (!_have_weight_tx()) {
                         Debugf("Keep our published block %s height %u for slot %u, nothing new to add",
                             $prev_block->hash_str, $height, $timeslot);
+                        # The decision stands until a new trigger (generate_new) or the next
+                        # slot; without closing the gate here every main-loop pass would
+                        # re-evaluate it and repeat the message for the rest of the slot
+                        QBitcoin::Generate::Control->generated_time($timeslot);
                         return;
                     }
                     Debugf("Slot %u already staked; build a sibling block with a free address", $timeslot);
