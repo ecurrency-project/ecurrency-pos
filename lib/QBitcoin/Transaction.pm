@@ -498,7 +498,7 @@ sub store {
     my $self = shift;
     $self->is_cached or die "store not cached transaction " . $self->hash_str;
     # we are in sql transaction
-    if ($self->is_tokens && $self->token_hash) {
+    if ($self->is_tokens && length($self->token_hash // "")) {
         my ($tokens_tx) = QBitcoin::Transaction->fetch(hash => $self->token_hash);
         $self->token_id = $tokens_tx->{id};
     }
@@ -602,7 +602,7 @@ sub sign_data {
         # We do not need to sign coinbase transactions
         $$cached_data = $data;
     }
-    if ($self->is_tokens && $self->token_hash) {
+    if ($self->is_tokens && length($self->token_hash // "")) {
         $data .= $self->token_hash;
     }
     if ($self->is_stake) {
@@ -920,7 +920,7 @@ sub create_outputs {
             data       => $out->{data},
             tx_in      => $hash,
             num        => $num++,
-            $token_hash ? ( token_hash => $token_hash ) : (),
+            length($token_hash // "") ? ( token_hash => $token_hash ) : (),
         });
         push @txo, $txo;
     }
@@ -1191,7 +1191,7 @@ sub validate {
         }
         # Is this a token transaction?
         if ($self->is_tokens) {
-            $self->check_tokens_tx() == 0
+            $self->validate_tokens_tx() == 0
                 or return -1;
         }
     }

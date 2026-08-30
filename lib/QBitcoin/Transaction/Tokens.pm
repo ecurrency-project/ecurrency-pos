@@ -83,7 +83,7 @@ sub token_tx {
     my $self = shift;
 
     return undef unless $self->is_tokens;
-    return $self unless $self->token_hash;
+    return $self unless length($self->token_hash // "");
     my $token_tx = (ref $self)->get_by_hash($self->token_hash)
         or die "No such token transaction " . $self->token_hash_str . " for transaction " . $self->hash_str;
     return $token_tx;
@@ -109,12 +109,16 @@ sub token_info {
     return $self->{token_info} //= $self->_load_token_info;
 }
 
-sub check_tokens_tx {
+sub validate_tokens_tx {
     my $self = shift;
 
     my $permissions = 0;
     my $in_value = 0;
-    if ($self->token_hash) {
+    if (my $length_token_hash = length($self->token_hash // "")) {
+        if ($length_token_hash != 32) {
+            Warningf("Incorrect token hash length %u in transaction %s", $length_token_hash, $self->hash_str);
+            return -1;
+        }
         my $correct_input = 0;
         foreach my $in (grep { ($_->{txo}->token_hash // "") eq $self->token_hash && length($_->{txo}->data // "") } @{$self->in}) {
             my $txo = $in->{txo};
@@ -174,7 +178,7 @@ sub check_tokens_tx {
             # Control attributes
             my $data = $self->unpack_token_info($out->data)
                 or return -1;
-            if ($self->token_hash) {
+            if (length($self->token_hash // "")) {
                 if ($data->{permissions} && ($data->{permissions} & ~$permissions)) {
                     Warningf("Attempt to gain token %s permission in transaction %s", $self->token_hash_str, $self->hash_str);
                     return -1;
@@ -186,7 +190,7 @@ sub check_tokens_tx {
             }
         }
     }
-    if ($self->token_hash && $out_value > $in_value && !($permissions & TOKEN_PERMISSION_MINT)) {
+    if (length($self->token_hash // "") && $out_value > $in_value && !($permissions & TOKEN_PERMISSION_MINT)) {
         Warningf("Token transfer output value %lu exceeds input value %lu in transaction %s token %s",
             $out_value, $in_value, $self->hash_str, $self->token_hash_str);
         return -1;
