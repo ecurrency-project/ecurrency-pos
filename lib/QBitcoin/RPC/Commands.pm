@@ -408,7 +408,7 @@ Result (if verbose is not set or is set to true):
   ],
   "out" : [                          (json array)
     {                                (json object)
-      "value" : n,                   (numeric) The value in BTC
+      "value" : n,                   (numeric) The value in QBTC
       "address" : "str",             (string) qbitcoin address
       "data" : "hex",                (string, optional) The data in hex (if a data output)
     },
@@ -417,7 +417,7 @@ Result (if verbose is not set or is set to true):
   "blockhash" : "hex",               (string) the block hash
   "confirmations" : n,               (numeric) The confirmations
   "blocktime" : xxx,                 (numeric) The block time expressed in UNIX epoch time
-  "fee" : n                          (numeric) The transaction fee in BTC
+  "fee" : n                          (numeric) The transaction fee in QBTC
 }
 
 Examples:
@@ -482,7 +482,7 @@ Arguments:
 2. outputs                     (json array, required) The outputs (key-value pairs)
      [
        {                       (json object)
-         "address": amount,      (numeric or string, required) A key-value pair. The key (string) is the qbitcoin address, the value (float or string) is the amount in BTC
+         "address": amount,      (numeric or string, required) A key-value pair. The key (string) is the qbitcoin address, the value (float or string) is the amount in QBTC
          "token_id": "hex",      (numeric or string, optional) Token id, txid of the token creation transaction or empty for new token
          "token_amount": amount, (numeric or string, optional) Amount in tokens
          "token_permissions": [ "mint", ... ], (json array, optional) Token permissions
@@ -718,7 +718,7 @@ sub cmd_signrawtransactionwithkey {
     my $fee_per_kb = ($input_amount - $output_amount) * 1024 / length($tx_data);
     my $max_fee_per_kb = $self->max_fee_per_kb;
     if ($max_fee_per_kb && $fee_per_kb > $max_fee_per_kb) {
-        return $self->response_error("Transaction fee too high: " . $fee_per_kb / DENOMINATOR . " > " . $max_fee_per_kb / DENOMINATOR . " BTC/kb", ERR_INVALID_REQUEST);
+        return $self->response_error("Transaction fee too high: " . $fee_per_kb / DENOMINATOR . " > " . $max_fee_per_kb / DENOMINATOR . " QBTC/kb", ERR_INVALID_REQUEST);
     }
 
     my ($token_err, $token_warning) = check_tx_tokens_balance($tx);
@@ -738,7 +738,7 @@ sub max_fee_per_kb {
     my $self = shift;
     return $config->{max_fee_per_kb} if defined $config->{max_fee_per_kb};
     return 0 if $config->{testnet} || $config->{regtest};
-    return 100000; # 0.001 BTC
+    return 100000; # 0.001 QBTC
 }
 
 $PARAMS{decoderawtransaction} = "hexstring";
@@ -751,25 +751,27 @@ Arguments:
 1. hexstring    (string, required) The transaction hex string
 
 Result:
-{                           (json object)
-  "txid" : "hex",           (string) The transaction id
-  "size" : n,               (numeric) The transaction size
-  "weight" : n,             (numeric) The transaction's weight (between vsize*4 - 3 and vsize*4)
-  "vin" : [                 (json array)
-    {                       (json object)
-      "txid" : "hex",       (string) The transaction id
-      "vout" : n,           (numeric) The output number
-      "script" : {          (json object) The script
-        "hex" : "hex"       (string) hex
+{                                    (json object)
+  "txid" : "hex",                    (string) The transaction id
+  "hash" : "hex",                    (string) The transaction hash (the same as the txid)
+  "size" : n,                        (numeric) The serialized transaction size
+  "type" : "str",                    (string) The transaction type
+  "in" : [                           (json array)
+    {                                (json object)
+      "txid" : "hex",                (string) The transaction id
+      "num" : n,                     (numeric) The output number
+      "redeem_script" : "hex",       (string, optional) The redeem script in hex
+      "siglist" : [                  (json object) The list of signatures
+        "hex"                        (string) hex
       },
     },
     ...
   ],
-  "vout" : [                (json array)
-    {                       (json object)
-      "value" : n,          (numeric) The amount
-      "n" : n,              (numeric) index
-      "address" : "str"     (string) address
+  "out" : [                          (json array)
+    {                                (json object)
+      "value" : n,                   (numeric) The value in QBTC
+      "address" : "str",             (string) qbitcoin address
+      "data" : "hex",                (string, optional) The data in hex (if a data output)
     },
     ...
   ]
@@ -1134,7 +1136,7 @@ Arguments:
 Result:
 {                                       (json object)
   "size" : n,                           (numeric) transaction size in bytes
-  "fee"  : n,                           (numeric) transaction fee in BTC
+  "fee"  : n,                           (numeric) transaction fee in QBTC
   "time" : xxx,                         (numeric) local time transaction entered pool in seconds since 1 Jan 1970 GMT
 }
 
@@ -1846,7 +1848,7 @@ Arguments:
 2. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
 
 Result:
-n    (numeric) The total amount in BTC unspent at this address.
+n    (numeric) The total amount in QBTC unspent at this address.
 
 Examples:
 
@@ -1885,7 +1887,7 @@ Arguments:
 2. minconf    (numeric, optional, default=1, max=${\(INCORE_LEVELS+1)}) Only include transactions confirmed at least this many times.
 
 Result:
-n    (numeric) The total amount in BTC received at this address.
+n    (numeric) The total amount in QBTC received at this address.
 
 Examples:
 
@@ -1929,7 +1931,7 @@ Result:
     "txid" : "hex",              (string) the transaction id
     "vout" : n,                  (numeric) the vout value
     "address" : "str",           (string) the qbitcoin address
-    "amount" : n,                (numeric) the transaction output amount in BTC
+    "amount" : n,                (numeric) the transaction output amount in QBTC
     "confirmations" : n,         (numeric) The number of confirmations
   },
   ...
@@ -2002,7 +2004,7 @@ Result:
 [                                (json array)
   {                              (json object)
     "txid" : "hex",              (string) the transaction id
-    "amount" : n,                (numeric) the received (positive) or sent (negative) amount in BTC
+    "amount" : n,                (numeric) the received (positive) or sent (negative) amount in QBTC
     "height" : n,                (numeric) the block height containing the transaction (or -1 if unconfirmed)
     "confirmations" : n,         (numeric) The number of confirmations
   },
@@ -2183,7 +2185,7 @@ getbalance ( minconf )
 Returns total balance of the addresses in the wallet with at least minconf confirmations.
 
 Result:
-n    (numeric) The total amount in BTC in the wallet.
+n    (numeric) The total amount in QBTC in the wallet.
 
 Examples:
 > qbitcoin-cli getbalance
@@ -2288,7 +2290,7 @@ Arguments:
 
 Result:
 {                   (json object)
-  "feerate" : n,    (numeric, optional) estimate fee rate in BTC/kB (only present if no errors were encountered)
+  "feerate" : n,    (numeric, optional) estimate fee rate in QBTC/kB (only present if no errors were encountered)
   "errors" : [      (json array, optional) Errors encountered during processing (if there are any)
     "str",          (string) error
     ...
