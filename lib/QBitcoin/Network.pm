@@ -223,7 +223,6 @@ sub main_loop {
     $SIG{TERM} = $SIG{INT} = sub { $sig_killed = 1 };
 
     while () {
-        QBitcoin::Fork->reap();
         QBitcoin::Resolver->process(); # kill overdue hostname checks, start queued ones
         QBitcoin::Fork->maintain_db_pool();
         QBitcoin::Block->store_blocks();
@@ -316,6 +315,10 @@ sub main_loop {
             last;
         }
         my $time = time();
+        # Reap finished request handlers right after select(), before accepting new
+        # connections: their connections are detached from the connection list, and
+        # the RPC/REST limits below count them via forked_requests() until reaped
+        QBitcoin::Fork->reap();
 
         foreach my $listen_socket (grep { vec($rin, fileno($_), 1) == 1 } @listen_socket) {
             my $peerinfo = accept(my $new_socket, $listen_socket);
@@ -372,9 +375,12 @@ sub main_loop {
             my $peerinfo = accept(my $new_socket, $listen_rpc);
             my ($remote_port, $peer_addr) = sockaddr_to_ip_port($peerinfo);
             my $peer_ip = ip_str($peer_addr);
-            my @rpc_connections = grep { $_->type_id == PROTOCOL_RPC } QBitcoin::ConnectionList->list();
-            if (@rpc_connections >= ($config->{max_rpc_connections} // MAX_RPC_CONNECTIONS)) {
-                Warningf("Too many RPC connections (%u), reject from %s", scalar(@rpc_connections), $peer_ip);
+            # Requests handed to forked children are detached from the connection list
+            # but each still occupies a client connection, count them too
+            my $rpc_connections = QBitcoin::Fork->forked_requests(PROTOCOL_RPC);
+            $rpc_connections += grep { $_->type_id == PROTOCOL_RPC } QBitcoin::ConnectionList->list();
+            if ($rpc_connections >= ($config->{max_rpc_connections} // MAX_RPC_CONNECTIONS)) {
+                Warningf("Too many RPC connections (%u), reject from %s", $rpc_connections, $peer_ip);
                 close($new_socket);
             }
             else {
@@ -403,9 +409,12 @@ sub main_loop {
             my $peerinfo = accept(my $new_socket, $listen_rest);
             my ($remote_port, $peer_addr) = sockaddr_to_ip_port($peerinfo);
             my $peer_ip = ip_str($peer_addr);
-            my @rest_connections = grep { $_->type_id == PROTOCOL_REST } QBitcoin::ConnectionList->list();
-            if (@rest_connections >= ($config->{max_rest_connections} // MAX_REST_CONNECTIONS)) {
-                Warningf("Too many REST connections (%u), reject from %s", scalar(@rest_connections), $peer_ip);
+            # Requests handed to forked children are detached from the connection list
+            # but each still occupies a client connection, count them too
+            my $rest_connections = QBitcoin::Fork->forked_requests(PROTOCOL_REST);
+            $rest_connections += grep { $_->type_id == PROTOCOL_REST } QBitcoin::ConnectionList->list();
+            if ($rest_connections >= ($config->{max_rest_connections} // MAX_REST_CONNECTIONS)) {
+                Warningf("Too many REST connections (%u), reject from %s", $rest_connections, $peer_ip);
                 close($new_socket);
             }
             else {
