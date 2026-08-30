@@ -21,7 +21,7 @@ use QBitcoin::ConnectionList;
 use constant MAX_FORK_CHILDREN => 8;
 
 my @LISTEN_SOCKETS;
-my %CHILDREN;
+my %CHILDREN; # pid => type_id of the connection whose request the child processes
 my $IS_CHILD = 0;
 
 sub is_child { $IS_CHILD }
@@ -70,7 +70,7 @@ sub spawn {
     }
     if ($pid) {
         QBitcoin::ORM::db_pool_loaned($db_entry, $pid) if $db_entry;
-        $CHILDREN{$pid} = 1;
+        $CHILDREN{$pid} = $connection->type_id;
         $connection->detach();
         $class->register_worker($pid, \&QBitcoin::ORM::db_pool_returned);
         return 0;
@@ -114,6 +114,15 @@ sub finish {
     # to the server, and the master lends the connection to the next child
     QBitcoin::ORM::disconnect_dbh();
     POSIX::_exit(0);
+}
+
+# Requests being processed in forked children, per connection type. spawn() detaches
+# such connections from the ConnectionList, so the max_rpc_connections and
+# max_rest_connections checks must add this count to the listed connections.
+sub forked_requests {
+    my $class = shift;
+    my ($type_id) = @_;
+    return scalar grep { $_ == $type_id } values %CHILDREN;
 }
 
 my %WORKER_CALLBACKS;
