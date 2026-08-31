@@ -572,10 +572,12 @@ sub cmd_sendrawtransaction {
     }
     $tx->received_from = $self;
     if (QBitcoin::Transaction->has_pending($tx->hash)) {
-        return $self->response_error("Transaction already published.", ERR_VERIFY_ALREADY_IN_CHAIN);
+        # Transaction already known, but in pending state
+        return $self->response_error("Some inputs unknown.", ERR_VERIFY_ALREADY_IN_CHAIN);
     }
     if (QBitcoin::Transaction->check_by_hash($tx->hash)) {
-        return $self->response_error("Transaction already published.", ERR_VERIFY_ALREADY_IN_CHAIN);
+        # Transaction already in blockchain, return its hash for idempotency
+        return $self->response_ok(unpack("H*", $tx->hash));
     }
     if (!$tx->load_txo()) {
         return $self->response_error("Incorrect transaction data.", ERR_DESERIALIZATION_ERROR);
