@@ -642,10 +642,11 @@ sub tx_send {
     $tx->received_from = $self;
 
     if (QBitcoin::Transaction->has_pending($tx->hash)) {
-        return $self->http_response(400, "Transaction already published");
+        return $self->http_response(400, "Some inputs unknown");
     }
     if (QBitcoin::Transaction->check_by_hash($tx->hash)) {
-        return $self->http_response(400, "Transaction already published");
+        # Already published, return ok for idempotency
+        return $self->http_ok({ txid => unpack("H*", $tx->hash) });
     }
     if (!$tx->load_txo()) {
         return $self->http_response(400, "Incorrect transaction data");
