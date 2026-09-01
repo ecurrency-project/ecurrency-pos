@@ -278,8 +278,9 @@ sub receive {
         }
         $best_block[$bl->height] = $bl;
     }
-    if (blockchain_synced() && !$loaded && $contest_level) {
+    if (blockchain_synced() && !$loaded && $self->received_from && $contest_level) {
         QBitcoin::Generate::Control->generate_level($contest_level);
+        QBitcoin::Generate::Control->generate_new();
     }
 
     # Notify about confirmed transactions to tracked addresses
