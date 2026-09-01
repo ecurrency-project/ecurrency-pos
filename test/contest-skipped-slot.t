@@ -143,6 +143,21 @@ is($gen[0][2], "p3", "...on p3, the block before the contested one");
 ok($gen[0][3], "...using only the contested branch's transactions (so its fee tx lets us stake)");
 is(QBitcoin::Generate::Control->generate_level, undef, "generate_level cleared after current-slot contest");
 
+# A pending target must never expire at the slot border: a cheap block signed in the
+# last milliseconds of its slot (hoping to be accepted but never contested) still gets
+# contested right after the border - through the past-slot path, with the current-slot
+# block built on top. Only an actual contest attempt consumes the target.
+QBitcoin::Generate::Control->generate_level(3);
+@gen = ();
+QBitcoin::Generate->generate($c3_slot + BLOCK_INTERVAL);
+is(scalar(@gen), 2, "target pending from the previous slot is still contested after the border");
+is($gen[0][0], $c3_slot, "...in the contested block's slot (the latest allowed past slot)");
+is($gen[0][1], 3, "...at the contested height");
+is($gen[0][2], "p3", "...on p3, the block before the contested one");
+ok($gen[0][3], "...using only the contested branch's transactions");
+is($gen[1][1], 4, "...and the current-slot block is built on top");
+is(QBitcoin::Generate::Control->generate_level, undef, "target consumed by the late contest");
+
 # A block received on top must not displace a still-pending lower contest target: the flag
 # is only consumed by the next generate() pass, which may be a randomized in-slot delay
 # away, and the pending (lower) block is the one worth contesting. This is how a
@@ -184,5 +199,69 @@ ok(!QBitcoin::Generate->contest_pending_past($f6_slot + BLOCK_INTERVAL),
 QBitcoin::Generate::Control->generate_level(undef);
 ok(!QBitcoin::Generate->contest_pending_past($f6_slot + BLOCK_INTERVAL),
     "no pending target - no bypass");
+
+# Installing a contest target must also reopen the generation gate (generate_new): when
+# the displacing block is in the CURRENT slot at the same height, neither of receive()'s
+# other generate_new() triggers fires (the branch does not start in a past slot, and
+# sibling parents weigh the same), so with this slot's generation already done the
+# pending target would wait for the next slot (seen live 2026-09-01 h1889456: "Contest
+# block e1ac73d1 ... from past slot" right after the border instead of an in-slot
+# contest). Wall-clock reads inside receive() are mocked so the incoming block lands
+# "in its own slot".
+my $g7_slot = GENESIS_TIME + 7 * BLOCK_INTERVAL * FORCE_BLOCKS;
+my $o8_slot = GENESIS_TIME + 8 * BLOCK_INTERVAL * FORCE_BLOCKS;
+my $fake_now_slot;
+my $receive_module = Test::MockModule->new('QBitcoin::Block::Receive');
+$receive_module->mock('timeslot', sub {
+    my ($time) = @_;
+    # block times keep the real formula; only wall-clock time() reads get the fake slot
+    return $fake_now_slot if defined($fake_now_slot) && $time > $o8_slot;
+    my $t = int($time);
+    return $t - $t % BLOCK_INTERVAL;
+});
+$fake_now_slot = $g7_slot; # receive g7 "in its own slot"
+QBitcoin::Generate::Control->generate_level(undef);
+QBitcoin::Generate::Control->generated_time($g7_slot); # this slot's generation already ran
+send_blk(7, "g7", "f6", 800, 90, 1);
+is(QBitcoin::Block->best_block->hash, "g7", "current-slot block g7 became best");
+is(QBitcoin::Generate::Control->generate_level, 7, "current-slot switch installs the contest target");
+ok(!defined(QBitcoin::Generate::Control->generated_time),
+    "...and reopens the generation gate so the contest happens within the slot");
+
+# ...while a switch that installs no target (the displaced tip carried stake in the same
+# slot - a plain weight race already lost) must NOT reopen the gate
+QBitcoin::Generate::Control->generate_level(undef);
+QBitcoin::Generate::Control->generated_time($g7_slot);
+send_blk(7, "h7", "f6", 850, 140, 1);
+is(QBitcoin::Block->best_block->hash, "h7", "heavier sibling h7 displaced g7");
+is(QBitcoin::Generate::Control->generate_level, undef,
+    "same-slot displacement of a same-slot staked tip installs no target");
+is(QBitcoin::Generate::Control->generated_time, $g7_slot, "...and the gate stays closed");
+
+# Our OWN block also flags its height structurally (an append walks nothing, so the
+# last-stake bar is -1), but its receive() runs right after _generate closed the gate:
+# it must neither install a self-target (contesting applies to peer blocks only) nor
+# reopen the gate after every block we produce.
+$fake_now_slot = $o8_slot;
+QBitcoin::Generate::Control->generated_time($o8_slot);
+my $own = QBitcoin::Block->new(
+    time         => $o8_slot,
+    height       => 8,
+    hash         => "o8",
+    prev_hash    => "h7",
+    prev_block   => QBitcoin::Block->best_block(7),
+    weight       => 950,
+    self_weight  => 100,
+    merkle_root  => ZERO_HASH,
+    transactions => [],
+);
+block_hash($own->hash);
+is($own->receive(), 0, "own block accepted");
+is(QBitcoin::Block->best_block->hash, "o8", "own block became best");
+is(QBitcoin::Generate::Control->generate_level, undef, "own block installs no contest target for itself");
+is(QBitcoin::Generate::Control->generated_time, $o8_slot,
+    "...and leaves the gate closed after our own generation");
+$receive_module->unmock('timeslot');
+QBitcoin::Generate::Control->generated_time(undef);
 
 done_testing();
