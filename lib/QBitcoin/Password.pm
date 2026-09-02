@@ -14,7 +14,7 @@ use constant SETTING_NAME => 'wallet_password';
 
 use constant {
     PBKDF2_HASH => 'SHA256',
-    PBKDF2_ITER => 100_000,
+    PBKDF2_ITER => 600_000, # https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#pbkdf2
     SALT_LEN    => 16,
     DK_LEN      => 32,
     MAX_LEN     => 1024, # cap input length to bound PBKDF2 cost
