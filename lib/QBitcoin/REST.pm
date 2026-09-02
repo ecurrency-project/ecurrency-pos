@@ -84,6 +84,12 @@ sub process_request {
     shift @path if @path && $path[0] eq "";
     return $self->http_response(404, "Unknown request") unless @path;
     DEBUG_REST && Debugf("REST request: /%s", join("/", @path));
+    if ($http_request->method eq "POST" && $http_request->decoded_content) {
+        if (lc($http_request->headers->content_type // "") ne "application/json") {
+            DEBUG_REST && Infof("REST request with invalid Content-Type: %s", $http_request->headers->content_type // "");
+            return $self->http_response(400, "Invalid Content-Type");
+        }
+    }
     if ($path[0] eq "api") {
         $self->cors(1);
         shift @path; # remove "api"
