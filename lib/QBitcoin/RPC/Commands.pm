@@ -2322,6 +2322,12 @@ stakeaddress address
 
 Set address to be used for staking (block validation).
 
+WARNING: an address must be staked on exactly ONE node. If the same private key
+is imported on another node which stakes it too (a hot spare, an old node left
+running after a migration), both nodes will stake the same outputs - that is
+equivocation, and the slashing penalty is paid from these coins. Stop staking
+the address on the other node before enabling it here.
+
 Arguments:
 1. address    (string, required) The qbitcoin address to be used for staking.
               Must be already in the wallet (imported using importprivkey).

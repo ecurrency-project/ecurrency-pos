@@ -56,6 +56,12 @@ export const StakingToggle = (props: StakingToggleProps) => {
                 <span className={cls.label}>Staking</span>
             </div>
 
+            <Text type="warning" className={cls.hint}>
+                An address must be staked on one node only. If the same private key is imported
+                on another node which stakes it too, both will stake the same outputs - that is
+                equivocation, and the slashing penalty is paid from these coins.
+            </Text>
+
             {wallet?.locked && (
                 <Text type="secondary" className={cls.hint}>
                     The wallet is locked. Enabling staking will unlock it with the admin password.
