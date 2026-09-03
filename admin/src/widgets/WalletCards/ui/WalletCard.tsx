@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Dropdown, type MenuProps, Modal, Popover, Switch, Tooltip } from 'antd';
+import { Alert, Dropdown, type MenuProps, Modal, Popover, Switch, Tooltip } from 'antd';
 
 import { useGetAddressQuery, addressBalanceSat } from '@/entities/Address';
 import { TokenChip } from '@/entities/Token';
@@ -54,6 +54,28 @@ export const WalletCard = (props: WalletCardProps) => {
     const { data: addressInfo, isLoading: isInfoLoading, isError: isInfoError } = useGetAddressQuery({ id: address }, {
         pollingInterval: BALANCE_POLL_INTERVAL,
     });
+
+    const onStakeSwitch = (checked: boolean) => {
+        if (!checked) {
+            onStakedChange(address, false);
+            return;
+        }
+        Modal.confirm({
+            title: 'Enable staking for this address?',
+            okText: 'Enable staking',
+            content: (
+                <Alert
+                    type="warning"
+                    showIcon
+                    message="An address must be staked on one node only. If the same private key
+                        is imported on another node which stakes it too, both will stake the same
+                        outputs - that is equivocation, and the slashing penalty is paid from
+                        these coins."
+                />
+            ),
+            onOk: () => onStakedChange(address, true),
+        });
+    };
 
     const balanceSat = addressInfo ? addressBalanceSat(addressInfo.chain_stats) : 0n;
     const tokens = Object.entries(addressInfo?.tokens ?? {});
@@ -124,7 +146,7 @@ export const WalletCard = (props: WalletCardProps) => {
                                     checked={!!myAddress.staked}
                                     loading={stakedLoading}
                                     disabled={!!myAddress.delegation}
-                                    onChange={(checked) => onStakedChange(address, checked)}
+                                    onChange={onStakeSwitch}
                                 />
                             </Tooltip>
                         </span>
