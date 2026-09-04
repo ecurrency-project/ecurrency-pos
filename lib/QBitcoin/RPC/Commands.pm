@@ -123,7 +123,7 @@ Result:
   "total_coins" : n,                      (numeric) total number of generated (upgraded) coins
   "btc_headers" : n,                      (numeric) number of processed btc block headers
   "btc_scanned" : n,                      (numeric) number of scanned btc blocks
-  "btc_synced" : true|false,              (bookean) is btc blockchain fully synced or is in initial block download mode
+  "btc_synced" : true|false,              (boolean) is btc blockchain fully synced or is in initial block download mode
 }
 
 Examples:
@@ -159,9 +159,9 @@ sub cmd_getblockchaininfo {
                 ($btc_scanned) = Bitcoin::Block->find(scanned => 1, -sortby => 'height DESC', -limit => 1);
             }
         }
-        $response->{btc_synced}  = btc_synced() ? TRUE : FALSE,
-        $response->{btc_headers} = $btc_block   ? $btc_block->height+0   : 0,
-        $response->{btc_scanned} = $btc_scanned ? $btc_scanned->height+0 : 0,
+        $response->{btc_synced}  = btc_synced() ? TRUE : FALSE;
+        $response->{btc_headers} = $btc_block   ? $btc_block->height+0   : 0;
+        $response->{btc_scanned} = $btc_scanned ? $btc_scanned->height+0 : 0;
     }
     return $self->response_ok($response);
 }
@@ -256,7 +256,6 @@ sub cmd_getblockheader {
         merkleroot        => unpack("H*", $block->merkle_root),
         weight            => $block->weight,
         confirm_weight    => $best_block->weight - $block->weight,
-        UPGRADE_POW ? ( upgraded => ($block->upgraded // 0) / DENOMINATOR ) : (),
     });
 }
 
@@ -341,7 +340,6 @@ sub cmd_getblock {
         weight            => $block->weight,
         confirm_weight    => $best_block->weight - $block->weight,
     };
-    $res->{upgraded} = ($block->upgraded // 0) / DENOMINATOR if UPGRADE_POW;
     if ($verbosity == 1) {
         $res->{tx} = [ map { unpack("H*", $_) } @{$block->tx_hashes} ];
     }
