@@ -446,9 +446,8 @@ sub cmd_checksequenceverify($) {
     return undef;
 }
 
-# OP_TX_TYPE: push the type of the transaction being validated (used by the
-# freeze/HTLC scripts to constrain how an output may be spent, e.g. only by a
-# TX_TYPE_BURN). Pushed as a script integer.
+# OP_TX_TYPE: push the type of the transaction being validated.
+# Pushed as a script integer.
 sub cmd_tx_type($) {
     my ($state) = @_;
     return unless $state->ifstate;

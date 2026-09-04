@@ -33,7 +33,7 @@ use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::TXO;
 use QBitcoin::Utils qw(get_address_txs get_address_utxo address_stats all_tokens_balance get_tokens_txs get_tokens_info create_txo estimate_fees check_tx_tokens_balance);
-use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair hash160);
+use QBitcoin::Crypto qw(pk_import pk_alg generate_keypair);
 use QBitcoin::Generate;
 use QBitcoin::Generate::Control;
 use QBitcoin::ProtocolState qw(blockchain_synced btc_synced);
@@ -656,16 +656,6 @@ sub tx_send {
     }
     if (!$tx->load_txo()) {
         return $self->http_response(400, "Incorrect transaction data");
-    }
-
-    # Reject downgrade transactions when upgrade threshold reached
-    if (my $best_block = QBitcoin::Block->best_block) {
-        if (($best_block->upgraded // 0) >= UPGRADE_MAX_VALUE) {
-            my $freeze_scripthash = hash160(QBT_BURN_SCRIPT);
-            if (grep { $_->scripthash eq $freeze_scripthash && $_->data } @{$tx->out}) {
-                return $self->http_response(400, "Conversion threshold reached, downgrade not accepted");
-            }
-        }
     }
 
     if ($tx->is_pending) {

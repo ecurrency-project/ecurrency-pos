@@ -329,7 +329,7 @@ sub make_stake_tx {
 }
 
 # Is there an uncommitted, weight-increasing transaction in the mempool? Only such a
-# transaction (coinbase / burn / downgrade / slashing - not a plain fee) can make a
+# transaction (coinbase / slashing - not a plain fee) can make a
 # sibling block built with a smaller free stake address outweigh our already-published
 # block, so we build a sibling only when one is pending.
 sub _have_weight_tx {
@@ -403,7 +403,7 @@ sub generate {
                     # Our block already occupies this slot (its stake is published).
                     # Regenerating it would re-sign the same (slot, UTXO) => self-
                     # equivocation, so we never unconfirm it. But if a new weight-
-                    # increasing transaction (coinbase/burn/downgrade/slashing) has
+                    # increasing transaction (coinbase/slashing) has
                     # appeared, build a SIBLING competing block with a still-free stake
                     # address (make_stake_tx skips published UTXOs) - like a second
                     # independent validator - WITHOUT unconfirming the published block.
