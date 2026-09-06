@@ -311,6 +311,17 @@ sub unspent {
     return 1;
 }
 
+# Hash of the transaction spending this txo: the confirmed one if any, otherwise
+# an unconfirmed (mempool) one; undef if the txo is unspent.
+# Pending transactions (with unknown inputs) are not counted as spending.
+sub spent_by {
+    my $self = shift;
+    return $self->tx_out if $self->tx_out;
+    # Deterministic choice when the mempool holds conflicting spenders
+    my ($tx) = sort { $a->hash cmp $b->hash } grep { !defined $_->block_height } $self->spent_list;
+    return $tx ? $tx->hash : undef;
+}
+
 sub set_redeem_script {
     my $self = shift;
     my ($script) = @_;

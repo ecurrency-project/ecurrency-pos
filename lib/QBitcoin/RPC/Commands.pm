@@ -63,6 +63,7 @@ $READONLY{$_} = 1 foreach qw(
     getblock
     getblockhash
     getrawtransaction
+    gettxspendingprevout
     createrawtransaction
     signrawtransactionwithkey
     decoderawtransaction
@@ -456,6 +457,58 @@ sub cmd_getrawtransaction {
     }
     return $self->response_ok($res);
 }
+
+$PARAMS{gettxspendingprevout} = "outputs/inputs";
+$HELP{gettxspendingprevout} = qq(
+gettxspendingprevout [{"txid":"hex","vout":n},...]
+
+Scans for transactions spending the given outputs.
+Unlike Bitcoin Core, which checks the mempool only, both the blockchain and
+the mempool are scanned; a confirmed spending transaction takes precedence
+over unconfirmed ones.
+
+Arguments:
+1. outputs                 (json array, required) The transaction outputs that we want to check
+     [
+       {                   (json object)
+         "txid": "hex",    (string, required) The transaction id
+         "vout": n,        (numeric, required) The output number
+       },
+       ...
+     ]
+
+Result:
+[                            (json array)
+  {                          (json object)
+    "txid" : "hex",          (string) the transaction id of the checked output
+    "vout" : n,              (numeric) the vout value of the checked output
+    "spendingtxid" : "hex",  (string, optional) the transaction id of the spending transaction (omitted if unspent)
+  },
+  ...
+]
+
+Examples:
+> qbitcoin-cli gettxspendingprevout '[{"txid":"a08e6907dbbd3d809776dbfc5d82e371b764ed838b5655e72f463568df1aadf0","vout":3}]'
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "gettxspendingprevout", "params": [[{"txid":"a08e6907dbbd3d809776dbfc5d82e371b764ed838b5655e72f463568df1aadf0","vout":3}]]}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_gettxspendingprevout {
+    my $self = shift;
+    my @res;
+    foreach my $outpoint (@{$self->args->[0]}) {
+        my $tx = QBitcoin::Transaction->get_by_hash(pack("H*", $outpoint->{txid}))
+            or return $self->response_error("No such mempool or blockchain transaction $outpoint->{txid}", ERR_INVALID_ADDRESS_OR_KEY);
+        my $out = $tx->out->[$outpoint->{vout}]
+            or return $self->response_error("Output index $outpoint->{vout} is out of range for transaction $outpoint->{txid}", ERR_INVALID_PARAMS);
+        my $spent_by = $out->spent_by;
+        push @res, {
+            txid => $outpoint->{txid},
+            vout => $outpoint->{vout} + 0,
+            $spent_by ? ( spendingtxid => unpack("H*", $spent_by) ) : (),
+        };
+    }
+    return $self->response_ok(\@res);
+}
+
 
 $PARAMS{createrawtransaction} = "inputs outputs";
 $HELP{createrawtransaction} = qq(
