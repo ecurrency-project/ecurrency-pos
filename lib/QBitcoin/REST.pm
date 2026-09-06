@@ -117,16 +117,7 @@ sub process_request {
                     return $self->http_ok($tx->serialize);
                 }
                 elsif ($path[2] eq "outspends") {
-                    my @out;
-                    foreach my $out (@{$tx->out}) {
-                        push @out, {
-                            spent => $out->tx_out ? TRUE : FALSE,
-                            $out->tx_out ? (
-                                txid => unpack("H*", $out->tx_out),
-                            ) : (),
-                        };
-                    }
-                    return $self->http_ok(\@out);
+                    return $self->http_ok([ map { outspend_obj($_) } @{$tx->out} ]);
                 }
                 elsif ($path[2] eq "merkleblock-proof") {
                     return $self->http_response(500, "Unimplemented");
@@ -143,12 +134,9 @@ sub process_request {
             }
             elsif (@path == 4) {
                 if ($path[2] eq "outspend" && $path[3] =~ /^(?:0|[1-9][0-9]*)\z/) {
-                    return $self->http_ok({
-                        spent => $tx->out->[$path[3]]->tx_out ? TRUE : FALSE,
-                        $tx->out->[$path[3]]->tx_out ? (
-                            txid => unpack("H*", $tx->out->[$path[3]]->tx_out),
-                        ) : (),
-                    });
+                    my $out = $tx->out->[$path[3]]
+                        or return $self->http_response(404, "Output not found");
+                    return $self->http_ok(outspend_obj($out));
                 }
                 else {
                     return $self->http_response(404, "Unknown request");
@@ -735,6 +723,20 @@ sub tx_status {
     else {
         return { confirmed => FALSE };
     }
+}
+
+# Spending status of a transaction output (esplora-like): confirmed or mempool
+# spending transaction, if any. Only the confirmation flag is reported in status,
+# it is known from the txo itself; loading the spending transaction is not needed.
+sub outspend_obj {
+    my ($out) = @_;
+    my $spent_by = $out->spent_by
+        or return { spent => FALSE };
+    return {
+        spent  => TRUE,
+        txid   => unpack("H*", $spent_by),
+        status => { confirmed => $out->tx_out ? TRUE : FALSE },
+    };
 }
 
 sub block_by_height {
