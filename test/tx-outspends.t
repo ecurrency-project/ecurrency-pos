@@ -2,7 +2,8 @@
 use warnings;
 use strict;
 
-# Spending transactions for the outputs of a transaction: RPC gettxspendingprevout.
+# Spending transactions for the outputs of a transaction: RPC gettxspendingprevout
+# and REST /api/tx/<txid>/outspends, /api/tx/<txid>/outspend/<vout>.
 # Both confirmed (stored in the database) and mempool spends must be reported,
 # a confirmed spend takes precedence.
 
@@ -11,6 +12,8 @@ use lib ("$Bin/../lib", "$Bin/lib");
 
 use Test::More;
 use Test::MockModule;
+use HTTP::Request;
+use HTTP::Response;
 use Cpanel::JSON::XS;
 use QBitcoin::Test::ORM;
 use QBitcoin::Test::BlockSerialize;
@@ -21,6 +24,7 @@ use QBitcoin::Config;
 use QBitcoin::Block;
 use QBitcoin::TXO;
 use QBitcoin::Transaction;
+use QBitcoin::REST;
 
 $config->{regtest} = 1;
 
@@ -109,5 +113,40 @@ ok(!rpc('gettxspendingprevout'),                                  "missing param
 ok(!rpc('gettxspendingprevout', []),                              "empty list rejected");
 ok(!rpc('gettxspendingprevout', [ { txid => $b } ]),              "missing vout rejected");
 ok(!rpc('gettxspendingprevout', [ { txid => "xx", vout => 0 } ]), "bad txid rejected");
+
+# --- REST ---
+
+my $JSON = Cpanel::JSON::XS->new;
+my $sent;
+my $rest_module = Test::MockModule->new('QBitcoin::REST');
+$rest_module->mock('check_access', sub { undef });
+$rest_module->mock('send', sub { $sent = $_[1]; 0 });
+
+sub req {
+    my ($path) = @_;
+    $sent = undef;
+    my $rest = bless {}, 'QBitcoin::REST';
+    $rest->process_request(HTTP::Request->new(GET => "http://localhost$path"));
+    my $response = HTTP::Response->parse($sent);
+    my $content = ($response->content_type // "") eq "application/json"
+        ? $JSON->decode($response->content) : $response->content;
+    return ($response->code, $content);
+}
+
+my ($code, $res) = req("/api/tx/$a/outspends");
+is($code, 200, "outspends of stored transaction ok");
+is_deeply($res, [ { spent => Cpanel::JSON::XS::true, txid => $b, status => { confirmed => Cpanel::JSON::XS::true } } ],
+    "confirmed spend with status");
+($code, $res) = req("/api/tx/$b/outspends");
+is_deeply($res, [ { spent => Cpanel::JSON::XS::true, txid => $c, status => { confirmed => Cpanel::JSON::XS::false } } ],
+    "mempool spend of a stored output with status");
+($code, $res) = req("/api/tx/$c/outspends");
+is_deeply($res, [ { spent => Cpanel::JSON::XS::false } ], "unspent mempool output");
+($code, $res) = req("/api/tx/$last/outspend/0");
+is_deeply($res, { spent => Cpanel::JSON::XS::false }, "single unspent confirmed output");
+($code, $res) = req("/api/tx/$b/outspend/0");
+is_deeply($res, { spent => Cpanel::JSON::XS::true, txid => $c, status => { confirmed => Cpanel::JSON::XS::false } }, "single spent output");
+($code, $res) = req("/api/tx/$b/outspend/1");
+is($code, 404, "output index out of range");
 
 done_testing();
