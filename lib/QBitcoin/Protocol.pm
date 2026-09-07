@@ -180,8 +180,11 @@ sub cmd_version {
     $self->greeted = 1;
     $self->protocol_version = $protocol_version;
     if ($self->connection->direction == DIR_OUT) {
-        # We reached this peer ourselves: it is confirmed reachable / accepts incoming connections.
-        $self->peer->connect_success();
+        # We reached this peer ourselves, but the handshake is complete only when the peer accepts
+        # our "version" with "verack" (see cmd_verack): it may still answer "reject".
+        # A reachability probe does not wait for "verack" (see QBitcoin::Network::check_probes):
+        # the peer's "version" alone proves it is alive and accepts incoming connections.
+        $self->peer->connect_success() if $self->connection->probe;
     }
     else {
         # Incoming connection: store the peer now that the greeting succeeded (req: do not persist random connects).
@@ -221,6 +224,10 @@ sub cmd_version {
 
 sub cmd_verack {
     my $self = shift;
+    if ($self->connection->direction == DIR_OUT && !$self->connection->probe) {
+        # Outgoing handshake completed: the peer is confirmed reachable (a probe is counted on its "version")
+        $self->peer->connect_success();
+    }
     $self->request_peer_addresses;
     return 0;
 }
@@ -1071,6 +1078,10 @@ sub cmd_pong {
 sub cmd_reject {
     my $self = shift;
     Warningf("%s peer %s aborted connection", $self->type, $self->peer->id);
+    # The peer refused us (typically our "version"): count it as a failed connect so the exponential
+    # backoff (see QBitcoin::Peer::is_connect_allowed) stops us from reconnecting in a tight loop.
+    # Before the greeting Connection::failed() counts the failure itself, do not count it twice.
+    $self->peer->failed_connect() if $self->connection->direction == DIR_OUT && $self->greeted;
     return -1;
 }
 

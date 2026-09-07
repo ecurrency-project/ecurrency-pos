@@ -81,7 +81,7 @@ sub receive {
                 # Reset "syncing" state if we received no commands between send "ping" and receive corresponding "pong"
                 $self->last_cmd_ping = undef;
             }
-            if ($command ne "version" && $command ne "vernak" && !$self->greeted) {
+            if ($command ne "version" && $command ne "vernak" && $command ne "reject" && !$self->greeted) {
                 Errf("command [%s] before greeting from %s peer %s", $command, $self->type, $self->peer->id);
                 $self->abort("protocol_error");
                 return -1;
@@ -89,7 +89,9 @@ sub receive {
             $self->$func($data) == 0
                 or return -1;
             $self->last_recv_time = time();
-            $self->peer->recv_good_command($self->connection->direction);
+            # The peer's "version" alone does not prove a successful outgoing connect (it may still reject ours),
+            # so it must not reset the connect backoff; that is done by "verack", see QBitcoin::Protocol::cmd_verack
+            $self->peer->recv_good_command($self->connection->direction) if $command ne "version";
         }
         else {
             Errf("Unknown command [%s] from %s peer %s", $command, $self->type, $self->peer->id);
