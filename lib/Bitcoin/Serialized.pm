@@ -42,8 +42,7 @@ sub varint {
 
 sub get_varint {
     my $self = shift;
-    my $first = unpack("C", $self->get(1))
-        // return undef;
+    my $first = unpack("C", $self->get(1) // return undef);
     # We do not check if $data has enough data, but if not we will fail on next step, get items
     return $first < 0xFD ? $first :
         $first == 0xFD ? unpack("v", $self->get(2) // return undef) :
