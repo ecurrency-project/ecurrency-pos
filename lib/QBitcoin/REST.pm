@@ -704,11 +704,11 @@ sub response_error {
 }
 
 sub validate_address {
-    $_[0] =~ ADDRESS_RE;
+    defined($_[0]) && $_[0] =~ ADDRESS_RE;
 }
 
 sub validate_txid {
-    $_[0] =~ /^[0-9a-f]{64}\z/;
+    defined($_[0]) && $_[0] =~ /^[0-9a-f]{64}\z/;
 }
 
 sub tx_status {
