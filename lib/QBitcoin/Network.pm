@@ -303,7 +303,7 @@ sub main_loop {
         my @connections = QBitcoin::ConnectionList->list;
         foreach my $connection (@connections) {
             vec($rin, $connection->socket_fileno, 1) = 1 if length($connection->recvbuf) < READ_BUFFER_SIZE && $connection->state != STATE_CONNECTING;
-            vec($win, $connection->socket_fileno, 1) = 1 if $connection->sendbuf || $connection->state == STATE_CONNECTING;
+            vec($win, $connection->socket_fileno, 1) = 1 if length($connection->sendbuf) || $connection->state == STATE_CONNECTING;
         }
 
         $ein = $rin | $win;
