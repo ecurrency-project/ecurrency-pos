@@ -155,6 +155,7 @@ sub reward_addr {
 sub make_out_join {
     my ($reward, $my_txo) = @_;
 
+    @$my_txo or $reward or return ();
     my $my_address;
     if ($config->{sign_alg}) {
         foreach my $sign_alg (split(/\s+/, $config->{sign_alg})) {
@@ -211,6 +212,7 @@ sub make_out_separate {
 
 sub make_out_union {
     my ($reward, $my_txo, $timeslot) = @_;
+    @$my_txo or $reward or return ();
     my @my;
     if (!@$my_txo) {
         # Reward to all stake addresses in equal parts
