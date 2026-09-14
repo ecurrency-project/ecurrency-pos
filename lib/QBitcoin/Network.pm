@@ -119,6 +119,18 @@ sub connect_to {
         or die "socket get fcntl error: $!\n";
     fcntl($socket, F_SETFL, $flags | O_NONBLOCK)
         or die "socket set fcntl error: $!\n";
+    # A non-blocking connect normally returns EINPROGRESS and completes (or fails) later,
+    # reported by select() and SO_ERROR. But it may also fail synchronously, typically with
+    # ENETUNREACH/EHOSTUNREACH when the host has no route to the peer (e.g. an IPv6 peer on a
+    # host that lost its IPv6 connectivity). Such a socket has SO_ERROR == 0 and is reported
+    # writable at once, so it would be mistaken for a connected one; count the failure here so
+    # the backoff (see QBitcoin::Peer::is_connect_allowed) prevents retrying every loop.
+    unless (connect($socket, $paddr) || $!{EINPROGRESS}) {
+        Warningf("Connect to %s peer %s error: %s", $peer->type, $peer->id, $!);
+        close($socket);
+        $peer->failed_connect();
+        return undef;
+    }
     my $connection = QBitcoin::Connection->new(
         peer       => $peer,
         addr       => $peer->ip,
@@ -132,7 +144,6 @@ sub connect_to {
         obj_recv   => 0,
         $opts{probe} ? (probe => 1) : (),
     );
-    connect($socket, $paddr);
     Debugf("Connecting to %s peer %s:%u", $peer->type, $peer->id, $peer->port);
     # do not touch update_time here: it means "last activity of the peer" and anchors the
     # reputation decay; the attempt result is recorded in last_fail_time / last_success_time
@@ -466,9 +477,11 @@ sub main_loop {
                         next;
                     }
                     else {
-                        Warningf("Read error from %s peer %s", $connection->type, $connection->ip);
+                        Warningf("Read error from %s peer %s: %s", $connection->type, $connection->ip, $!);
                     }
-                    $connection->disconnect();
+                    # An outgoing connection broken before the greeting (e.g. reset by the remote
+                    # right after accept) is a failed connect: failed() counts it for the backoff
+                    $connection->failed();
                     next;
                 }
                 if ($n > 0) {
