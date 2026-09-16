@@ -3,7 +3,11 @@ use warnings;
 use strict;
 
 use POSIX qw(:errno_h);
+use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
+use Exporter qw(import);
 use QBitcoin::IP qw(ip_str);
+
+our @EXPORT_OK = qw(socket_set_blocking);
 use QBitcoin::Const;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
@@ -38,6 +42,30 @@ sub new {
     $self->id = $self->protocol->id;
     QBitcoin::ConnectionList->add($self);
     return $self;
+}
+
+# Switch the socket between blocking and non-blocking mode.
+# All sockets of the main loop must be non-blocking: a blocking write(2) on a TCP socket
+# returns only after the whole buffer was copied to the kernel, even if select() reported
+# the socket writable (that only guarantees room for a part of it), so a peer which
+# stopped reading would stall the single-threaded main loop until it reads again or the
+# connection dies. A blocking accept() may also hang if the pending connection was
+# reset between select() and accept(). Note that on Linux an accepted socket does not
+# inherit O_NONBLOCK from the listening one, so it must be set explicitly.
+sub socket_set_blocking {
+    my ($socket, $blocking) = @_;
+    my $flags = fcntl($socket, F_GETFL, 0)
+        or die "socket get fcntl error: $!\n";
+    fcntl($socket, F_SETFL, $blocking ? $flags & ~O_NONBLOCK : $flags | O_NONBLOCK)
+        or die "socket set fcntl error: $!\n";
+    return;
+}
+
+sub set_blocking {
+    my $self = shift;
+    my ($blocking) = @_;
+    socket_set_blocking($self->socket, $blocking) if $self->socket;
+    return;
 }
 
 sub host { $_[0]->peer->host }
@@ -112,15 +140,17 @@ sub send {
         return -1;
     }
     if ($self->sendbuf eq '' && $self->socket) {
+        # The socket is non-blocking: this writes what fits into the kernel buffer at once,
+        # the rest is kept in sendbuf and sent from the main loop when select() allows
         my $n = syswrite($self->socket, $data);
         if (!defined($n)) {
-            if ($! == EAGAIN) {
+            if ($! == EAGAIN || $! == EWOULDBLOCK) {
                 Debugf("Error write to socket: %s", $!);
             }
             else {
                 Warningf("Error write to socket: %s", $!);
             }
-            # May be EAGAIN (Resource temporarily unavailable), save data in savebuf and try to send it later
+            # May be EAGAIN (Resource temporarily unavailable), save data in sendbuf and try to send it later
         }
         elsif ($n > 0) {
             return 0 if $n == length($data);

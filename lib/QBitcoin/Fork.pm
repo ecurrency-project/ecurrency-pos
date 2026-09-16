@@ -110,6 +110,10 @@ sub spawn {
     # and use the connection lent to us from the master's pool (if there was a free one,
     # otherwise the first query in the child opens a fresh connection)
     QBitcoin::ORM::reset_dbh_after_fork($db_entry);
+    # The child has nothing else to do but to write the response, so the socket may block;
+    # the O_NONBLOCK flag lives in the file description shared with the parent, but the
+    # parent has already closed its descriptor of this socket in detach()
+    $connection->set_blocking(1);
     return 1;
 }
 
@@ -119,7 +123,7 @@ sub finish {
     my $class = shift;
     my ($connection) = @_;
 
-    # The accepted socket is blocking, so a plain syswrite loop flushes the rest of the response
+    # The socket was set to blocking mode in spawn(), so a plain syswrite loop flushes the rest of the response
     while ($connection->socket && length($connection->sendbuf)) {
         my $n = syswrite($connection->socket, $connection->sendbuf);
         if (!defined $n) {
