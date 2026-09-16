@@ -49,6 +49,7 @@ $throttle_mock->mock('Warningf', sub {}); # the failure log is not part of the c
     sub new { my $class = shift; return bless { sendbuf => "", port => 12345, @_ }, $class }
     sub detach { close($_[0]->{socket}) if $_[0]->{socket}; $_[0]->{socket} = undef }
     sub disconnect { close($_[0]->{socket}) if $_[0]->{socket}; $_[0]->{socket} = undef }
+    sub set_blocking {} # the test sockets are blocking anyway
 }
 
 sub v4_addr {

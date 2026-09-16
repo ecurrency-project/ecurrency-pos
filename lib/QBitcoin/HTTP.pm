@@ -4,6 +4,7 @@ use strict;
 
 use Cpanel::JSON::XS;
 use Time::HiRes;
+use POSIX qw(:errno_h);
 use Scalar::Util qw(weaken);
 use HTTP::Request;
 use QBitcoin::Const;
@@ -112,10 +113,15 @@ sub send {
     my ($data) = @_;
 
     if ($self->connection->sendbuf eq '' && $self->connection->socket) {
+        # Non-blocking socket in the main process: the part which does not fit into the
+        # kernel buffer at once is kept in sendbuf and sent from the main loop.
+        # In a forked child the socket is blocking and the whole response is written here
         my $n = syswrite($self->connection->socket, $data);
         if (!defined($n)) {
-            Warningf("Error write to socket: %s", $!);
-            return -1;
+            if ($! != EAGAIN && $! != EWOULDBLOCK) {
+                Warningf("Error write to socket: %s", $!);
+                return -1;
+            }
         }
         elsif ($n > 0) {
             if ($n < length($data)) {

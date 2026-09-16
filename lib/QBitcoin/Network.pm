@@ -5,7 +5,7 @@ use feature 'state';
 
 use Time::HiRes;
 use Socket qw(:DEFAULT inet_pton pack_sockaddr_in6 AF_INET6 PF_INET6 IPPROTO_IPV6 IPV6_V6ONLY);
-use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
+use POSIX qw(:errno_h);
 use List::Util qw(min);
 use QBitcoin::Const;
 use QBitcoin::Config;
@@ -13,7 +13,7 @@ use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::IP qw(ip_str ip_port_str parse_addr_port sockaddr_to_ip_port pack_sockaddr_by_ip);
 use QBitcoin::Peer;
-use QBitcoin::Connection;
+use QBitcoin::Connection qw(socket_set_blocking);
 use QBitcoin::ConnectionList;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer last_qbt_data_time);
 use QBitcoin::CheckPoints qw(max_checkpoint_height);
@@ -99,6 +99,10 @@ sub listen_socket {
         or die "bind $addr_str error: $!\n";
     listen($socket, LISTEN_QUEUE)
         or die "Error listen: $!\n";
+    # A blocking accept() may hang until the next connection arrives if the pending one was
+    # reset by the client between select() and accept() (see accept(2)); for a rarely used
+    # RPC/REST port that would stall the main loop for a long time
+    socket_set_blocking($socket, 0);
     Infof("Accepting connections on %s", $addr_str);
     return $socket;
 }
@@ -116,10 +120,7 @@ sub connect_to {
         $peer->failed_connect();
         return undef;
     }
-    my $flags = fcntl($socket, F_GETFL, 0)
-        or die "socket get fcntl error: $!\n";
-    fcntl($socket, F_SETFL, $flags | O_NONBLOCK)
-        or die "socket set fcntl error: $!\n";
+    socket_set_blocking($socket, 0);
     # A non-blocking connect normally returns EINPROGRESS and completes (or fails) later,
     # reported by select() and SO_ERROR. But it may also fail synchronously, typically with
     # ENETUNREACH/EHOSTUNREACH when the host has no route to the peer (e.g. an IPv6 peer on a
@@ -335,7 +336,8 @@ sub main_loop {
         QBitcoin::Fork->reap();
 
         foreach my $listen_socket (grep { vec($rin, fileno($_), 1) == 1 } @listen_socket) {
-            my $peerinfo = accept(my $new_socket, $listen_socket);
+            my $peerinfo = accept_connection($listen_socket, my $new_socket)
+                or next;
             my ($remote_port, $peer_addr) = sockaddr_to_ip_port($peerinfo);
             my $peer_ip = ip_str($peer_addr);
             # Do not reject a duplicate IP here: several nodes behind one NAT address may connect
@@ -386,7 +388,8 @@ sub main_loop {
             }
         }
         foreach my $listen_rpc (grep { vec($rin, fileno($_), 1) == 1 } @listen_rpc) {
-            my $peerinfo = accept(my $new_socket, $listen_rpc);
+            my $peerinfo = accept_connection($listen_rpc, my $new_socket)
+                or next;
             my ($remote_port, $peer_addr) = sockaddr_to_ip_port($peerinfo);
             my $peer_ip = ip_str($peer_addr);
             # Requests handed to forked children are detached from the connection list
@@ -420,7 +423,8 @@ sub main_loop {
             }
         }
         foreach my $listen_rest (grep { vec($rin, fileno($_), 1) == 1 } @listen_rest) {
-            my $peerinfo = accept(my $new_socket, $listen_rest);
+            my $peerinfo = accept_connection($listen_rest, my $new_socket)
+                or next;
             my ($remote_port, $peer_addr) = sockaddr_to_ip_port($peerinfo);
             my $peer_ip = ip_str($peer_addr);
             # Requests handed to forked children are detached from the connection list
@@ -469,7 +473,10 @@ sub main_loop {
             if (vec($rin, $connection->socket_fileno, 1) == 1) {
                 my $n = sysread($connection->socket, my $data, READ_BUFFER_SIZE);
                 if (!defined $n) {
-                    if ($sig_killed) {
+                    if ($! == EAGAIN || $! == EWOULDBLOCK) {
+                        # Spurious readability (e.g. a segment discarded on checksum error), try later
+                    }
+                    elsif ($sig_killed) {
                         Notice("Killed by signal");
                         $connection->disconnect();
                         last;
@@ -481,13 +488,13 @@ sub main_loop {
                     }
                     else {
                         Warningf("Read error from %s peer %s: %s", $connection->type, $connection->ip, $!);
+                        # An outgoing connection broken before the greeting (e.g. reset by the remote
+                        # right after accept) is a failed connect: failed() counts it for the backoff
+                        $connection->failed();
+                        next;
                     }
-                    # An outgoing connection broken before the greeting (e.g. reset by the remote
-                    # right after accept) is a failed connect: failed() counts it for the backoff
-                    $connection->failed();
-                    next;
                 }
-                if ($n > 0) {
+                elsif ($n > 0) {
                     $connection->recvbuf .= $data;
                     $was_traffic = 1;
                 }
@@ -517,16 +524,24 @@ sub main_loop {
                     $connection->protocol->startup();
                     next;
                 }
+                # Non-blocking socket: writes as much as fits into the kernel buffer, the rest waits
+                # for the next select(); a blocking write would stall here until the whole sendbuf
+                # (up to WRITE_BUFFER_SIZE) is accepted, i.e. until the peer reads it all
                 my $n = syswrite($connection->socket, $connection->sendbuf, length($connection->sendbuf));
                 if (!defined $n) {
-                    if ($sig_killed) {
+                    if ($! == EAGAIN || $! == EWOULDBLOCK) {
+                        # Spurious writability, try later
+                    }
+                    elsif ($sig_killed) {
                         Notice("Interrupted by signal");
                         $connection->disconnect();
                         last;
                     }
-                    Warningf("Write error to %s peer %s", $connection->type, $connection->ip);
-                    $connection->failed();
-                    next;
+                    else {
+                        Warningf("Write error to %s peer %s: %s", $connection->type, $connection->ip, $!);
+                        $connection->failed();
+                        next;
+                    }
                 }
                 elsif ($n > 0) {
                     $connection->sendbuf = $n == length($connection->sendbuf) ? "" : substr($connection->sendbuf, $n);
@@ -571,6 +586,25 @@ sub main_loop {
     # Do not let global destruction disconnect a pooled connection which a forked child is still using
     QBitcoin::Fork->close_db_pool();
     return 0;
+}
+
+# accept() on a listening socket reported readable by select(). Returns the packed peer
+# address and sets the accepted socket to non-blocking mode (it is not inherited from the
+# listening socket on Linux). Returns undef if there is nothing to accept after all: the
+# pending connection was reset by the client before we got to it (EAGAIN with a
+# non-blocking listening socket, or ECONNABORTED), or a transient error like EMFILE.
+sub accept_connection {
+    # $_[1] is the caller's socket variable, accept() autovivifies the handle in it
+    my $listen_socket = $_[0];
+    my $peerinfo = accept($_[1], $listen_socket);
+    if (!$peerinfo) {
+        if ($! != EAGAIN && $! != EWOULDBLOCK && $! != ECONNABORTED && $! != EINTR) {
+            Warningf("accept error: %s", $!);
+        }
+        return undef;
+    }
+    socket_set_blocking($_[1], 0);
+    return $peerinfo;
 }
 
 sub set_pinned_peers {
