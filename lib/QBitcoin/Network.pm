@@ -16,6 +16,7 @@ use QBitcoin::Peer;
 use QBitcoin::Connection;
 use QBitcoin::ConnectionList;
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer last_qbt_data_time);
+use QBitcoin::CheckPoints qw(max_checkpoint_height);
 use QBitcoin::Generate;
 use QBitcoin::Coins;
 use QBitcoin::Produce;
@@ -156,15 +157,11 @@ sub main_loop {
 
     local $SIG{PIPE} = 'IGNORE'; # prevent exceptions on write to socket which was closed by remote
 
-    if ($config->{genesis}) {
-        mempool_synced(1);
-        blockchain_synced(1);
-        last_qbt_data_time(time());
-    }
     if (UPGRADE_FINISHED) {
         btc_synced(1);
     }
     # Load last block from database
+    my $height = -1;
     while (my ($block) = QBitcoin::Block->find(-sortby => "height DESC", -limit => 1)) {
         foreach my $tx (@{$block->transactions}) {
             $tx->add_to_cache();
@@ -178,8 +175,14 @@ sub main_loop {
             QBitcoin::Block->max_db_height($block->height - 1);
             next;
         }
-        Debugf("Loaded block height %u", $block->height);
+        $height = $block->height;
+        Debugf("Loaded block height %u", $height);
         last;
+    }
+    if ($config->{genesis} && $height >= max_checkpoint_height()) {
+        mempool_synced(1);
+        blockchain_synced(1);
+        last_qbt_data_time(time());
     }
     # Fill the pubkey column for wallet rows created before it existed (needs the
     # plaintext keys, so it only covers unencrypted rows)
@@ -216,7 +219,7 @@ sub main_loop {
         }
     }
 
-    if ($config->{genesis} && !QBitcoin::Block->blockchain_time) {
+    if ($config->{genesis} && blockchain_synced() && !QBitcoin::Block->blockchain_time) {
         GENESIS_TIME % BLOCK_INTERVAL == 0
             or die "Genesis time " . GENESIS_TIME . " is not a multiple of block interval " . BLOCK_INTERVAL;
         QBitcoin::Generate->generate(GENESIS_TIME);

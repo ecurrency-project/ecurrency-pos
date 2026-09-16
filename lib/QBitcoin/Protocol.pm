@@ -53,6 +53,7 @@ use QBitcoin::BlockchainParams;
 use QBitcoin::Log;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ProtocolState qw(mempool_synced blockchain_synced btc_synced sync_peer last_qbt_data_time);
+use QBitcoin::CheckPoints qw(max_checkpoint_height);
 use QBitcoin::Block;
 use QBitcoin::Transaction;
 use QBitcoin::TXO;
@@ -778,7 +779,7 @@ sub request_new_block {
             }
             $self->syncing(1);
         }
-        elsif (!blockchain_synced() && $best_block) {
+        elsif (!blockchain_synced() && $best_block && $best_block->height >= max_checkpoint_height()) {
             if (timeslot($best_block->time) + FORCE_BLOCKS * BLOCK_INTERVAL >= timeslot(time())) {
                 Infof("Blockchain is synced");
                 blockchain_synced(1);
