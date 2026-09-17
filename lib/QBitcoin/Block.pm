@@ -277,7 +277,7 @@ sub delete_since_height {
         QBitcoin::Coinbase->delete_by(tx_out => \@coinbase_tx_id);
     }
     # Delete blocks from DB in one query (cascades to transactions)
-    $class->delete_by(height => { '>' => $height });
+    $class->delete_by(height => { '>=' => $height });
 }
 
 1;
