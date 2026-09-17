@@ -10,6 +10,8 @@ use QBitcoin::Accessors qw(mk_accessors new);
 use QBitcoin::Config;
 use QBitcoin::ProtocolState qw(skip_scripts);
 use QBitcoin::Transaction;
+use QBitcoin::Coinbase;
+use QBitcoin::CheckPoints qw(max_checkpoint_height);
 use QBitcoin::ValueUpgraded qw(level_by_total upgrade_value);
 use QBitcoin::Crypto qw(hash256);
 use Bitcoin::Block;
@@ -57,7 +59,13 @@ sub branch_height {
 sub self_weight {
     my $self = shift;
     if (!defined $self->{self_weight}) {
-        if (skip_scripts()) {
+        # The weight of a block below the last checkpoint (skip_scripts) or loaded from the
+        # database is taken from its header: the chain there is settled or was verified when
+        # stored, the rules may have changed since (hardfork), and the transactions with their
+        # inputs may be no longer cached. A received block above the checkpoint and a block we
+        # generate (no header weight yet) get the weight from the contents.
+        my $header_weight = skip_scripts() || (!$self->received_from && defined($self->weight));
+        if ($header_weight) {
             my $prev = $self->prev_block_load;
             $self->{self_weight} = $self->weight - ($prev ? $prev->weight : 0);
         }
@@ -94,7 +102,8 @@ sub self_weight {
         else {
             $self->{self_weight} = 0;
         }
-        if (defined($self->{self_weight}) && (timeslot($self->time) - GENESIS_TIME) / BLOCK_INTERVAL % FORCE_BLOCKS == 0) {
+        # The forced block bonus is already a part of the header weight
+        if (!$header_weight && defined($self->{self_weight}) && (timeslot($self->time) - GENESIS_TIME) / BLOCK_INTERVAL % FORCE_BLOCKS == 0) {
             $self->{self_weight} += 1;
         }
     }
@@ -241,8 +250,10 @@ sub reorg_penalty {
 sub delete_since_height {
     my ($class, $height) = @_;
     my $tx_class = 'QBitcoin::Transaction';
+    my @coinbase_tx_id;
     # Load and unconfirm transactions from stored blocks to restore UTXO state
     foreach my $tx_hashref ($tx_class->fetch( block_height => { '>=', $height }, -sortby => 'block_height DESC, block_pos DESC')) {
+        push @coinbase_tx_id, $tx_hashref->{id} if $tx_hashref->{tx_type} == TX_TYPE_COINBASE;
         my $tx = $tx_class->get($tx_hashref->{hash});
         if (!$tx) {
             $tx_class->pre_load($tx_hashref);
@@ -256,6 +267,14 @@ sub delete_since_height {
             $tx->add_to_cache;
         }
         $tx->unconfirm();
+    }
+    # Blocks below the last checkpoint were validated only partially, and so were the coinbase
+    # records of their transactions. Deleting a transaction leaves its record as an unpublished
+    # upgrade (tx_out set to NULL) which our own coinbase transaction would be built from
+    # (Coinbase::get_new): delete such records, a genuine upgrade is stored again with its
+    # transaction received from peers.
+    if (@coinbase_tx_id && $height <= max_checkpoint_height()) {
+        QBitcoin::Coinbase->delete_by(tx_out => \@coinbase_tx_id);
     }
     # Delete blocks from DB in one query (cascades to transactions)
     $class->delete_by(height => { '>' => $height });

@@ -114,7 +114,10 @@ sub receive {
 
     return 0 if $block_pool{$self->hash};
     # $self->prev_block must be already loaded by prev_block_load in QBitcoin::Protocol
-    skip_scripts($self->height <= max_checkpoint_height() ? 1 : 0);
+    # Validation is partial (no script checks) while the best branch is below the last
+    # checkpoint: the chain there is settled by the checkpoint hash, and the rules may have
+    # changed since. Full validation from the checkpoint on, see the switch below.
+    skip_scripts(($HEIGHT // -1) < max_checkpoint_height() ? 1 : 0);
     if (my $err = $self->validate()) {
         Warningf("Incorrect block %s from %s: %s", $self->hash_str, $self->received_from ? $self->received_from->peer->id : "me", $err);
         # Incorrect block
@@ -359,6 +362,19 @@ sub receive {
             my $class = ref($self);
             $class->cleanup_old_blocks();
         }
+    }
+
+    if (skip_scripts() && $HEIGHT >= max_checkpoint_height()) {
+        # The last checkpoint is reached: everything from now on is validated by the current
+        # rules. Blocks and transactions received so far were validated only partially, and
+        # the pending ones (blocks above the checkpoint waiting for their transactions or
+        # ancestors, mempool and pending transactions) may be invalid by the current rules.
+        # Drop them all, they will be received again with the full validation.
+        Infof("Checkpoint height %u reached, full validation from now on", max_checkpoint_height());
+        skip_scripts(0);
+        QBitcoin::Block->drop_all_pending();
+        QBitcoin::Transaction->drop_all_pending();
+        $_->drop() foreach QBitcoin::Transaction->mempool_list();
     }
 
     # Remove transactions with spent inputs from the mempool

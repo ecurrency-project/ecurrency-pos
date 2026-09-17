@@ -238,7 +238,12 @@ sub receive {
         QBitcoin::Generate::Control->generate_new() if blockchain_synced();
     }
 
-    if ($self->up) {
+    if ($self->up && !skip_scripts()) {
+        # Under the partial validation the lock script of the btc output is not checked (see
+        # Coinbase::deserialize), so the record is not stored here: with the transaction dropped
+        # when the checkpoint is reached, Coinbase::get_new would build our own coinbase
+        # transaction from the record, invalid by the current rules. The record of a confirmed
+        # transaction is stored with the transaction (store).
         $self->up->store; # and update $self->up->tx_out here if already stored
     }
 
@@ -518,6 +523,7 @@ sub store {
         $txo->store($self);
     }
     if (my $coinbase = $self->up) {
+        $coinbase->store; # if not stored on receive (partial validation)
         $coinbase->store_published($self);
     }
 }
@@ -799,6 +805,9 @@ sub deserialize {
             $upgrade_level < level_by_total(MAX_VALUE)
                 or return undef;
             $up = deserialize_coinbase($data, $upgrade_level) // return undef;
+            # Below the last checkpoint the lock script is not checked (see Coinbase::deserialize),
+            # take the scripthash from the transaction output as the full validation would require
+            $up->scripthash = $output[0]->{scripthash} if skip_scripts() && $up->scripthash eq ZERO_HASH && @output;
         }
         else {
             $up = unpack("Q<", $data->get(8) // return undef);
@@ -1804,11 +1813,11 @@ sub min_tx_block_height {
 sub drop_all_pending {
     my $class = shift;
     my ($connection) = @_;
-
+    # without $connection: drop all pending transactions
     foreach my $tx_hash (keys %PENDING_TX_INPUT) {
         my $tx = $PENDING_TX_INPUT{$tx_hash}
             or next;
-        if ($tx->received_from_peer && $tx->received_from->peer->id eq $connection->peer->id) {
+        if (!$connection || $tx->received_from_peer && $tx->received_from->peer->id eq $connection->peer->id) {
             $tx->drop();
         }
     }

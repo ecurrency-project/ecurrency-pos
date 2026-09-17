@@ -187,10 +187,14 @@ sub load_transactions {
 sub drop_all_pending {
     my $class = shift;
     my ($connection) = @_;
-
+    # without $connection: drop all pending blocks
     foreach my $block_hash (keys %PENDING_BLOCK) {
         my $block = $PENDING_BLOCK{$block_hash}
             or next; # already dropped?
+        if (!$connection) {
+            $block->drop_pending();
+            next;
+        }
         $block->received_from->peer->id eq $connection->peer->id
             or next;
         # Do not drop a block which has a pending ancestor (not necessarily direct)
