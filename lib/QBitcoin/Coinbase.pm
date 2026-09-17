@@ -12,7 +12,7 @@ use QBitcoin::BlockchainParams;
 use QBitcoin::ORM qw(:types dbh find fetch delete_by for_log DEBUG_ORM);
 use QBitcoin::Crypto qw(hash160 hash256);
 use QBitcoin::Address qw(script_by_pubkey);
-use QBitcoin::ProtocolState qw(btc_synced);
+use QBitcoin::ProtocolState qw(btc_synced skip_scripts);
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 use QBitcoin::RedeemScript;
 use QBitcoin::ValueUpgraded qw(upgrade_value);
@@ -367,8 +367,19 @@ sub deserialize {
     }
     my $scripthash = $class->get_scripthash($transaction, $btc_out_num);
     if (!$scripthash) {
-        Warningf("Incorrect btc upgrade transaction %s output open_script", $transaction->hash_str);
-        return undef unless $config->{fake_coinbase};
+        if (skip_scripts()) {
+            # Below the last checkpoint the lock script may differ from the current one
+            # (changed by a hardfork), and the chain there is settled by the checkpoint hash.
+            # Transaction::deserialize replaces the zero scripthash with the one of the
+            # transaction output; what is not confirmed when the checkpoint is reached is
+            # dropped and received again with the full validation.
+            Debugf("Btc upgrade transaction %s output open_script does not match the current lock script, accepted below the checkpoint",
+                $transaction->hash_str);
+        }
+        else {
+            Warningf("Incorrect btc upgrade transaction %s output open_script", $transaction->hash_str);
+            return undef unless $config->{fake_coinbase};
+        }
         $scripthash = ZERO_HASH;
     }
 
