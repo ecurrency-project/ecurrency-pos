@@ -29,6 +29,7 @@ use constant MAINNET => {
     CHECKPOINTS        => {
         # height => pack('H*', "block_hash_hex"),
         1000000 => pack("H*", "17f97cf4a7bda6c31379e185a314fc6e47d6c4987b0f7bc4816c69420537c668"),
+        2000000 => pack("H*", "4f42722bc2c4e2faf3b7654a693019470a450f2443a955a20eab5ece19b10afa"),
     },
 };
 use constant TESTNET => {
@@ -56,6 +57,7 @@ use constant TESTNET => {
     SIGN_TOKEN_HASH_START => 1788220800, # 2026-09-01
     CHECKPOINTS        => {
         150000 => pack("H*", "be4125eb25b4e527f3b87108245ddd6c18875c15b8b6451502b03d8f5eb54667"),
+        350000 => pack("H*", "ad6fdbefa34542586f093a0b29c526f4ab7de838bec2a9d97690da60516b418b"),
     },
 };
 use constant REGTEST => {
