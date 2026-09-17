@@ -95,14 +95,7 @@ sub check_tx_signature {
     my $sighash_type = unpack('C', $signature);
     my $sign_data = $tx->sign_data($input_num, $sighash_type)
         or return 0;
-    my $res = check_sig($sign_data, substr($signature, 1), $pubkey);
-    if (!$res && $tx->is_tokens && (time() < SIGN_TOKEN_HASH_START + BLOCK_INTERVAL*FORCE_BLOCKS || !blockchain_synced())) {
-        $sign_data = $tx->sign_data_legacy($input_num, $sighash_type)
-            or return 0;
-        $res = check_sig($sign_data, substr($signature, 1), $pubkey);
-        $tx->legacy_signature(1) if $res;
-    }
-    return $res;
+    return check_sig($sign_data, substr($signature, 1), $pubkey);
 }
 
 1;
