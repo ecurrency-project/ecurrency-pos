@@ -15,7 +15,7 @@ use POSIX qw(WNOHANG);
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::Log;
-use QBitcoin::ORM ();
+use QBitcoin::ORM qw(db_pool_take db_pool_loaned db_pool_returned db_pool_maintain db_pool_close reset_dbh_after_fork disconnect_dbh);
 use QBitcoin::ConnectionList;
 use QBitcoin::Password::Throttle qw(throttle_key throttle_failure);
 
@@ -79,7 +79,7 @@ sub spawn {
         return undef;
     }
     # Reserve the connection before fork(): the master must know which one belongs to the child
-    my $db_entry = QBitcoin::ORM::db_pool_take();
+    my $db_entry = db_pool_take();
     my $pid = fork();
     if (!defined $pid) {
         Warningf("Cannot fork request handler: %s, process request inline", $!);
@@ -87,14 +87,14 @@ sub spawn {
         return undef;
     }
     if ($pid) {
-        QBitcoin::ORM::db_pool_loaned($db_entry, $pid) if $db_entry;
+        db_pool_loaned($db_entry, $pid) if $db_entry;
         $CHILDREN{$pid} = {
             type_id => $connection->type_id,
             key     => throttle_key($connection->addr),
             ip      => $connection->ip,
         };
         $connection->detach();
-        $class->register_worker($pid, \&QBitcoin::ORM::db_pool_returned);
+        $class->register_worker($pid, \&db_pool_returned);
         return 0;
     }
     $IS_CHILD = 1;
@@ -109,7 +109,7 @@ sub spawn {
     # The inherited database handle belongs to the parent; drop it without disconnect
     # and use the connection lent to us from the master's pool (if there was a free one,
     # otherwise the first query in the child opens a fresh connection)
-    QBitcoin::ORM::reset_dbh_after_fork($db_entry);
+    reset_dbh_after_fork($db_entry);
     # The child has nothing else to do but to write the response, so the socket may block;
     # the O_NONBLOCK flag lives in the file description shared with the parent, but the
     # parent has already closed its descriptor of this socket in detach()
@@ -138,7 +138,7 @@ sub finish {
     # lent from the master's pool is marked InactiveDestroy and is left open: the master
     # keeps its own descriptor of the same socket, so closing ours on exit is invisible
     # to the server, and the master lends the connection to the next child
-    QBitcoin::ORM::disconnect_dbh();
+    disconnect_dbh();
     POSIX::_exit($AUTH_FAILURE ? EXIT_AUTH_FAILURE : 0);
 }
 
@@ -165,7 +165,7 @@ sub worker_child_init {
     # Plain close of our copies of the descriptors; shutdown() would act on the shared
     # file descriptions and break the parent's connections
     close($_->socket) foreach grep { $_->socket } QBitcoin::ConnectionList->list;
-    QBitcoin::ORM::reset_dbh_after_fork();
+    reset_dbh_after_fork();
 }
 
 # Called periodically from the main loop; no global SIGCHLD handler to avoid
@@ -192,13 +192,13 @@ sub reap {
 # connections for the next requests, keep the open ones alive and release the extra ones
 sub maintain_db_pool {
     my $class = shift;
-    QBitcoin::ORM::db_pool_maintain(enabled() ? db_pool_size() : 0);
+    db_pool_maintain(enabled() ? db_pool_size() : 0);
 }
 
 # Called on shutdown, while the pooled connections still may be in use by children
 sub close_db_pool {
     my $class = shift;
-    QBitcoin::ORM::db_pool_close();
+    db_pool_close();
 }
 
 1;

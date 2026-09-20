@@ -20,7 +20,11 @@ use constant DB_TYPES;
 use constant DEBUG_ORM => 0;
 
 use parent 'Exporter';
-our @EXPORT_OK = qw(dbh find fetch create replace update delete delete_by IGNORE DEBUG_ORM for_log wal_checkpoint_truncate db_alive db_failed mark_db_failed);
+our @EXPORT_OK = qw(dbh find fetch create replace update delete delete_by);
+push @EXPORT_OK, qw(IGNORE DEBUG_ORM for_log wal_checkpoint_truncate);
+push @EXPORT_OK, qw(db_alive db_failed mark_db_failed);
+push @EXPORT_OK, qw(db_pool_take db_pool_loaned db_pool_release db_pool_returned db_pool_maintain db_pool_close db_pool_stats);
+push @EXPORT_OK, qw(reset_dbh_after_fork disconnect_dbh);
 push @EXPORT_OK, keys %{&DB_TYPES};
 our %EXPORT_TAGS = ( types => [ keys %{&DB_TYPES} ] );
 
