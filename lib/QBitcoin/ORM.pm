@@ -20,7 +20,7 @@ use constant DB_TYPES;
 use constant DEBUG_ORM => 0;
 
 use parent 'Exporter';
-our @EXPORT_OK = qw(dbh find fetch create replace update delete delete_by IGNORE DEBUG_ORM for_log wal_checkpoint_truncate);
+our @EXPORT_OK = qw(dbh find fetch create replace update delete delete_by IGNORE DEBUG_ORM for_log wal_checkpoint_truncate db_alive db_failed mark_db_failed);
 push @EXPORT_OK, keys %{&DB_TYPES};
 our %EXPORT_TAGS = ( types => [ keys %{&DB_TYPES} ] );
 
@@ -58,9 +58,32 @@ my @DB_POOL;   # idle pre-opened connections, [ { dbh => $handle, checked => $ti
 my %DB_LOANED; # pid of a forked child => connection entry currently used by that child
 my $POOL_WANTED = 0; # number of connections the observed request rate needs
 my $POOL_RETRY_AT = 0;
+my $DB_FAILED; # message of an unrecoverable database error, see mark_db_failed()
 
 sub dbh {
     return $dbh //= _connect();
+}
+
+# Record an error after which the connection cannot be trusted anymore: a failed rollback
+# (see QBitcoin::ORM::Transaction) may leave the transaction open on the server with its
+# partial changes, and nothing tells whether the following statements ever commit.
+# The process must not go on working with the database after that; the main process dies
+# on the next check (QBitcoin::HTTP::receive), outside the request handlers no exception is
+# caught at all and the original error terminates it
+sub mark_db_failed {
+    my ($error) = @_;
+    $DB_FAILED //= $error;
+    return;
+}
+
+sub db_failed {
+    return $DB_FAILED;
+}
+
+sub db_alive {
+    return 0 if defined $DB_FAILED;
+    return 1 unless $dbh; # nothing to check, the next use opens a new connection
+    return eval { $dbh->ping } ? 1 : 0;
 }
 
 sub _connect {
