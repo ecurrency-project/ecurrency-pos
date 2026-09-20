@@ -14,6 +14,7 @@ use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::Block;
 use QBitcoin::Generate;
 use QBitcoin::Fork;
+use QBitcoin::ORM qw(db_alive db_failed);
 use QBitcoin::Password::Throttle qw(throttle_key throttle_delay throttle_failure throttle_success);
 
 use constant ATTR => qw(
@@ -66,9 +67,17 @@ sub receive {
     if ($@) {
         my $error = "$@";
         $error =~ s/\s+$//s;
+        if (!QBitcoin::Fork->is_child && !db_alive()) {
+            Critf("Database connection is lost, exiting: %s", $error);
+            die "$error\n";
+        }
         Errf("process_http exception: %s", $error);
         $self->response_error("Internal error", ERR_INTERNAL_ERROR);
         $res = -1;
+    }
+    elsif (!QBitcoin::Fork->is_child && defined(my $db_error = db_failed())) {
+        Critf("Database connection is broken, exiting: %s", $db_error);
+        die "$db_error\n";
     }
     QBitcoin::Fork->finish($self->connection) if QBitcoin::Fork->is_child;
     return $res;
