@@ -41,12 +41,16 @@ my %HELP;
 my %SENSITIVE; # commands whose params must not be logged in plaintext (e.g. passwords)
 my %READONLY;  # commands which do not modify in-memory or database state
 my %REQUIRE_PASSWORD; # commands gated by the wallet password (when one is set), see QBitcoin::RPC::process_request
+my @GROUPS; # documentation groups in display order, see bin/qbitcoin-rpc-doc
+my %GROUP;  # command => group
 
 sub params            { $PARAMS{$_[1]}           }
 sub help              { $HELP{$_[1]}             }
 sub sensitive         { $SENSITIVE{$_[1]}        }
 sub readonly          { $READONLY{$_[1]}         }
 sub requires_password { $REQUIRE_PASSWORD{$_[1]} }
+sub group             { $GROUP{$_[1]}            }
+sub groups            { @GROUPS                  }
 
 # Read-only commands may be processed in a forked child in parallel with the main
 # process (see QBitcoin::Fork). Do not mark a command here if it modifies mempool,
@@ -92,6 +96,88 @@ $READONLY{$_} = 1 foreach qw(
     gettokensreceived
     gettokensinfo
 );
+
+# Command groups for the generated API documentation (bin/qbitcoin-rpc-doc);
+# every command must belong to exactly one group
+foreach my $group (
+    [ "Control" => qw(
+        help
+        ping
+    ) ],
+    [ "Blockchain" => qw(
+        getbestblockhash
+        getblock
+        getblockchaininfo
+        getblockcount
+        getblockhash
+        getblockheader
+        getblockstats
+        getchaintxstats
+        getindexinfo
+        getmempoolentry
+        getmempoolinfo
+        getrawmempool
+        gettxspendingprevout
+    ) ],
+    [ "Raw transactions" => qw(
+        createrawtransaction
+        decoderawtransaction
+        getrawtransaction
+        sendrawtransaction
+        signrawtransactionwithkey
+    ) ],
+    [ "Address" => qw(
+        getaddressbalance
+        getaddressinfo
+        getreceivedbyaddress
+        listtransactions
+        listunspent
+    ) ],
+    [ "Tokens" => qw(
+        gettokensbalance
+        gettokensinfo
+        gettokensreceived
+    ) ],
+    [ "Wallet" => qw(
+        dumpprivkey
+        getbalance
+        getnewaddress
+        getwalletinfo
+        importaddress
+        importprivkey
+        listmyaddresses
+        setaddresstag
+        setwalletpassword
+        walletlock
+        walletunlock
+    ) ],
+    [ "Staking" => qw(
+        adddelegationaddress
+        createdelegationaddress
+        dumpstakingkey
+        getnewstakingkey
+        importstakingkey
+        listdelegations
+        liststakingkeys
+        removedelegationaddress
+        stakeaddress
+        unstakeaddress
+    ) ],
+    [ "Network" => qw(
+        getnetworkinfo
+        getpeerinfo
+        listpeers
+        resetpeer
+    ) ],
+    [ "Util" => qw(
+        estimatesmartfee
+        validateaddress
+    ) ],
+) {
+    my ($name, @commands) = @$group;
+    push @GROUPS, $name;
+    $GROUP{$_} = $name foreach @commands;
+}
 
 $PARAMS{ping} = "";
 $HELP{ping} = qq(
@@ -377,8 +463,6 @@ sub cmd_getblockhash {
 
 $PARAMS{getrawtransaction} = "txid verbose?";
 $HELP{getrawtransaction} = qq(
-getrawtransaction "txid" ( verbose )
-
 Return the raw transaction data.
 
 If verbose is 'true', returns an Object with information about 'txid'.
@@ -460,8 +544,6 @@ sub cmd_getrawtransaction {
 
 $PARAMS{gettxspendingprevout} = "outputs/inputs";
 $HELP{gettxspendingprevout} = qq(
-gettxspendingprevout [{"txid":"hex","vout":n},...]
-
 Scans for transactions spending the given outputs.
 Unlike Bitcoin Core, which checks the mempool only, both the blockchain and
 the mempool are scanned; a confirmed spending transaction takes precedence
@@ -512,8 +594,6 @@ sub cmd_gettxspendingprevout {
 
 $PARAMS{createrawtransaction} = "inputs outputs";
 $HELP{createrawtransaction} = qq(
-createrawtransaction [{"txid":"hex","vout":n},...] [{"address":amount},...]
-
 Create a transaction spending the given inputs and creating new outputs.
 Outputs can be addresses or data.
 Returns hex-encoded raw transaction.
@@ -589,8 +669,6 @@ sub cmd_createrawtransaction {
 
 $PARAMS{sendrawtransaction} = "hexstring";
 $HELP{sendrawtransaction} = qq(
-sendrawtransaction "hexstring"
-
 Submit a raw transaction (serialized, hex-encoded) to local node and network.
 
 Also see createrawtransaction and signrawtransactionwithkey calls.
@@ -649,8 +727,6 @@ sub cmd_sendrawtransaction {
 $SENSITIVE{signrawtransactionwithkey} = 1;
 $PARAMS{signrawtransactionwithkey} = "hexstring privatekeys replace?";
 $HELP{signrawtransactionwithkey} = qq(
-signrawtransactionwithkey "hexstring" ["privatekey",...] ( replace )
-
 Sign inputs for raw transaction (serialized, hex-encoded).
 The second argument is an array of base58-encoded private
 keys that will be the only keys used to sign the transaction.
@@ -788,8 +864,6 @@ sub max_fee_per_kb {
 
 $PARAMS{decoderawtransaction} = "hexstring";
 $HELP{decoderawtransaction} = qq(
-decoderawtransaction "hexstring"
-
 Return a JSON object representing the serialized, hex-encoded transaction.
 
 Arguments:
@@ -839,8 +913,6 @@ sub cmd_decoderawtransaction {
 
 $PARAMS{getmempoolinfo} = "";
 $HELP{getmempoolinfo} = qq(
-getmempoolinfo
-
 Returns details on the active state of the TX memory pool.
 
 Result:
@@ -867,8 +939,6 @@ sub cmd_getmempoolinfo {
 
 $PARAMS{getrawmempool} = "verbose?";
 $HELP{getrawmempool} = qq(
-getrawmempool ( verbose )
-
 Returns all transaction ids in memory pool as a json array of string transaction ids.
 
 Arguments:
@@ -903,8 +973,6 @@ sub cmd_getrawmempool {
 
 $PARAMS{validateaddress} = "address";
 $HELP{validateaddress} = qq(
-validateaddress "address"
-
 Return information about the given qbitcoin address.
 
 Arguments:
@@ -936,7 +1004,6 @@ sub cmd_validateaddress {
 
 $PARAMS{getnetworkinfo} = "";
 $HELP{getnetworkinfo} = qq(
-getnetworkinfo
 Returns an object containing various state info regarding P2P networking.
 
 Result:
@@ -991,8 +1058,6 @@ sub cmd_getnetworkinfo {
 # Just to satisfy btc explorer
 $PARAMS{getindexinfo} = "";
 $HELP{getindexinfo} = qq(
-getindexinfo
-
 Returns the status of all available indices currently running in the node.
 
 Result:
@@ -1018,8 +1083,6 @@ sub cmd_getindexinfo {
 
 $PARAMS{getchaintxstats} = "nblocks? blockhash?";
 $HELP{getchaintxstats} = qq(
-getchaintxstats ( nblocks "blockhash" )
-
 Compute statistics about the total number and rate of transactions in the chain.
 
 Arguments:
@@ -1075,8 +1138,6 @@ sub cmd_getchaintxstats {
 
 $PARAMS{getblockstats} = "hash_or_height";
 $HELP{getblockstats} = qq(
-getblockstats hash_or_height
-
 Compute per block statistics for a given window. All amounts are in satoshis.
 
 Arguments:
@@ -1171,8 +1232,6 @@ sub cmd_getblockstats {
 
 $PARAMS{getmempoolentry} = "txid verbose?";
 $HELP{getmempoolentry} = qq(
-getmempoolentry "txid"
-
 Returns mempool data for given transaction
 
 Arguments:
@@ -1201,8 +1260,6 @@ sub cmd_getmempoolentry {
 $SENSITIVE{importprivkey} = 1;
 $PARAMS{importprivkey} = "privkey address_type?";
 $HELP{importprivkey} = qq(
-importprivkey "privkey" ( address_type )
-
 Adds a private key (as returned by dumpprivkey) to your wallet.
 
 A delegation owner key (as returned by getnewaddress with delegate_pubkeyhash)
@@ -1285,8 +1342,6 @@ sub cmd_importprivkey {
 
 $PARAMS{importaddress} = "address tag?";
 $HELP{importaddress} = qq(
-importaddress "address" [ "tag" ]
-
 Adds a watch-only address to the wallet.
 Transactions to this address will be tracked and generate notifications
 if a notification channel is configured.
@@ -1330,8 +1385,6 @@ sub cmd_importaddress {
 
 $PARAMS{getnewstakingkey} = "address_type?";
 $HELP{getnewstakingkey} = qq(
-getnewstakingkey ( address_type )
-
 Creates a new staking key for delegated staking and stores it in the wallet.
 A staking key can only sign the stake branch of a delegation covenant; it
 never controls money. Publish the returned pubkeyhash: an owner builds a
@@ -1368,8 +1421,6 @@ sub cmd_getnewstakingkey {
 $SENSITIVE{importstakingkey} = 1;
 $PARAMS{importstakingkey} = "privkey address_type?";
 $HELP{importstakingkey} = qq(
-importstakingkey "privkey" ( address_type )
-
 Adds a staking key for delegated staking (as returned by dumpstakingkey) to
 the wallet. See getnewstakingkey.
 
@@ -1436,8 +1487,6 @@ sub _store_staking_key {
 $PARAMS{dumpstakingkey} = "staking_pubkeyhash/pubkeyhash";
 $REQUIRE_PASSWORD{dumpstakingkey} = 1;
 $HELP{dumpstakingkey} = qq(
-dumpstakingkey "staking_pubkeyhash"
-
 Reveals the staking private key for the given staking pubkeyhash.
 Then the importstakingkey can be used with this output.
 Enabled by 'allow_dumpprivkey' config option.
@@ -1478,8 +1527,6 @@ sub cmd_dumpstakingkey {
 
 $PARAMS{liststakingkeys} = "";
 $HELP{liststakingkeys} = qq(
-liststakingkeys
-
 Returns the list of the wallet staking keys for delegated staking.
 
 Result:
@@ -1510,8 +1557,6 @@ sub cmd_liststakingkeys {
 
 $PARAMS{createdelegationaddress} = "owner_pubkeyhash/pubkeyhash staking_pubkeyhash/pubkeyhash";
 $HELP{createdelegationaddress} = qq(
-createdelegationaddress "owner_pubkeyhash" "staking_pubkeyhash"
-
 Computes the delegated-staking address for the given owner and delegate
 pubkeyhashes. Stateless: does not touch the wallet; use it to verify that
 both sides derived the same address.
@@ -1541,8 +1586,6 @@ sub cmd_createdelegationaddress {
 
 $PARAMS{adddelegationaddress} = "owner_pubkeyhash/pubkeyhash staking_pubkeyhash/pubkeyhash?";
 $HELP{adddelegationaddress} = qq(
-adddelegationaddress "owner_pubkeyhash" ( "staking_pubkeyhash" )
-
 Registers a delegated-staking address on this (delegate) node: the address is
 built from the owner pubkeyhash and a wallet staking key, and its coins are
 staked by this node from now on. The staking key can only return the full
@@ -1590,8 +1633,6 @@ sub cmd_adddelegationaddress {
 
 $PARAMS{removedelegationaddress} = "address";
 $HELP{removedelegationaddress} = qq(
-removedelegationaddress "address"
-
 Stops staking the given delegated-staking address on this node and removes it
 from the wallet. The owner keeps full control of the coins; they just stop
 being staked here.
@@ -1616,8 +1657,6 @@ sub cmd_removedelegationaddress {
 
 $PARAMS{listdelegations} = "";
 $HELP{listdelegations} = qq(
-listdelegations
-
 Returns the list of the delegated-staking addresses staked by this node.
 
 Result:
@@ -1646,8 +1685,6 @@ sub cmd_listdelegations {
 
 $PARAMS{setaddresstag} = "address tag?";
 $HELP{setaddresstag} = qq(
-setaddresstag "address" [ "tag" ]
-
 Sets or clears the tag for an address in the wallet.
 If tag is empty or omitted, the tag is cleared.
 
@@ -1685,8 +1722,6 @@ sub cmd_setaddresstag {
 $PARAMS{dumpprivkey} = "address";
 $REQUIRE_PASSWORD{dumpprivkey} = 1;
 $HELP{dumpprivkey} = qq(
-dumpprivkey "address"
-
 Reveals the private key corresponding to 'address'.
 Then the importprivkey can be used with this output
 
@@ -1849,8 +1884,6 @@ sub cmd_listpeers {
 
 $PARAMS{resetpeer} = "node";
 $HELP{resetpeer} = qq(
-resetpeer "node"
-
 Reset the failed-connects counter and backoff for the given known peer,
 so a new outgoing connection to the peer may be initiated on the next
 connection round if all other conditions are met (see listpeers).
@@ -2092,8 +2125,6 @@ sub cmd_listtransactions {
 
 $PARAMS{listmyaddresses} = "include_watchonly?";
 $HELP{listmyaddresses} = qq(
-listmyaddresses ( include_watchonly )
-
 Returns the list of addresses in the wallet.
 
 Arguments:
@@ -2154,8 +2185,6 @@ sub cmd_listmyaddresses {
 
 $PARAMS{getaddressinfo} = "address";
 $HELP{getaddressinfo} = qq(
-getaddressinfo "address"
-
 Return information about the given qbitcoin address.
 Some of the information is present only if the address is in the wallet
 (see listmyaddresses).
@@ -2225,8 +2254,6 @@ sub cmd_getaddressinfo {
 
 $PARAMS{getbalance} = "minconf?";
 $HELP{getbalance} = qq(
-getbalance ( minconf )
-
 Returns total balance of the addresses in the wallet with at least minconf confirmations.
 
 Result:
@@ -2263,8 +2290,6 @@ sub cmd_getbalance {
 
 $PARAMS{getnewaddress} = "address_type? delegate_pubkeyhash/pubkeyhash?";
 $HELP{getnewaddress} = qq(
-getnewaddress ( address_type delegate_pubkeyhash )
-
 Returns a new qbitcoin address and private key.
 Private key is not stored in the wallet and can be imported using importprivkey.
 
@@ -2317,8 +2342,6 @@ sub cmd_getnewaddress {
 
 $PARAMS{estimatesmartfee} = "conf_target estimate_mode?";
 $HELP{estimatesmartfee} = qq(
-estimatesmartfee conf_target ( "estimate_mode" )
-
 Estimates the approximate fee per kilobyte needed for a transaction to begin
 confirmation within conf_target blocks if possible.
 
@@ -2360,8 +2383,6 @@ sub cmd_estimatesmartfee {
 
 $PARAMS{stakeaddress} = "address";
 $HELP{stakeaddress} = qq(
-stakeaddress address
-
 Set address to be used for staking (block validation).
 
 WARNING: an address must be staked on exactly ONE node. If the same private key
@@ -2405,8 +2426,6 @@ sub cmd_stakeaddress {
 
 $PARAMS{unstakeaddress} = "address";
 $HELP{unstakeaddress} = qq(
-unstakeaddress address
-
 Disable staking (block validation) by this address.
 
 Arguments:
