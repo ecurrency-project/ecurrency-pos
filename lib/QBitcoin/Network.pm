@@ -639,7 +639,7 @@ sub set_pinned_peers {
     $_->update(hidden => 0) foreach values %hidden_qbtc;
 
     if (!UPGRADE_FINISHED) {
-        my %pinned_btc = map { $_->ip => $_ } grep { $_->pinned } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN);
+        my %btc_peers = map { $_->ip => $_ } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN);
         foreach my $peer_host ($config->get_all('btcnode')) {
             my @peers = QBitcoin::Peer->get_or_create(
                 host    => $peer_host,
@@ -647,9 +647,9 @@ sub set_pinned_peers {
                 pinned  => 1,
             )
                 or next;
-            delete @pinned_btc{ map { $_->ip } @peers };
+            delete @btc_peers{ map { $_->ip } @peers };
         }
-        $_->update(pinned => 0) foreach values %pinned_btc;
+        $_->remove() foreach values %btc_peers;
     }
 }
 
@@ -721,7 +721,7 @@ sub check_sync_peer {
 
 sub call_btc_peers {
     return if UPGRADE_FINISHED;
-    my @peers = grep { $_->is_connect_allowed } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN)
+    my @peers = grep { $_->pinned && $_->is_connect_allowed } QBitcoin::Peer->get_all(PROTOCOL_BITCOIN)
         or return;
     foreach my $peer (@peers) {
         connect_to($peer);
