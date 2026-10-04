@@ -78,9 +78,13 @@ sub apply_file {
     local $/ = ";\n";
     while (my $statement = <$fh>) {
         if ($dbms_name eq "SQLite") {
+            $statement =~ s/^--\s*sqlite:\s*//mg;
             $statement =~ s/\bauto_increment\b//gi;
             $statement =~ s/\blongblob\b/blob/gi;
         }
+        # Skip chunks containing only comments (e.g. sqlite-only statements when applied to another DBMS)
+        (my $code = $statement) =~ s/--[^\n]*//g;
+        next unless $code =~ /\S/;
         $dbh->do($statement)
             or die "Can't execute statement: $statement: " . $dbh->errstr . "\n";
     }

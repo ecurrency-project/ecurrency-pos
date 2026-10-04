@@ -28,6 +28,9 @@ CREATE TABLE `transaction` (
 );
 CREATE UNIQUE INDEX `tx_hash` ON `transaction` (hash);
 CREATE UNIQUE INDEX `tx_block_height_pos` ON `transaction` (block_height, block_pos);
+-- Lines starting with "-- sqlite: " are applied only for sqlite (see bin/qbitcoin-init); mysql creates
+-- indexes for foreign keys implicitly, sqlite does not.
+-- sqlite: CREATE INDEX `tx_token_id` ON `transaction` (token_id) WHERE token_id IS NOT NULL;
 
 -- Actually these are qbt addresses
 CREATE TABLE `redeem_script` (
@@ -51,6 +54,7 @@ CREATE TABLE `txo` (
   FOREIGN KEY (scripthash) REFERENCES `redeem_script` (id) ON DELETE RESTRICT
 );
 CREATE INDEX `tx_out` ON `txo` (tx_out, scripthash);
+-- sqlite: CREATE INDEX `txo_scripthash_in` ON `txo` (scripthash, tx_in);
 
 -- Equivocation evidence of a TX_TYPE_SLASHING transaction (two stake proofs), kept so
 -- a stored slashing transaction can be rebuilt from the database
@@ -135,6 +139,7 @@ CREATE TABLE `coinbase` (
   FOREIGN KEY (scripthash)       REFERENCES `redeem_script` (id)     ON DELETE RESTRICT
 );
 CREATE INDEX `coinbase_tx_out` ON `coinbase` (tx_out);
+-- sqlite: CREATE INDEX `coinbase_btc_block_height` ON `coinbase` (btc_block_height);
 
 CREATE TABLE `peer` (
   type_id smallint unsigned NOT NULL,
