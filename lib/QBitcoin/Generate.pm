@@ -245,6 +245,37 @@ sub make_out_union {
     return @out;
 }
 
+# Upper bound for the stake transaction size. A function (not the constant
+# inline) so that tests can lower it
+sub max_stake_tx_size { MAX_TX_SIZE }
+
+# Order the stakeable UTXOs by their stake weight (value * age, see
+# Transaction::stake_weight) heaviest first, and cut the list to the
+# max_stake_inputs config option when set. A node staking many delegated
+# addresses cannot spend every UTXO in every block: the stake transaction
+# would outgrow the size limit (post-quantum signatures are kilobytes each).
+# Taking the heaviest ones loses the least block weight; a small UTXO is not
+# starved, its age grows until it outweighs the big ones staked (and so
+# renewed) in every block. Deterministic order: the two make_stake_tx calls
+# per block (size probe and the real stake) must choose the same inputs.
+sub select_stake_inputs {
+    my ($my_txo, $timeslot) = @_;
+    my $time = $timeslot // timeslot(time());
+    my @sorted = map { $_->[0] }
+        sort { $b->[1] <=> $a->[1] || $b->[0]->value <=> $a->[0]->value || $a->[0]->key cmp $b->[0]->key }
+        map {
+            my $value = $_->value; # prevent conversion to float in case of large value
+            [ $_, $value * ($time - (QBitcoin::Transaction->txo_time($_) // $time)) ]
+        } @$my_txo;
+    if (my $limit = $config->{max_stake_inputs}) {
+        if (@sorted > $limit) {
+            Debugf("Stake %u heaviest UTXO of %u (max_stake_inputs)", $limit, scalar(@sorted));
+            splice(@sorted, $limit);
+        }
+    }
+    return @sorted;
+}
+
 sub make_stake_tx {
     my ($reward, $block_sign_data, $timeslot, $prev_height) = @_;
     # Delegations registered from the chain since the last stake (see
@@ -277,6 +308,30 @@ sub make_stake_tx {
         return undef;
     }
 
+    @my_txo = select_stake_inputs(\@my_txo, $timeslot);
+    my $tx = build_stake_tx($reward, $block_sign_data, $timeslot, $reward_to, [ @my_txo ]);
+    # The signed size is the only exact one (siglist sizes depend on the key
+    # algorithms, the outputs on the number of addresses); when it exceeds the
+    # limit, keep the heaviest inputs in proportion and rebuild. Each round
+    # drops at least one input, so the loop terminates
+    while ($tx->size > max_stake_tx_size() && @my_txo > 1) {
+        my $keep = int(@my_txo * max_stake_tx_size() / $tx->size);
+        $keep = @my_txo - 1 if $keep >= @my_txo;
+        $keep = 1 if $keep < 1;
+        Infof("Stake tx size %u exceeds %u, keep %u heaviest UTXO of %u",
+            $tx->size, max_stake_tx_size(), $keep, scalar(@my_txo));
+        splice(@my_txo, $keep);
+        $tx = build_stake_tx($reward, $block_sign_data, $timeslot, $reward_to, [ @my_txo ]);
+    }
+    return $tx;
+}
+
+# The stake transaction over the given inputs (the list is trimmed by the
+# output builders: an address without a reward part, or all but the best
+# address in "separate" mode)
+sub build_stake_tx {
+    my ($reward, $block_sign_data, $timeslot, $reward_to, $my_txo) = @_;
+
     # The reward-address cut goes first; the remainder is distributed to the
     # staking addresses. Union and separate need no delegation special-casing:
     # each address gets a single output of its full input value plus its part
@@ -296,8 +351,8 @@ sub make_stake_tx {
     if ($reward_to eq "join") {
         # Delegated outputs cannot be joined: the covenant requires each
         # delegated scripthash to receive its full input value back
-        my @delegated_txo = grep { $_->is_delegated } @my_txo;
-        my @own_txo       = grep { !$_->is_delegated } @my_txo;
+        my @delegated_txo = grep { $_->is_delegated } @$my_txo;
+        my @own_txo       = grep { !$_->is_delegated } @$my_txo;
         my @join_out = make_out_join($reward_rest, \@own_txo);
         if (@join_out) {
             push @out, @join_out;
@@ -307,23 +362,23 @@ sub make_stake_tx {
                     scripthash => $_->[0],
                 )
             } my_txo_by_address(\@delegated_txo, $timeslot);
-            @my_txo = (@own_txo, @delegated_txo);
+            @$my_txo = (@own_txo, @delegated_txo);
         }
         else {
             # No own stake address to join to; distribute the remainder over
             # the delegated addresses so no part of the reward is lost
-            push @out, make_out_union($reward_rest, \@my_txo, $timeslot);
+            push @out, make_out_union($reward_rest, $my_txo, $timeslot);
         }
     }
     elsif ($reward_to eq "separate") {
-        push @out, make_out_separate($reward_rest, \@my_txo, $timeslot);
+        push @out, make_out_separate($reward_rest, $my_txo, $timeslot);
     }
     else { # union
-        push @out, make_out_union($reward_rest, \@my_txo, $timeslot);
+        push @out, make_out_union($reward_rest, $my_txo, $timeslot);
     }
 
     my $tx = QBitcoin::Transaction->new(
-        in              => [ map +{ txo => $_ }, @my_txo ],
+        in              => [ map +{ txo => $_ }, @$my_txo ],
         out             => \@out,
         fee             => -$reward,
         tx_type         => TX_TYPE_STAKE,
