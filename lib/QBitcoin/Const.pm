@@ -79,6 +79,7 @@ use constant QBITCOIN_CONST => {
     PEER_PROBE_DEAD_FAILS   => 10, # with this many consecutive failed connects the peer is considered long-dead
     PEER_PROBE_DEAD_PERIOD  => 24*3600, # sec, probe a long-dead peer at most once per this period
     PEER_CLEANUP_PERIOD     => 3600, # sec, how often to scan the peer table for expired records
+    DELEGATION_CLEANUP_PERIOD => 3600, # sec, how often to scan the delegations for empty ones
     HOSTNAME_MAX_LENGTH     => 64,   # max length of the hostname announced in the "version" message
     HOSTNAME_CHECK_PERIOD   => 24*3600, # sec, re-verify a peer's announced hostname at most once per this period
     HOSTNAME_CHECK_TIMEOUT  => 10,   # sec, kill the resolver child if DNS does not answer in this time

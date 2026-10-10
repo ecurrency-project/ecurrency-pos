@@ -312,6 +312,7 @@ sub main_loop {
         check_probes();
         probe_peers();
         cleanup_peers();
+        QBitcoin::Generate->cleanup_delegations();
         check_blockchain_alive();
         check_sync_peer();
 

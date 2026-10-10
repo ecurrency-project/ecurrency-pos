@@ -160,6 +160,7 @@ foreach my $group (
         listdelegations
         liststakingkeys
         removedelegationaddress
+        rescandelegations
         stakeaddress
         unstakeaddress
     ) ],
@@ -1428,6 +1429,8 @@ WARNING: a staking key must run on exactly ONE node. If the node you exported
 it from is still staking, two nodes will stake the same delegated outputs -
 that is equivocation, and the slashing penalty is paid from the owners' coins
 entrusted to you. Stop the old node before importing the key here.
+The delegations of the key are not imported; the owners' funded addresses are
+found by rescandelegations (see the accept_delegations config option).
 
 Arguments:
 1. privkey        (string, required) The staking private key (an ordinary WIF)
@@ -1681,6 +1684,52 @@ sub cmd_listdelegations {
         staking_pubkeyhash => $_->staking_key->pubkeyhash_string,
     }} QBitcoin::Delegation->list;
     return $self->response_ok(\@list);
+}
+
+$PARAMS{rescandelegations} = "";
+$HELP{rescandelegations} = qq(
+Scans the unspent outputs for delegation registrations - an output on a
+delegated-staking address marked with the owner pubkeyhash in its data field,
+see the accept_delegations config option - and registers the ones built on
+the wallet staking keys. The node registers such outputs as they are
+confirmed; the scan is for a staking key added after the owners had funded
+their addresses (e.g. after importstakingkey).
+
+Result:
+{
+    "registered" : n,          (numeric) The number of delegations registered by this scan
+    "addresses" : [ "str" ],   (array of strings) Their addresses
+}
+
+Examples:
+> qbitcoin-cli rescandelegations
+> curl --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "rescandelegations", "params": []}' -H 'content-type: application/json;' http://127.0.0.1:${\RPC_PORT}/
+);
+sub cmd_rescandelegations {
+    my $self = shift;
+    $config->{accept_delegations}
+        or return $self->response_error("accept_delegations is disabled in the config", ERR_MISC);
+    QBitcoin::StakingKey->list
+        or return $self->response_error("No staking key in the wallet; create one with getnewstakingkey", ERR_INVALID_ADDRESS_OR_KEY);
+    my @registered;
+    # Stored outputs (a cached txo may be spent by a block not stored yet: check unspent)
+    foreach my $txo (QBitcoin::TXO->load_unspent_by_data_length(21, 33)) {
+        next unless $txo->unspent;
+        push @registered, QBitcoin::Delegation->register_output($txo) // ();
+    }
+    # Outputs of the blocks not stored yet
+    for (my $height = QBitcoin::Block->max_db_height + 1; $height <= (QBitcoin::Block->blockchain_height // -1); $height++) {
+        my $block = QBitcoin::Block->best_block($height)
+            or next;
+        foreach my $tx (@{$block->transactions}) {
+            foreach my $txo (@{$tx->out}) {
+                next unless $txo->unspent;
+                push @registered, QBitcoin::Delegation->register_output($txo) // ();
+            }
+        }
+    }
+    QBitcoin::Generate->load_address_utxo($_) foreach QBitcoin::Delegation->take_pending_load;
+    return $self->response_ok({ registered => scalar(@registered), addresses => [ map { $_->address } @registered ] });
 }
 
 $PARAMS{setaddresstag} = "address tag?";

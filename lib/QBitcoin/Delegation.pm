@@ -47,6 +47,12 @@ mk_accessors(qw(address staking_key_id owner_pubkeyhash));
 # fill the delegation table and the stake transaction inputs
 use constant MIN_DELEGATION_DEFAULT => 1;
 
+# Days an address stays registered with no coins on it (config
+# delegation_expire): the owner spent the coins away, or an operator added an
+# address never funded. The registration is cheap to redo (a marked output or
+# adddelegationaddress), so the table does not keep dead rows forever
+use constant DELEGATION_EXPIRE_DEFAULT => 30;
+
 my $DELEGATIONS;
 my $HASHES;
 my @PENDING_LOAD; # delegations registered from the chain whose UTXO are not loaded yet
@@ -150,6 +156,13 @@ sub register_output {
             $txo->tx_in_str, $txo->num, $txo->value, $min_value);
         return undef;
     }
+    if (my $max = $config->{max_delegations}) {
+        if ($class->list >= $max) {
+            Warningf("Ignore delegation registration by output %s:%u: max_delegations %u reached",
+                $txo->tx_in_str, $txo->num, $max);
+            return undef;
+        }
+    }
     my $self = $class->create($staking_key, $owner_pubkeyhash)
         or return undef;
     Infof("Registered delegation address %s by output %s:%u", $self->address, $txo->tx_in_str, $txo->num);
@@ -167,6 +180,34 @@ sub take_pending_load {
     my $class = shift;
     my @pending = splice(@PENDING_LOAD);
     return @pending;
+}
+
+# Remove the delegations whose address has had no tracked coins for
+# delegation_expire days. The empty period is counted in memory from the
+# moment the address is seen empty (the last output spent, or the startup
+# load found none), so a restart starts it over; good enough for a cleanup.
+# Returns the removed delegations.
+sub expire_empty {
+    my $class = shift;
+    my ($now) = @_;
+    $now //= time();
+    my $expire = ($config->{delegation_expire} // DELEGATION_EXPIRE_DEFAULT) * 24 * 3600;
+    my @removed;
+    foreach my $delegation ($class->list) { # list() returns a copy, remove() is safe inside
+        if (QBitcoin::Wallet::UTXO::myutxo_delegated_count($delegation->scripthash)) {
+            delete $delegation->{empty_since};
+        }
+        elsif (!defined($delegation->{empty_since})) {
+            $delegation->{empty_since} = $now;
+        }
+        elsif ($now - $delegation->{empty_since} >= $expire) {
+            Infof("Delegation address %s has no coins for %u days, remove it",
+                $delegation->address, ($now - $delegation->{empty_since}) / (24 * 3600));
+            $delegation->remove;
+            push @removed, $delegation;
+        }
+    }
+    return @removed;
 }
 
 sub reset_cache {

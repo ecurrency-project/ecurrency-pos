@@ -32,6 +32,7 @@ use QBitcoin::Wallet::UTXO qw(
     sub tx_in_str  { $_[0]->{key} }
     sub num        { 0 }
     sub value      { 100 }
+    sub scripthash { "sh_" . $_[0]->{key} }
 }
 
 my $own      = FakeTXO->new("own");

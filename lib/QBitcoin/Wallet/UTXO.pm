@@ -6,7 +6,8 @@ use strict;
 # which roles a txo has is decided by the caller (QBitcoin::TXO::My->my_roles
 # for the usual add/del, QBitcoin::MyAddress on stake flag change).
 # Stored values are QBitcoin::TXO objects, but only their instance methods are
-# called here, so this module depends on neither TXO nor MyAddress.
+# called here (key, scripthash, value and the log helpers), so this module
+# depends on neither TXO nor MyAddress.
 #
 # Roles are a bitmask; an output may be both MY and DELEGATED when the node
 # holds the owner key of an address delegated to it for staking:
@@ -23,6 +24,7 @@ our @EXPORT_OK = qw(
     myutxo_list
     myutxo_staked
     myutxo_delegated
+    myutxo_delegated_count
     UTXO_MY
     UTXO_STAKED
     UTXO_DELEGATED
@@ -37,6 +39,7 @@ use constant {
 my %MY_UTXO;
 my %STAKED_UTXO;
 my %DELEGATED_UTXO;
+my %DELEGATED_COUNT; # scripthash => number of its outputs in %DELEGATED_UTXO
 
 sub myutxo_add {
     my ($txo, $roles) = @_;
@@ -49,6 +52,7 @@ sub myutxo_add {
         Infof("Add staked UTXO %s:%u %lu coins", $txo->tx_in_str, $txo->num, $txo->value);
     }
     if ($roles & UTXO_DELEGATED) {
+        $DELEGATED_COUNT{$txo->scripthash}++ unless exists $DELEGATED_UTXO{$txo->key};
         $DELEGATED_UTXO{$txo->key} = $txo;
         Infof("Add delegated UTXO %s:%u %lu coins", $txo->tx_in_str, $txo->num, $txo->value);
     }
@@ -63,6 +67,7 @@ sub myutxo_del {
         Infof("Delete staked UTXO %s:%u %lu coins", $txo->tx_in_str, $txo->num, $txo->value);
     }
     if (delete $DELEGATED_UTXO{$txo->key}) {
+        delete $DELEGATED_COUNT{$txo->scripthash} unless --$DELEGATED_COUNT{$txo->scripthash};
         Infof("Delete delegated UTXO %s:%u %lu coins", $txo->tx_in_str, $txo->num, $txo->value);
     }
 }
@@ -88,6 +93,12 @@ sub myutxo_staked {
 
 sub myutxo_delegated {
     return values %DELEGATED_UTXO;
+}
+
+# Number of the tracked delegated outputs of the address; 0 for an empty one
+sub myutxo_delegated_count {
+    my ($scripthash) = @_;
+    return $DELEGATED_COUNT{$scripthash} // 0;
 }
 
 1;

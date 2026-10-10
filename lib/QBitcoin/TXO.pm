@@ -245,6 +245,30 @@ sub load_stored_outputs {
     return @txo;
 }
 
+# Unspent outputs with a data field of one of the given lengths, for the
+# delegation registration rescan (QBitcoin::Delegation::register_output); the
+# marked outputs are rare, so the table scan is the simplest way
+sub load_unspent_by_data_length {
+    my $class = shift;
+    my (@length) = @_;
+    @length or return ();
+    my $sql = "SELECT value, num, tx_in.hash AS tx_in, s.hash as scripthash, s.script as redeem_script, data";
+    $sql .= " FROM `" . $class->TABLE . "` AS t JOIN `" . QBitcoin::RedeemScript->TABLE . "` AS s ON (t.scripthash = s.id)";
+    $sql .= " JOIN `" . TRANSACTION_TABLE . "` AS tx_in ON (tx_in.id = t.tx_in)";
+    # Literals, not placeholders: DBD::SQLite binds a placeholder as text, and
+    # LENGTH() compared with text never matches
+    $sql .= " WHERE t.tx_out IS NULL AND LENGTH(data) IN (" . join(",", map { int($_) } @length) . ")";
+    my $sth = dbh->prepare($sql);
+    DEBUG_ORM && Debugf("sql: [%s]", $sql);
+    $sth->execute();
+    my @txo;
+    while (my $hash = $sth->fetchrow_hashref()) {
+        push @txo, $class->new_saved($hash);
+    }
+    DEBUG_ORM && Debugf("found %u entries", scalar(@txo));
+    return @txo;
+}
+
 # Called from find() just before create new object
 # Used for load my UTXO on startup and for "produce" random transaction, so optimization is not a point here
 sub pre_load {

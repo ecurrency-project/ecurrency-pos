@@ -245,6 +245,21 @@ sub make_out_union {
     return @out;
 }
 
+# Periodic (DELEGATION_CLEANUP_PERIOD) housekeeping of the delegations, called
+# from the main loop: load the UTXO of the delegations registered from the
+# chain (so that a node with generation disabled does not see them as empty)
+# and drop the ones empty for too long (Delegation::expire_empty)
+my $last_delegation_cleanup_time = 0;
+sub cleanup_delegations {
+    my $class = shift;
+    my $now = time();
+    $now - $last_delegation_cleanup_time >= DELEGATION_CLEANUP_PERIOD
+        or return;
+    $last_delegation_cleanup_time = $now;
+    $class->load_address_utxo($_) foreach QBitcoin::Delegation->take_pending_load;
+    QBitcoin::Delegation->expire_empty($now);
+}
+
 # Upper bound for the stake transaction size. A function (not the constant
 # inline) so that tests can lower it
 sub max_stake_tx_size { MAX_TX_SIZE }
