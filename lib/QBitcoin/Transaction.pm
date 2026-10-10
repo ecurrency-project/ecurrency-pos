@@ -15,6 +15,7 @@ use QBitcoin::ORM qw(find fetch create delete :types);
 use QBitcoin::Crypto qw(hash160 hash256);
 use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::TXO;
+use QBitcoin::Delegation;
 use QBitcoin::Coinbase;
 use QBitcoin::Slashing;
 use QBitcoin::Slashing::Stored;
@@ -1514,7 +1515,11 @@ sub confirm {
         $txo->del_my_utxo if $txo->is_my; # for stake transaction
     }
     foreach my $txo (@{$self->out}) {
-        $txo->add_my_utxo if $txo->is_my && $txo->unspent;
+        next unless $txo->unspent;
+        # An output marked as a delegation registration makes its address ours
+        # (see Delegation::register_output), so register before the is_my check
+        QBitcoin::Delegation->register_output($txo);
+        $txo->add_my_utxo if $txo->is_my;
     }
     # min proper block_height and time should be recalculated for depended transactions
     if (exists $TX_SEQ_DEPENDS{$self->hash}) {

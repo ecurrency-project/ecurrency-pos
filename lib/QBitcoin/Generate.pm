@@ -247,6 +247,11 @@ sub make_out_union {
 
 sub make_stake_tx {
     my ($reward, $block_sign_data, $timeslot, $prev_height) = @_;
+    # Delegations registered from the chain since the last stake (see
+    # Delegation::register_output) may have outputs confirmed before the
+    # registering one; load the whole address (already loaded txo are the
+    # same cached objects, so re-adding them is harmless)
+    __PACKAGE__->load_address_utxo($_) foreach QBitcoin::Delegation->take_pending_load;
     # Exclude UTXOs we have already published a stake with in this timeslot: re-using
     # them would self-equivocate. The free (still-unused) UTXOs remain available, so in
     # "separate" reward mode a later call can build a second, independent stake with a

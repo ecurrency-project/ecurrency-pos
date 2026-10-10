@@ -29,6 +29,7 @@ use constant QBITCOIN_CONST => {
     LISTEN_QUEUE            => 5,
     PEER_RECONNECT_TIME     => 10,
     TXO_DATA_TAG            => "T",
+    TXO_DATA_DELEGATION     => "D", # followed by the owner pubkeyhash, see QBitcoin::Delegation
     REWARD_DIVIDER          => 500, # reward for block is 1/500 of the reward fund
     MAX_BLOCK_SIZE          => 8*1024*1024,
     MAX_TX_IN_BLOCK         => 65535,
