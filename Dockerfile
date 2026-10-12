@@ -12,7 +12,7 @@ WORKDIR /build
 
 RUN apk add --no-cache \
     perl openssl sqlite-libs gmp \
-    perl-cpanel-json-xs perl-dbi perl-dbd-sqlite \
+    perl-cpanel-json-xs perl-dbi perl-dbd-sqlite perl-dbd-mysql \
     perl-http-message perl-hash-multivalue perl-params-validate \
     perl-role-tiny perl-tie-ixhash perl-cryptx
 
@@ -29,6 +29,13 @@ RUN cpan -i Encode::Base58::GMP Math::GMPz Crypt::PK::ECC::Schnorr Crypt::PQClea
 RUN apk add --no-cache perl-test-mockmodule
 COPY . /qbitcoin
 RUN cd /qbitcoin; make test || exit 1
+# Check the MARIADB_TLS_DISABLE_PEER_VERIFICATION workaround for the final image: it must still be needed and must work
+RUN cd /qbitcoin; \
+    if perl test/docker/mysql-tls-check.pl; then \
+      echo "mariadb-connector-c connects to a non-TLS server by itself now, remove MARIADB_TLS_DISABLE_PEER_VERIFICATION from the final image" >&2; \
+      exit 1; \
+    fi; \
+    MARIADB_TLS_DISABLE_PEER_VERIFICATION=1 perl test/docker/mysql-tls-check.pl || exit 1
 RUN cd /qbitcoin/admin; CI=true make || exit 1
 RUN cd /qbitcoin; rm -rf test systemd Dockerfile Makefile admin/Makefile admin/src admin/node_modules
 RUN apk del --no-cache perl-test-mockmodule
@@ -94,7 +101,8 @@ ENV dbi=sqlite
 ENV database=qbitcoin
 ENV debug=
 ENV notify_url=
-# Workaround mariadb-connector-c 3.4x in alpine 3.23 which fail to connect without SSL by default
+# Workaround mariadb-connector-c 3.4+ (alpine >= 3.23) which requires TLS by default and refuses
+# to connect to a server without SSL, even over a unix socket; the builder stage checks whether it is still needed
 ENV MARIADB_TLS_DISABLE_PEER_VERIFICATION=1
 
 ENTRYPOINT ["/qbitcoin/bin/run-qbitcoin.sh"]
