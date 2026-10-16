@@ -8,7 +8,7 @@ import { useNetwork } from '@/shared/lib/network';
 
 import type { BurnInfo, DowngradeInfo } from '../../lib/txType';
 import { isDowngradeInfo } from '../../lib/txType';
-import { powExplorerTxUrl } from '../../lib/powTxid';
+import { powExplorerUrl } from '../../lib/powExplorer';
 import { TxInfoPanel, type TxInfoRow } from '../TxInfoPanel/TxInfoPanel.tsx';
 
 interface TxDowngradeInfoProps {
@@ -16,14 +16,15 @@ interface TxDowngradeInfoProps {
     info: DowngradeInfo | BurnInfo;
 }
 
+const hashLink = (hash: string, url: string | undefined) => (url
+    ? <a href={url} target="_blank" rel="noreferrer">{hash} <span aria-hidden="true">↗</span></a>
+    : hash);
+
 export const TxDowngradeInfo = ({ className, info }: TxDowngradeInfoProps) => {
     const network = useNetwork();
     const label = brand.powChain?.label;
-    // Unlike a coinbase hash, this one arrives already in display byte order.
-    const url = powExplorerTxUrl(brand.powChain?.explorerTxUrl[network], info.btc_txid);
-    const target = url
-        ? <a href={url} target="_blank" rel="noreferrer">{info.btc_txid} <span aria-hidden="true">↗</span></a>
-        : info.btc_txid;
+    const explorer = brand.powChain?.explorerUrl[network];
+    const target = hashLink(info.btc_txid, powExplorerUrl(explorer, 'tx', info.btc_txid));
 
     const rows: TxInfoRow[] = isDowngradeInfo(info)
         ? [
@@ -40,7 +41,10 @@ export const TxDowngradeInfo = ({ className, info }: TxDowngradeInfoProps) => {
         ]
         : [
             { label: 'Target transaction', value: target },
-            { label: 'Target block', value: info.btc_block_hash },
+            {
+                label: 'Target block',
+                value: hashLink(info.btc_block_hash, powExplorerUrl(explorer, 'block', info.btc_block_hash)),
+            },
         ];
 
     return (

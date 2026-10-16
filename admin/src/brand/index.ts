@@ -12,7 +12,7 @@ export interface BrandConfig {
     CoinIcon?: ComponentType<SVGProps<SVGSVGElement>>;
     powChain?: {
         label: string;
-        explorerTxUrl: { main: string; testnet: string };
+        explorerUrl: { main: string; testnet: string };
     };
 }
 

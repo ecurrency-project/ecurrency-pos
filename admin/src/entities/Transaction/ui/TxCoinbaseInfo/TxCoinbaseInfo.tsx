@@ -6,7 +6,7 @@ import { satToNativeString } from '@/shared/lib/fmtbtc';
 import { useNetwork } from '@/shared/lib/network';
 
 import type { CoinbaseInfo } from '../../lib/txType';
-import { powExplorerTxUrl, powTxid } from '../../lib/powTxid';
+import { powExplorerUrl } from '../../lib/powExplorer';
 import { TxInfoPanel, type TxInfoRow } from '../TxInfoPanel/TxInfoPanel.tsx';
 
 interface TxCoinbaseInfoProps {
@@ -16,17 +16,15 @@ interface TxCoinbaseInfoProps {
 
 export const TxCoinbaseInfo = ({ className, info }: TxCoinbaseInfoProps) => {
     const network = useNetwork();
-    const txid = powTxid(info.tx_hash);
-    const url = powExplorerTxUrl(brand.powChain?.explorerTxUrl[network], txid);
+    const url = powExplorerUrl(brand.powChain?.explorerUrl[network], 'tx', info.tx_hash);
     const label = brand.powChain?.label;
-    const shown = txid || info.tx_hash;
 
     const rows: TxInfoRow[] = [
         {
             label: 'Source transaction',
             value: url
-                ? <a href={url} target="_blank" rel="noreferrer">{shown} <span aria-hidden="true">↗</span></a>
-                : shown,
+                ? <a href={url} target="_blank" rel="noreferrer">{info.tx_hash} <span aria-hidden="true">↗</span></a>
+                : info.tx_hash,
         },
         {
             label: 'Origin',
