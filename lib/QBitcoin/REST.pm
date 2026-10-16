@@ -833,7 +833,7 @@ sub tx_obj {
         UPGRADE_POW && $tx->is_coinbase ? (
             coinbase_info => {
                 block_height => $tx->up->btc_block_height,
-                tx_hash      => unpack("H*", $tx->up->btc_tx_hash),
+                tx_hash      => unpack("H*", scalar reverse $tx->up->btc_tx_hash),
                 out_num      => $tx->up->btc_out_num,
                 value        => $tx->up->value,
             },

@@ -235,6 +235,7 @@ sub as_hashref {
         btc_tx_num       => $self->btc_tx_num+0,
         btc_out_num      => $self->btc_out_num+0,
         btc_tx_data      => unpack("H*", $self->btc_tx_data),
+        btc_tx_hash      => unpack("H*", scalar reverse $self->btc_tx_hash),
         merkle_path      => unpack("H*", $self->merkle_path),
         value            => $value / DENOMINATOR,
         scripthash       => unpack("H*", $self->scripthash),

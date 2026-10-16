@@ -1710,7 +1710,7 @@ sub new_coinbase {
     $self->calculate_hash;
     if (my $cached = $class->get($self->hash)) {
         Debugf("Coinbase transaction %s for btc %s:%u already in %s",
-            $self->hash_str, $class->hash_str($coinbase->btc_tx_hash), $coinbase->btc_out_num,
+            $self->hash_str, $class->hash_str(scalar reverse $coinbase->btc_tx_hash), $coinbase->btc_out_num,
             $cached->block_height ? "blockchain" : "mempool");
         $self = $cached;
     }
@@ -1718,7 +1718,7 @@ sub new_coinbase {
         QBitcoin::TXO->save_all($self->hash, $self->out);
         $self->save(); # Add coinbase tx to mempool
         Infof("Generated new coinbase transaction %s for btc output %s:%u value %lu fee %lu",
-            $self->hash_str, $class->hash_str($coinbase->btc_tx_hash), $coinbase->btc_out_num,
+            $self->hash_str, $class->hash_str(scalar reverse $coinbase->btc_tx_hash), $coinbase->btc_out_num,
             $txo->value, $self->fee);
         $self->announce();
     }
