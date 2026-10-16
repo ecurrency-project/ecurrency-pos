@@ -65,14 +65,21 @@ export const TxVin = memo(function TxVin(props: TransactionVinProps) {
         return wrapper(body, description);
     }
 
+    const outpoint = <Link to={`/tx/${vin.txid}?output:${vin.vout}`}>{`${vin.txid}:${vin.vout}`}</Link>;
+
     const description = vin.is_coinbase
         ? 'Coinbase'
         : vin.prevout?.scripthash_address
             ? linkToAddr(vin.prevout.scripthash_address)
-            : <Link to={`/tx/${vin.txid}?output:${vin.vout}`}>{`${vin.txid}:${vin.vout}`}</Link>;
+            : outpoint;
 
     const body = (
         expanded ? <VStack gap="sm" className={classNames(cls.vinBody)}>
+            {!vin.is_coinbase && <div className={cls.vinBodyRow}>
+                <div>Previous output</div>
+                <div className="mono">{outpoint}</div>
+            </div>}
+
             {vin.issuance && <>
                 <div className={cls.vinBodyRow}>
                     <div>Issuance</div>

@@ -147,8 +147,8 @@ export const TxVout = memo(function TxVout(props: TransactionVoutProps) {
                             ? 'Loading...'
                             : spend.spent
                                 ? <span>
-                                    Spent by <Link to={`/tx/${spend.txid}`} className="mono">{`${spend.txid}`}</Link> {' '}
-                                    { spend.status ? spend.status.confirmed ? <span>in block <Link to={`/block/${spend.status.block_hash}`}>#{spend.status.block_height}</Link></span> : `(Unconfirmed)` : `` }
+                                    Spent by <Link to={`/tx/${spend.txid}`} className="mono">{`${spend.txid}`}</Link>
+                                    {spend.status?.confirmed === false && ' (Unconfirmed)'}
                                 </span>
                                 : 'Unspent'
                         }

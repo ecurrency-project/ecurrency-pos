@@ -125,6 +125,5 @@ export interface ITransactionBoxSchema extends EntityState<ITransaction, string>
 export interface ISpend {
     spent: boolean;
     txid?: string;
-    vin?: number;
-    status?: ITxStatus;
+    status?: { confirmed: boolean };
 }
