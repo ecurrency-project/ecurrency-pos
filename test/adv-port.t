@@ -63,11 +63,21 @@ $conn_out->protocol->startup();
 is(sent_adv_port($conn_out), 12345, "configured port advertised instead of the socket port");
 
 # The port from the "bind" option has higher priority (it is the really listening one)
-$config->{bind} = "127.0.0.1:7777";
+$config->set(bind => "127.0.0.1:7777");
 $conn_out = make_connection(direction => DIR_OUT);
 $conn_out->protocol->startup();
 is(sent_adv_port($conn_out), 7777, "port from the bind address advertised");
-delete $config->{bind};
+
+# With several bind addresses the port of the first one is advertised
+$config->set(bind => "127.0.0.1:7777", "[::1]:8888");
+$conn_out = make_connection(direction => DIR_OUT);
+$conn_out->protocol->startup();
+is(sent_adv_port($conn_out), 7777, "port of the first bind address advertised");
+$config->set(bind => "[::1]", "127.0.0.1:7777");
+$conn_out = make_connection(direction => DIR_OUT);
+$conn_out->protocol->startup();
+is(sent_adv_port($conn_out), 12345, "configured port advertised for the first bind address without port");
+$config->remove('bind');
 delete $config->{port};
 
 # Advertised port of a new node (with nonce) is stored in the peer record

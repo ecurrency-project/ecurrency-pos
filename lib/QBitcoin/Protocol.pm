@@ -58,6 +58,7 @@ use QBitcoin::Block;
 use QBitcoin::Transaction;
 use QBitcoin::TXO;
 use QBitcoin::Peer;
+use QBitcoin::IP qw(parse_addr_port);
 use QBitcoin::Resolver;
 use QBitcoin::Generate;
 use QBitcoin::Generate::Control;
@@ -104,11 +105,18 @@ sub my_hostname {
     return substr($hostname, 0, HOSTNAME_MAX_LENGTH);
 }
 
+# The port for a "bind" address without an explicit port
+sub default_port {
+    return $config->{port} // getservbyname(SERVICE_NAME, 'tcp') // PORT;
+}
+
 # The port on which this node accepts incoming connections, advertised to peers in the
-# "version" message so they can dial us back; must match bind_addr() in QBitcoin::Network
+# "version" message so they can dial us back; must match bind_addr() in QBitcoin::Network.
+# With several "bind" addresses it is the port of the first one.
 sub listen_port {
-    my (undef, $port) = split(/:/, $config->{bind} // BIND_ADDR);
-    return $port // $config->{port} // getservbyname(SERVICE_NAME, 'tcp') // PORT;
+    my ($bind) = $config->get_all('bind');
+    my (undef, $port) = parse_addr_port($bind // BIND_ADDR);
+    return $port // default_port();
 }
 
 sub pack_my_address {

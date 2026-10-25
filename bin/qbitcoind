@@ -18,7 +18,7 @@ use QBitcoin::Notify;
 use Bitcoin::Protocol;
 
 sub main {
-    my ( $help, @peer_hosts, @fallback_peers, @btc_hosts, $conffile );
+    my ( $help, @peer_hosts, @fallback_peers, @btc_hosts, @bind, @rpc, @rest, $conffile );
 
     # Prettify ps title (remove "perl" from the command line)
     $0 = join(" ", $0 =~ s|.*/||r, @ARGV);
@@ -31,12 +31,12 @@ sub main {
         'btcnode|B=s'     => \@btc_hosts,
         'verbose|v'       => \$opts{verbose},
         'debug|d'         => \$opts{debug},
-        'bind|b=s'        => \$opts{bind},
+        'bind|b=s'        => \@bind,
         'daemonize|D'     => \$opts{daemonize},
         'port|P=s'        => \$opts{port},
-        'rpc|J=s'         => \$opts{rpc},
+        'rpc|J=s'         => \@rpc,
         'rpc-port=s'      => \$opts{rpc_port},
-        'rest|R=s'        => \$opts{rest},
+        'rest|R=s'        => \@rest,
         'rest-port=s'     => \$opts{rest_port},
         'genesis|G'       => \$opts{genesis},
         'generate|g'      => \$opts{generate},
@@ -68,6 +68,9 @@ sub main {
     $config->set(peer    => @peer_hosts) if @peer_hosts;
     $config->set(btcnode => @btc_hosts)  if @btc_hosts;
     $config->set(fallback_peer => @fallback_peers) if @fallback_peers;
+    $config->set(bind    => @bind) if @bind;
+    $config->set(rpc     => @rpc)  if @rpc;
+    $config->set(rest    => @rest) if @rest;
 
     if ($config->{daemonize}) {
         if ($opts{verbose}) {
@@ -123,9 +126,10 @@ sub usage {
     if (UPGRADE_POW) {
         print "   -B, --btcnode <host[:port]> - connect to btc node <host>:<port> (default port " . BTC_PORT . "),\n";
     }
-    print "   -b, --bind <addr[:port]>    - bind to local <address> and <port> (default " . BIND_ADDR . ":" . PORT . "),\n";
-    print "   -J, --rpc <addr[:port]>     - respond to JSON RPC API on <address> and <port> (default " . RPC_ADDR . ":" . RPC_PORT . "),\n";
-    print "   -R, --rest <addr[:port]>    - respond to Esplora RESTful API on <address> and <port> (disabled by default, default port " . REST_PORT . "),\n";
+    print "   -b, --bind <addr[:port]>    - bind to local <address> and <port> (default " . BIND_ADDR . ":" . PORT . "), may be repeated\n";
+    print "                                 to listen on several addresses; the port of the first one is advertised to peers,\n";
+    print "   -J, --rpc <addr[:port]>     - respond to JSON RPC API on <address> and <port> (default " . RPC_ADDR . ":" . RPC_PORT . "), may be repeated,\n";
+    print "   -R, --rest <addr[:port]>    - respond to Esplora RESTful API on <address> and <port> (disabled by default, default port " . REST_PORT . "), may be repeated,\n";
     print "   -D, --daemonize             - daemonize,\n";
     print "   -g, --generate              - generate blocks (enabled by default if there are any coins on balance),\n";
     print "   -G, --genesis               - run as genesis node, do not need to synchronize with other nodes for authoritative answers,\n";

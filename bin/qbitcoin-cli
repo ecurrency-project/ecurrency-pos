@@ -8,6 +8,7 @@ use Cpanel::JSON::XS;
 use QBitcoin::Const;
 use QBitcoin::RPC::Const;
 use QBitcoin::Config qw($config read_config);
+use QBitcoin::IP qw(parse_addr_port);
 use QBitcoin::BlockchainParams;
 
 # allow_bignum: decode amounts that do not fit a native int/float into
@@ -107,9 +108,12 @@ sub usage {
 
 sub call_rpc {
     my ($method, @params) = @_;
-    my ($address, $port) = split(/:/, $config->{rpc} // RPC_ADDR);
+    # the daemon may listen on several addresses, request the first one
+    my ($rpc) = $config->get_all('rpc');
+    my ($address, $port) = parse_addr_port($rpc // RPC_ADDR);
     $port //= $config->{rpc_port} // getservbyname(SERVICE_NAME, 'tcp') // RPC_PORT;
     $address = RPC_ADDR if $address eq '*';
+    $address = "[$address]" if index($address, ':') >= 0; # IPv6 literal
     my $url = "http://$address:$port";
     my $ua = HTTP::Tiny->new;
     # Top-level request fields added on a retry after the server asked for the

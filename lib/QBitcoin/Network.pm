@@ -31,33 +31,35 @@ use QBitcoin::Resolver;
 sub bind_addr {
     my $class = shift;
 
-    my ($address) = parse_addr_port($config->{bind} // BIND_ADDR);
-    # the same port is advertised to peers in the "version" message
-    return [ listen_sockets($address, QBitcoin::Protocol::listen_port()) ];
+    # each "bind" entry (there may be several: several interfaces, but not all of them) is
+    # listened on its own socket(s); the port of the first one is advertised to peers,
+    # see QBitcoin::Protocol::listen_port()
+    my @bind = $config->get_all('bind');
+    @bind = (BIND_ADDR) unless @bind;
+    return [ map { listen_sockets($_, QBitcoin::Protocol::default_port()) } @bind ];
 }
 
 sub bind_rpc_addr {
     my $class = shift;
 
-    my ($address, $port) = parse_addr_port($config->{rpc} // RPC_ADDR);
-    $port //= $config->{rpc_port} // RPC_PORT;
-    return [ listen_sockets($address, $port) ];
+    my @rpc = $config->get_all('rpc');
+    @rpc = (RPC_ADDR) unless @rpc;
+    return [ map { listen_sockets($_, $config->{rpc_port} // RPC_PORT) } @rpc ];
 }
 
 sub bind_rest_addr {
     my $class = shift;
 
-    $config->{rest} or return [];
-    my ($address, $port) = parse_addr_port($config->{rest});
-    $port //= $config->{rest_port} // REST_PORT;
-    return [ listen_sockets($address, $port) ];
+    return [ map { listen_sockets($_, $config->{rest_port} // REST_PORT) } $config->get_all('rest') ];
 }
 
-# Listening socket(s) for the given address; "*" means all addresses of both
-# families, i.e. separate IPv4 and IPv6 sockets (IPv6 one is skipped with a
-# warning on a host without IPv6 support)
+# Listening socket(s) for the given "addr[:port]" specification, $default_port is
+# used when it has no port; "*" means all addresses of both families, i.e. separate
+# IPv4 and IPv6 sockets (IPv6 one is skipped with a warning on a host without IPv6 support)
 sub listen_sockets {
-    my ($address, $port) = @_;
+    my ($spec, $default_port) = @_;
+    my ($address, $port) = parse_addr_port($spec);
+    $port //= $default_port;
     $address eq '*'
         or return listen_socket($address, $port);
     my @sockets = ( listen_socket("0.0.0.0", $port) );
