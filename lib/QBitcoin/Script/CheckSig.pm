@@ -88,13 +88,13 @@ sub cmd_checksigadd($) {
     my $stack = $state->stack;
     @$stack >= 3 or return 0;
     my ($signature, $accum, $pubkey) = splice(@$stack, -3);
+    my $acc_int = unpack_int($accum) // return 0;
     my $result = 0;
     if ($signature ne "") {
         $state->sigops-- > 0 or return 0;
         $result = check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? 1 : 0;
     }
-    my $acc_int = unpack_int($accum);
-    push @$stack, pack_int($acc_int + $result);
+    push @$stack, pack_int($acc_int + $result) // return 0;
     return undef;
 }
 
