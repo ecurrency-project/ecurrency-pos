@@ -7,6 +7,9 @@ use QBitcoin::Crypto qw(check_sig);
 use QBitcoin::Script::Const;
 use QBitcoin::Script::Util qw(pack_int unpack_int);
 
+# As in tapscript (BIP-342) an empty signature is not checked and costs no sigops:
+# it is how a missing signature is given to OP_CHECKSIG/OP_CHECKSIGADD in k-of-n scripts.
+
 sub cmd_checksig($) {
     my ($state) = @_;
     return unless $state->ifstate;
@@ -14,6 +17,10 @@ sub cmd_checksig($) {
     @$stack >= 2 or return 0;
     my $pubkey = pop @$stack;
     my $signature = pop @$stack;
+    if ($signature eq "") {
+        push @$stack, FALSE;
+        return undef;
+    }
     $state->sigops-- > 0 or return 0;
     push @$stack, check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? TRUE : FALSE;
     return undef;
@@ -26,6 +33,7 @@ sub cmd_checksigverify($) {
     @$stack >= 2 or return 0;
     my $pubkey = pop @$stack;
     my $signature = pop @$stack;
+    $signature ne "" or return 0;
     $state->sigops-- > 0 or return 0;
     return check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? undef : 0;
 }
@@ -80,8 +88,11 @@ sub cmd_checksigadd($) {
     my $stack = $state->stack;
     @$stack >= 3 or return 0;
     my ($signature, $accum, $pubkey) = splice(@$stack, -3);
-    $state->sigops-- > 0 or return 0;
-    my $result = check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? 1 : 0;
+    my $result = 0;
+    if ($signature ne "") {
+        $state->sigops-- > 0 or return 0;
+        $result = check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? 1 : 0;
+    }
     my $acc_int = unpack_int($accum);
     push @$stack, pack_int($acc_int + $result);
     return undef;
