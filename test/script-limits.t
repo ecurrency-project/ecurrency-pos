@@ -48,6 +48,20 @@ ok(!script_eval([$counter_leaf->(8), pack_int(16)], $exec_redeem, "", 0), "wide 
 cmp_ok(time - $t, '<', 1, "exec fan-out is cut quickly");
 ok(script_eval([$counter_leaf->(2), pack_int(4)], $exec_redeem, "", 0), "small exec fan-out (15 executions)");
 
+# Stack + altstack at most MAX_STACK_SIZE (1000) elements, as in bitcoin, so OP_ROLL costs a bounded time
+my $fill = (OP_1 x 3) . (OP_3DUP x 332); # 999 elements, the pushed roll index makes 1000
+my $roll = op_pushdata(pack_int(998)) . OP_ROLL;
+my $cleanup = (OP_2DROP x 499) . OP_DROP;
+ok(script_eval([], $fill . ($roll x 5000) . $cleanup . OP_1, "", 0), "1000 elements, 5000 deep rolls");
+ok(!script_eval([], $fill . OP_1 . OP_1 . OP_2DROP . $cleanup . OP_1, "", 0), "1001 elements");
+ok(!script_eval([], $fill . OP_TOALTSTACK . OP_1 . OP_1 . OP_2DROP . OP_FROMALTSTACK . $cleanup . OP_1, "", 0), "1001 elements over stack and altstack");
+ok(script_eval([], $fill . OP_TOALTSTACK . OP_1 . OP_DROP . OP_FROMALTSTACK . $cleanup . OP_1, "", 0), "1000 elements over stack and altstack");
+ok(!script_eval([("") x 1001], (OP_2DROP x 500) . OP_DROP . OP_1, "", 0), "1001 siglist elements");
+ok(script_eval([("") x 1000], (OP_2DROP x 500) . OP_1, "", 0), "1000 siglist elements");
+$t = time;
+script_eval([], $fill . ($roll x 10000) . $cleanup . OP_1, "", 0);
+cmp_ok(time - $t, '<', 1, "10000 deep rolls are fast");
+
 # Signatures
 my @addr = map { QBitcoin::MyAddress->new(private_key => wallet_import_format(generate_keypair(CRYPT_ALGO_ECDSA)->pk_serialize)) } 1 .. 20;
 my $sign_data = "\x55\xaa" x 700;

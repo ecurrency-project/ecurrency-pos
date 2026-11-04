@@ -40,6 +40,10 @@ use constant QBT_SEQUENCE_LOCKTIME_TYPE_FLAG => 1 << 27;
 # the input size, since each execution runs one stack element.
 use constant MAX_SCRIPT_EXEC_COUNT => 16;
 
+# Stack plus altstack size limit, as in bitcoin, so that OP_ROLL (which moves all elements above
+# the one it picks) and the other stack operations cost a bounded time
+use constant MAX_STACK_SIZE => 1000;
+
 # Allow attributes "in1", "in2", etc; store them so attributes::get() can fetch them back
 my %CODE_ATTRS;
 sub MODIFY_CODE_ATTRIBUTES {
@@ -566,10 +570,14 @@ sub _check_merkle_path {
 
 sub execute {
     my ($state) = @_;
+    my $stack = $state->stack;
+    my $altstack = $state->altstack;
+    @$stack + @$altstack <= MAX_STACK_SIZE or return 0;
     while (defined(my $cmd_code = $state->get_script(1))) {
         if (my $cmd_func = $OP_CMD[ord($cmd_code)]) {
             my $res = $cmd_func->($state);
             return $res if defined $res;
+            @$stack + @$altstack <= MAX_STACK_SIZE or return 0;
         }
         else {
             return 0; # Invalid opcode
