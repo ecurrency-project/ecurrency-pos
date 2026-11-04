@@ -250,7 +250,8 @@ sub cmd_if($) {
     @$stack or return 0;
     my $new_state = is_true(pop @$stack);
     push @{$state->ifstack}, $new_state;
-    $state->ifstate &&= $new_state;
+    $state->iffalse++ if !$new_state;
+    $state->set_ifstate();
     return undef;
 }
 
@@ -260,7 +261,8 @@ sub cmd_notif($) {
     @$stack or return 0;
     my $new_state = !is_true(pop @$stack);
     push @{$state->ifstack}, $new_state;
-    $state->ifstate &&= $new_state;
+    $state->iffalse++ if !$new_state;
+    $state->set_ifstate();
     return undef;
 }
 
@@ -268,7 +270,9 @@ sub cmd_else($) {
     my ($state) = @_;
     my $ifstack = $state->ifstack;
     @$ifstack or return 0;
-    $ifstack->[-1] = !$ifstack->[-1];
+    my $top = $ifstack->[-1];
+    $ifstack->[-1] = !$top;
+    $state->iffalse += $top ? 1 : -1;
     $state->set_ifstate();
     return undef;
 }
@@ -277,7 +281,8 @@ sub cmd_endif($) {
     my ($state) = @_;
     my $ifstack = $state->ifstack;
     @$ifstack or return 0;
-    pop @$ifstack;
+    my $top = pop @$ifstack;
+    $state->iffalse-- if !$top;
     $state->set_ifstate();
     return undef;
 }
