@@ -248,45 +248,39 @@ sub cmd_return($) {
 # the nested branch is just marked false
 sub cmd_if($) {
     my ($state) = @_;
-    my $new_state = 0;
-    if ($state->ifstate) {
-        my $stack = $state->stack;
-        @$stack or return 0;
-        $new_state = is_true(pop @$stack);
+    if (!$state->ifstate) {
+        $state->push_if(0);
+        return undef;
     }
-    push @{$state->ifstack}, $new_state;
-    $state->ifstate &&= $new_state;
+    my $stack = $state->stack;
+    @$stack or return 0;
+    $state->push_if(is_true(pop @$stack));
     return undef;
 }
 
 sub cmd_notif($) {
     my ($state) = @_;
-    my $new_state = 0;
-    if ($state->ifstate) {
-        my $stack = $state->stack;
-        @$stack or return 0;
-        $new_state = !is_true(pop @$stack);
+    if (!$state->ifstate) {
+        $state->push_if(0);
+        return undef;
     }
-    push @{$state->ifstack}, $new_state;
-    $state->ifstate &&= $new_state;
+    my $stack = $state->stack;
+    @$stack or return 0;
+    $state->push_if(!is_true(pop @$stack));
     return undef;
 }
 
 sub cmd_else($) {
     my ($state) = @_;
-    my $ifstack = $state->ifstack;
-    @$ifstack or return 0;
-    $ifstack->[-1] = !$ifstack->[-1];
-    $state->set_ifstate();
+    @{$state->ifstack} or return 0;
+    $state->else_if;
     return undef;
 }
 
 sub cmd_endif($) {
     my ($state) = @_;
-    my $ifstack = $state->ifstack;
-    @$ifstack or return 0;
-    pop @$ifstack;
-    $state->set_ifstate();
+    @{$state->ifstack} or return 0;
+    $state->pop_if;
     return undef;
 }
 
