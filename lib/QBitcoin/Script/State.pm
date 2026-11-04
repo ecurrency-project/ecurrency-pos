@@ -6,9 +6,9 @@ use QBitcoin::Script::Const;
 
 sub new {
     my $class = shift;
-    my ($script, $stack, $tx, $input_num, $sigops, $hashcache) = @_;
-    # script, cp, stack, false if-branches, if-stack, alt-stack, exec-count, tx, input_num, sigops, hash cache
-    return bless [$script, 0, $stack // [], 0, [], [], 0, $tx, $input_num, $sigops, $hashcache // {}], $class;
+    my ($script, $stack, $tx, $input_num, $sigbudget, $hashcache) = @_;
+    # script, cp, stack, false if-branches, if-stack, alt-stack, exec-count, tx, input_num, signature check budget, hash cache
+    return bless [$script, 0, $stack // [], 0, [], [], 0, $tx, $input_num, $sigbudget, $hashcache // {}], $class;
 }
 
 sub script  :lvalue { $_[0]->[0] }
@@ -20,7 +20,7 @@ sub altstack  { $_[0]->[5] }
 sub execcount :lvalue { $_[0]->[6] } # OP_EXEC calls made so far by this input, shared by all exec levels
 sub tx        { $_[0]->[7] }
 sub input_num { $_[0]->[8] }
-sub sigops  :lvalue  { $_[0]->[9] }
+sub sigbudget :lvalue { $_[0]->[9] }
 sub hashcache { $_[0]->[10] } # hashes of long elements computed so far by this input, shared by all exec levels
 
 # True while no enclosing IF branch is false, O(1) thanks to the iffalse counter

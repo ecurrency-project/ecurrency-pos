@@ -89,7 +89,7 @@ ok(!script_eval([ $sig_delegate, $owner->pubkey, SELECTOR_DELEGATE ], $script, $
     "signature must match the pubkey");
 
 # Post-quantum delegate key: the script commits to hash256(pubkey), the full
-# pubkey travels in the siglist and funds its own sigops budget; a mixed
+# pubkey travels in the siglist and funds its own signature check budget; a mixed
 # covenant hashes to a post-quantum-style (hash256) scripthash
 my $falcon_pk = generate_keypair(CRYPT_ALGO_FALCON);
 my $falcon    = QBitcoin::MyAddress->new( private_key => wallet_import_format($falcon_pk->pk_serialize) );

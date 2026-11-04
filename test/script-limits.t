@@ -95,15 +95,29 @@ my $tx = TestTx->new(sign_data => $sign_data);
 my @sig = map { signature($sign_data, $_, CRYPT_ALGO_ECDSA, SIGHASH_ALL) } @addr;
 my @pubkey = map { op_pushdata($_->pubkey) } @addr;
 
-# OP_CHECKMULTISIG costs nkeys sigops: a signature is tried against each key until it matches
+# The budget is the size of the input and a check pays the bytes of its key and signature,
+# so any k-of-n with explicit keys is spendable whatever the number of keys
 my $multisig_1_of_2 = OP_1 . join("", @pubkey[0..1]) . OP_2 . OP_CHECKMULTISIG;
 ok(script_eval([$sig[1]], $multisig_1_of_2, $tx, 0), "1-of-2 multisig with the last key");
 ok(script_eval([$sig[0]], $multisig_1_of_2, $tx, 0), "1-of-2 multisig with the first key");
 ok(!script_eval([$sig[3]], $multisig_1_of_2, $tx, 0), "1-of-2 multisig with a wrong key");
 my $multisig_1_of_20 = OP_1 . join("", @pubkey) . op_pushdata(pack_int(20)) . OP_CHECKMULTISIG;
-ok(!script_eval([$sig[0]], $multisig_1_of_20, $tx, 0), "1-of-20 multisig exceeds the sigops budget even with the first key");
+ok(script_eval([$sig[19]], $multisig_1_of_20, $tx, 0), "1-of-20 multisig with the last key");
+ok(script_eval([$sig[0]], $multisig_1_of_20, $tx, 0), "1-of-20 multisig with the first key");
+ok(!script_eval([$sig[0], $sig[19]], $multisig_1_of_20, $tx, 0), "1-of-20 multisig with two signatures");
+my $multisig_19_of_20 = op_pushdata(pack_int(19)) . join("", @pubkey) . op_pushdata(pack_int(20)) . OP_CHECKMULTISIG;
+ok(script_eval([@sig[1..19]], $multisig_19_of_20, $tx, 0), "19-of-20 multisig");
+ok(!script_eval([@sig[0..17], $sig[0]], $multisig_19_of_20, $tx, 0), "19-of-20 multisig with a repeated signature");
+# The budget is exact: the key in the siglist and the bare OP_CHECKSIG as the script
+ok(script_eval([$sig[0], $addr[0]->pubkey], OP_CHECKSIG, $tx, 0), "checksig with the key in the siglist");
+# Operands made cheaply (OP_2DUP, OP_3DUP, OP_HASH256) pay their full size, so a check cannot be repeated for free
+ok(!script_eval([$sig[0], $addr[0]->pubkey], OP_2DUP . OP_CHECKSIG . OP_DROP . OP_CHECKSIG, $tx, 0), "the same check twice exceeds the budget");
+ok(!script_eval([$sig[0]], OP_1 . join("", @pubkey[0..2]) . OP_3DUP . OP_3DUP . OP_9 . OP_CHECKMULTISIG, $tx, 0), "multisig keys made by OP_3DUP are paid in full");
+# The cheapest signature which is fully verified is a DER with one-byte r and s
+my $short_sig = pack("CC", SIGHASH_ALL, CRYPT_ALGO_ECDSA) . pack("H*", "3006020101020101");
+ok(!script_eval([$short_sig], $pubkey[0] . OP_CHECKSIG, $tx, 0), "a 10-byte signature is checked and fails");
 
-# An empty signature costs no sigops and counts as a failed check (BIP-342), so k-of-n via OP_CHECKSIGADD works
+# An empty signature costs nothing and counts as a failed check (BIP-342), so k-of-n via OP_CHECKSIGADD works
 my $checksigadd_1_of_3 = $pubkey[0] . OP_CHECKSIG . $pubkey[1] . OP_CHECKSIGADD . $pubkey[2] . OP_CHECKSIGADD . OP_1 . OP_NUMEQUAL;
 ok(script_eval([$sig[2], "", ""], $checksigadd_1_of_3, $tx, 0), "1-of-3 checksigadd with the last key");
 ok(script_eval(["", "", $sig[0]], $checksigadd_1_of_3, $tx, 0), "1-of-3 checksigadd with the first key");

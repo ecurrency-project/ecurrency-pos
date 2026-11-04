@@ -518,7 +518,7 @@ sub _sum_by_scripthash {
 
 # OP_INPUTSVALUE: pop a scripthash, push the total value of the transaction inputs
 # with that scripthash (0 if none). Sums are memoized on the transaction, so
-# repeated queries for the same scripthash cost O(1) and no sigops charge is needed.
+# repeated queries for the same scripthash cost O(1) and no budget charge is needed.
 sub cmd_inputsvalue($) {
     my ($state) = @_;
     return unless $state->ifstate;
@@ -554,11 +554,11 @@ sub cmd_exec {
     my $stack = $state->stack;
     @$stack or return 0;
     my $script = pop @$stack;
-    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->sigops, $state->hashcache);
+    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->sigbudget, $state->hashcache);
     $new_state->execcount = $state->execcount + 1;
     my $res = execute($new_state);
     return $res if defined $res;
-    $state->sigops    = $new_state->sigops;
+    $state->sigbudget = $new_state->sigbudget;
     $state->execcount = $new_state->execcount;
     return undef;
 }
@@ -635,8 +635,11 @@ sub script_eval($$$$) {
     my ($siglist, $redeem_script, $tx, $input_num) = @_;
 
     my @stack = $siglist ? @$siglist : (); # make a copy to prevent modifying original siglist
-    my $sigops = 1 + int(sum0(map { length($_) } @stack) / 50); # as for tapscript, BIP-342
-    my $state = QBitcoin::Script::State->new($redeem_script, \@stack, $tx, $input_num, $sigops);
+    # The signature check budget is the size of the input: a check pays the bytes of the key and the signature
+    # it consumes, so a script whose keys and signatures are given explicitly is always spendable,
+    # and the number of checks is bounded by the input size however cheaply (OP_DUP, OP_HASH256) the operands were made
+    my $sigbudget = length($redeem_script) + sum0(map { length($_) } @stack);
+    my $state = QBitcoin::Script::State->new($redeem_script, \@stack, $tx, $input_num, $sigbudget);
     my $res = execute($state);
     return $res if defined($res);
 
