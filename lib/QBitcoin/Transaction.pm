@@ -619,6 +619,17 @@ sub sign_data {
     return $data;
 }
 
+# hash256 of sign_data, cached the same way, so that checking many signatures of a large transaction
+# does not rehash the whole transaction for each of them. Reset when block_sign_data changes.
+sub sign_hash {
+    my $self = shift;
+    my ($input_num, $sighash_type) = @_;
+
+    my $per_input = ($sighash_type & SIGHASH_ANYONECANPAY) || $sighash_type == SIGHASH_SINGLE;
+    my $cached_hash = $per_input ? \$self->{sign_hash}->[$sighash_type]->[$input_num] : \$self->{sign_hash}->[$sighash_type];
+    return $$cached_hash //= hash256($self->sign_data($input_num, $sighash_type) // return undef);
+}
+
 sub type_as_text {
     my $self = shift;
     return TX_TYPES_NAMES->[$self->tx_type];
@@ -1301,6 +1312,7 @@ sub valid_for_block {
     my ($block) = @_;
     if ($self->is_stake) {
         $self->block_sign_data = $block->sign_data;
+        delete $self->{sign_hash}; # signed data includes block_sign_data
         if (!skip_scripts()) {
             $self->check_input_script == 0
                 or return -1;

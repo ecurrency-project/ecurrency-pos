@@ -85,6 +85,8 @@ use warnings;
 use strict;
 
 use QBitcoin::Accessors qw(new);
+use QBitcoin::Crypto qw(hash256);
 sub sign_data { $_[0]->{sign_data} };
+sub sign_hash { hash256($_[0]->{sign_data}) };
 
 1;

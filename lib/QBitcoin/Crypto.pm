@@ -6,6 +6,7 @@ use Exporter qw(import);
 
 our @EXPORT_OK = qw(
     check_sig
+    check_sig_hash
     hash160
     hash256
     ripemd160
@@ -48,6 +49,12 @@ BEGIN {
 
 sub check_sig {
     my ($data, $signature, $pubkey) = @_;
+    return check_sig_hash(hash256($data), $signature, $pubkey);
+}
+
+# Check the signature of already hashed data (hash256), so the caller can cache the hash
+sub check_sig_hash {
+    my ($hash, $signature, $pubkey) = @_;
     my $sig_alg = unpack("C", $signature);
     my $crypto_module = _crypto_module($sig_alg);
     if (!$crypto_module) {
@@ -63,7 +70,7 @@ sub check_sig {
         }
         return 1;
     }
-    return eval { $crypto_module->verify_signature(hash256($data), substr($signature, 1), $pubkey) };
+    return eval { $crypto_module->verify_signature($hash, substr($signature, 1), $pubkey) };
 }
 
 sub hash160 {

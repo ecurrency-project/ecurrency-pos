@@ -151,6 +151,8 @@ package TestTx;
 use warnings;
 use strict;
 use QBitcoin::Accessors qw(new);
+use QBitcoin::Crypto qw(hash256);
+sub sign_hash { hash256($_[0]->{sign_data}) }
 sub tx_type { $_[0]->{tx_type} }
 sub in  { $_[0]->{in} }
 sub out { $_[0]->{out} }

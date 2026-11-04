@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 use Role::Tiny;
-use QBitcoin::Crypto qw(check_sig);
+use QBitcoin::Crypto qw(check_sig_hash);
 use QBitcoin::Script::Const;
 use QBitcoin::Script::Util qw(pack_int unpack_int);
 
@@ -101,9 +101,9 @@ sub cmd_checksigadd($) {
 sub check_tx_signature {
     my ($pubkey, $signature, $tx, $input_num) = @_;
     my $sighash_type = unpack('C', $signature);
-    my $sign_data = $tx->sign_data($input_num, $sighash_type)
+    my $sign_hash = $tx->sign_hash($input_num, $sighash_type)
         or return 0;
-    return check_sig($sign_data, substr($signature, 1), $pubkey);
+    return check_sig_hash($sign_hash, substr($signature, 1), $pubkey);
 }
 
 1;
