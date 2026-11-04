@@ -44,6 +44,15 @@ use constant MAX_SCRIPT_EXEC_COUNT => 16;
 # the one it picks) and the other stack operations cost a bounded time
 use constant MAX_STACK_SIZE => 1000;
 
+# Hashing an element costs its size, and an element may be as large as the siglist or the redeem script,
+# so a script could hash a 64KB element once per three bytes of code. But a long element can only come
+# from the input (siglist or push data) or be a copy of one: there is no way to build a new long element
+# (no OP_CAT), so the results of hashing long elements are kept for the input and each distinct long
+# element is hashed once. The cache is a list per hash function and element size, scanned with eq,
+# which is much cheaper than hashing. Elements up to the bitcoin element size limit are hashed directly.
+# This is an implementation detail, not a consensus rule: the cache does not change any result.
+use constant HASH_CACHE_MIN_SIZE => 520;
+
 # Allow attributes "in1", "in2", etc; store them so attributes::get() can fetch them back
 my %CODE_ATTRS;
 sub MODIFY_CODE_ATTRIBUTES {
@@ -102,12 +111,6 @@ my %COMMON_CMD = (
     '0notequal' => sub :in1 { push @_, is_true(pop) ? TRUE : FALSE },
     booland => sub :in2 { push @_, is_true(pop) && is_true(pop) ? TRUE : FALSE },
     boolor  => sub :in2 { push @_, is_true(pop) || is_true(pop) ? TRUE : FALSE },
-
-    hash160   => sub :in1 { push @_, hash160(pop) },
-    ripemd160 => sub :in1 { push @_, ripemd160(pop) },
-    sha1      => sub :in1 { push @_, sha1(pop) },
-    sha256    => sub :in1 { push @_, sha256(pop) },
-    hash256   => sub :in1 { push @_, hash256(pop) },
 );
 
 my @OP_CMD;
@@ -361,6 +364,34 @@ sub cmd_roll($) {
     return undef;
 }
 
+sub cached_hash($$$$) {
+    my ($state, $name, $hash_func, $data) = @_;
+    length($data) > HASH_CACHE_MIN_SIZE
+        or return $hash_func->($data);
+    my $entries = $state->hashcache->{$name}->{length($data)} //= [];
+    foreach my $entry (@$entries) {
+        return $entry->[1] if $entry->[0] eq $data;
+    }
+    my $hash = $hash_func->($data);
+    push @$entries, [$data, $hash];
+    return $hash;
+}
+
+sub hash_op($$$) {
+    my ($state, $name, $hash_func) = @_;
+    return unless $state->ifstate;
+    my $stack = $state->stack;
+    @$stack or return 0;
+    push @$stack, cached_hash($state, $name, $hash_func, pop @$stack);
+    return undef;
+}
+
+sub cmd_hash160($)   { hash_op($_[0], hash160   => \&hash160)   }
+sub cmd_ripemd160($) { hash_op($_[0], ripemd160 => \&ripemd160) }
+sub cmd_sha1($)      { hash_op($_[0], sha1      => \&sha1)      }
+sub cmd_sha256($)    { hash_op($_[0], sha256    => \&sha256)    }
+sub cmd_hash256($)   { hash_op($_[0], hash256   => \&hash256)   }
+
 sub cmd_numequalverify($) {
     my ($state) = @_;
     return unless $state->ifstate;
@@ -523,7 +554,7 @@ sub cmd_exec {
     my $stack = $state->stack;
     @$stack or return 0;
     my $script = pop @$stack;
-    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->sigops);
+    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->sigops, $state->hashcache);
     $new_state->execcount = $state->execcount + 1;
     my $res = execute($new_state);
     return $res if defined $res;
@@ -541,9 +572,23 @@ sub cmd_mastverify {
     my $stack = $state->stack;
     @$stack >= 3 or return 0;
     my ($hash, $merkle_path, $merkle_root) = splice(@$stack, -3);
-    _check_merkle_path($hash, $merkle_path, $merkle_root)
+    _cached_merkle_path($state, $hash, $merkle_path, $merkle_root)
         or return 0;
     return undef;
+}
+
+# The merkle path is a long element hashed node by node, cached as the hash operations are
+sub _cached_merkle_path {
+    my ($state, $hash, $merkle_path, $merkle_root) = @_;
+    length($merkle_path) > HASH_CACHE_MIN_SIZE
+        or return _check_merkle_path($hash, $merkle_path, $merkle_root);
+    my $entries = $state->hashcache->{mastverify}->{length($merkle_path)} //= [];
+    foreach my $entry (@$entries) {
+        return $entry->[3] if $entry->[0] eq $hash && $entry->[1] eq $merkle_root && $entry->[2] eq $merkle_path;
+    }
+    my $res = _check_merkle_path($hash, $merkle_path, $merkle_root) ? 1 : 0;
+    push @$entries, [$hash, $merkle_root, $merkle_path, $res];
+    return $res;
 }
 
 sub _merkle_hash {

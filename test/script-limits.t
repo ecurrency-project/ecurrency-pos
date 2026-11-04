@@ -13,7 +13,7 @@ use QBitcoin::Const;
 use QBitcoin::Script::OpCodes qw(:OPCODES);
 use QBitcoin::Script qw(script_eval op_pushdata);
 use QBitcoin::Script::Util qw(pack_int);
-use QBitcoin::Crypto qw(signature hash160 hash256 generate_keypair);
+use QBitcoin::Crypto qw(signature hash160 hash256 sha256 generate_keypair);
 use QBitcoin::Address qw(wallet_import_format);
 use QBitcoin::MyAddress;
 
@@ -61,6 +61,32 @@ ok(script_eval([("") x 1000], (OP_2DROP x 500) . OP_1, "", 0), "1000 siglist ele
 $t = time;
 script_eval([], $fill . ($roll x 10000) . $cleanup . OP_1, "", 0);
 cmp_ok(time - $t, '<', 1, "10000 deep rolls are fast");
+
+# Hashes of long elements are cached per input: a long element comes only from the input or is a copy,
+# so hashing it once per few bytes of code is linear in time
+my $big = "\xaa" x 60000;
+my $big2 = ("\xaa" x 59999) . "\xab";
+my $hash_loop = OP_DUP . OP_HASH256 . OP_DROP;
+$t = time;
+ok(script_eval([$big], ($hash_loop x 20000) . OP_HASH256 . op_pushdata(hash256($big)) . OP_EQUAL, "", 0), "20000 hashes of a 60KB element");
+cmp_ok(time - $t, '<', 1, "repeated hashing of a long element is fast");
+ok(script_eval([$big, $big2], OP_HASH256 . op_pushdata(hash256($big2)) . OP_EQUALVERIFY . OP_SHA256 . op_pushdata(sha256($big)) . OP_EQUAL, "", 0), "distinct elements of the same size hash separately");
+# Many distinct elements of the same size with a common prefix: the worst case for the cache scan
+my @same = map { ("\x55" x 520) . pack("C", $_) } 0 .. 125; # 126 elements of 521 bytes
+my $pick_loop = join("", map { op_pushdata(pack_int($_)) . OP_PICK . OP_HASH256 . OP_DROP } 0 .. 125);
+$t = time;
+ok(script_eval([@same], ($pick_loop x 130) . (OP_2DROP x 63) . OP_1, "", 0), "16380 hashes of 126 same-size elements");
+cmp_ok(time - $t, '<', 1, "scanning the cache among same-size elements is fast");
+# OP_MASTVERIFY hashes the whole merkle path, cached the same way
+my $leaf_hash = hash256("leaf");
+my @path = map { hash256("node $_") } 1 .. 1000;
+my $root = $leaf_hash;
+$root = hash256($_ lt $root ? $_ . $root : $root . $_) foreach @path;
+my $mast_loop = OP_3DUP . OP_MASTVERIFY;
+$t = time;
+ok(script_eval([$leaf_hash, join("", @path), $root], ($mast_loop x 2000) . OP_MASTVERIFY . OP_1, "", 0), "2000 mastverify with a 1000-level path");
+cmp_ok(time - $t, '<', 1, "repeated mastverify of a long path is fast");
+ok(!script_eval([$leaf_hash, join("", @path), hash256("wrong")], $mast_loop . OP_MASTVERIFY . OP_1, "", 0), "mastverify with a wrong root is cached as failed");
 
 # Signatures
 my @addr = map { QBitcoin::MyAddress->new(private_key => wallet_import_format(generate_keypair(CRYPT_ALGO_ECDSA)->pk_serialize)) } 1 .. 20;
