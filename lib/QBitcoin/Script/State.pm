@@ -7,7 +7,7 @@ use QBitcoin::Script::Const;
 sub new {
     my $class = shift;
     my ($script, $stack, $tx, $input_num, $sigops) = @_;
-    # script, cp, stack, false if-branches, if-stack, alt-stack, exec-depth, tx, input_num, sigops
+    # script, cp, stack, false if-branches, if-stack, alt-stack, exec-count, tx, input_num, sigops
     return bless [$script, 0, $stack // [], 0, [], [], 0, $tx, $input_num, $sigops], $class;
 }
 
@@ -17,7 +17,7 @@ sub stack     { $_[0]->[2] }
 sub iffalse :lvalue { $_[0]->[3] } # number of false entries in ifstack
 sub ifstack   { $_[0]->[4] }
 sub altstack  { $_[0]->[5] }
-sub execdepth :lvalue { $_[0]->[6] }
+sub execcount :lvalue { $_[0]->[6] } # OP_EXEC calls made so far by this input, shared by all exec levels
 sub tx        { $_[0]->[7] }
 sub input_num { $_[0]->[8] }
 sub sigops  :lvalue  { $_[0]->[9] }

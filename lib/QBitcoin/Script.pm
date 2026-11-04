@@ -34,7 +34,11 @@ use constant SEQUENCE_LOCKTIME_DISABLE_FLAG  => 1 << 31;
 use constant SEQUENCE_LOCKTIME_TYPE_FLAG     => 1 << 22;
 use constant QBT_SEQUENCE_LOCKTIME_TYPE_FLAG => 1 << 27;
 
-use constant MAX_SCRIPT_EXEC_DEPTH => 16;
+# Limit the number of OP_EXEC calls per input, not the nesting depth: a script can copy the code
+# it executes (OP_DUP etc), so with a depth limit alone an input of a few bytes could run m**depth
+# executions. With the count limited, the executed code is at most (1 + MAX_SCRIPT_EXEC_COUNT) times
+# the input size, since each execution runs one stack element.
+use constant MAX_SCRIPT_EXEC_COUNT => 16;
 
 # Allow attributes "in1", "in2", etc; store them so attributes::get() can fetch them back
 my %CODE_ATTRS;
@@ -510,16 +514,17 @@ sub cmd_outputsvalue($) {
 sub cmd_exec {
     my ($state) = @_;
     return unless $state->ifstate;
-    $state->execdepth <= MAX_SCRIPT_EXEC_DEPTH
+    $state->execcount < MAX_SCRIPT_EXEC_COUNT
         or return 0;
     my $stack = $state->stack;
     @$stack or return 0;
     my $script = pop @$stack;
     my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->sigops);
-    $new_state->execdepth = $state->execdepth + 1;
+    $new_state->execcount = $state->execcount + 1;
     my $res = execute($new_state);
     return $res if defined $res;
-    $state->sigops = $new_state->sigops;
+    $state->sigops    = $new_state->sigops;
+    $state->execcount = $new_state->execcount;
     return undef;
 }
 
