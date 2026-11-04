@@ -244,11 +244,16 @@ sub cmd_return($) {
     return 0;
 }
 
+# Inside a false branch the condition is not evaluated and stays on the stack (as in bitcoin),
+# the nested branch is just marked false
 sub cmd_if($) {
     my ($state) = @_;
-    my $stack = $state->stack;
-    @$stack or return 0;
-    my $new_state = is_true(pop @$stack);
+    my $new_state = 0;
+    if ($state->ifstate) {
+        my $stack = $state->stack;
+        @$stack or return 0;
+        $new_state = is_true(pop @$stack);
+    }
     push @{$state->ifstack}, $new_state;
     $state->ifstate &&= $new_state;
     return undef;
@@ -256,9 +261,12 @@ sub cmd_if($) {
 
 sub cmd_notif($) {
     my ($state) = @_;
-    my $stack = $state->stack;
-    @$stack or return 0;
-    my $new_state = !is_true(pop @$stack);
+    my $new_state = 0;
+    if ($state->ifstate) {
+        my $stack = $state->stack;
+        @$stack or return 0;
+        $new_state = !is_true(pop @$stack);
+    }
     push @{$state->ifstack}, $new_state;
     $state->ifstate &&= $new_state;
     return undef;

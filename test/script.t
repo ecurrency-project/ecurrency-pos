@@ -28,6 +28,11 @@ my @scripts_ok = (
     [ op_equal_data => op_pushdata("abc") . op_pushdata("abc") . OP_EQUAL ],
     [ op_equal_if => OP_1 . OP_1 . OP_EQUAL . OP_IF . OP_1 . OP_ELSE . OP_0 . OP_ENDIF ],
     [ op_equal_notif => OP_0 . OP_1 . OP_EQUAL . OP_NOTIF . OP_1 . OP_ELSE . OP_0 . OP_ENDIF ],
+    # OP_IF inside a false branch does not consume the stack
+    [ op_if_in_false => OP_1 . OP_0 . OP_IF . OP_IF . OP_ENDIF . OP_ENDIF ],
+    [ op_notif_in_false => OP_1 . OP_0 . OP_IF . OP_NOTIF . OP_ELSE . OP_ENDIF . OP_ENDIF ],
+    [ op_if_in_else => OP_1 . OP_1 . OP_IF . OP_ELSE . OP_IF . OP_ENDIF . OP_ENDIF ],
+    [ op_if_in_true => OP_1 . OP_1 . OP_IF . OP_IF . OP_ENDIF . OP_ENDIF . OP_1 ],
 );
 
 my @scripts_fail = (
@@ -43,6 +48,8 @@ my @scripts_fail = (
     [ op_equal    => OP_0 . OP_1 . OP_EQUAL ],
     [ op_equal_data => op_pushdata("abc") . op_pushdata("abd") . OP_EQUAL ],
     [ op_equal_stack => OP_1 . OP_EQUAL ],
+    # was ok while OP_IF in a false branch consumed the stack
+    [ op_if_in_false => OP_1 . OP_0 . OP_IF . OP_IF . OP_ENDIF . OP_ENDIF . OP_1 ],
 );
 
 foreach my $check_data (@scripts_ok) {
