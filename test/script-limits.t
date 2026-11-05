@@ -29,24 +29,33 @@ cmp_ok(time - $t, '<', 1, "nested if is linear");
 ok(script_eval([], OP_0 . (OP_IF x $depth) . OP_RETURN . (OP_ENDIF x $depth) . OP_1, "", 0), "nested false if skips OP_RETURN");
 ok(!script_eval([], ((OP_1 . OP_IF) x $depth) . (OP_ENDIF x ($depth-1)) . OP_1, "", 0), "unbalanced nested if");
 
-# OP_EXEC: at most MAX_SCRIPT_EXEC_COUNT (16) executions per input, whatever the nesting
+# OP_EXEC: each executed command pays one unit of the budget, the input size, so the executions
+# of an element are bounded by the input whatever the nesting and no count limit is needed
 my $leaf = OP_1 . OP_DROP;
-ok(script_eval([$leaf], ((OP_DUP . OP_EXEC) x 16) . OP_DROP . OP_1, "", 0), "leaf executed 16 times");
-ok(!script_eval([$leaf], ((OP_DUP . OP_EXEC) x 17) . OP_DROP . OP_1, "", 0), "leaf executed 17 times");
+# n rounds of OP_DUP OP_EXEC run 4n+2 commands while the input has 2n+4 bytes plus the padding element
+my $rounds = 100;
+my $exec_rounds = ((OP_DUP . OP_EXEC) x $rounds) . OP_2DROP . OP_1;
+ok(script_eval(["\x00" x (2*$rounds - 2), $leaf], $exec_rounds, "", 0), "leaf executed $rounds times within the budget");
+ok(!script_eval(["\x00" x (2*$rounds - 3), $leaf], $exec_rounds, "", 0), "leaf executed $rounds times one byte short");
+# A self-replicating element recurses until the budget is exhausted
+my $self_exec = OP_DUP . OP_EXEC;
+$t = time;
+ok(!script_eval(["\x00" x 65000, $self_exec], $self_exec, "", 0), "self-replicating exec is stopped by the budget");
+cmp_ok(time - $t, '<', 1, "deep exec recursion is fast");
 # The leaf runs itself $m times with a counter decremented on each level: entry [leaf, n] -> exit [leaf, n]
 my $counter_leaf = sub {
     my ($m) = @_;
     return OP_1SUB . OP_DUP . OP_IF . ((OP_OVER . OP_EXEC) x $m) . OP_ENDIF . OP_1ADD;
 };
-my $exec_redeem = OP_OVER . OP_EXEC . OP_2DROP . OP_1;
-ok(script_eval([$counter_leaf->(1), pack_int(16)], $exec_redeem, "", 0), "exec chain of 16");
-ok(!script_eval([$counter_leaf->(1), pack_int(17)], $exec_redeem, "", 0), "exec chain of 17");
-# Without the count limit the fan-out would take $m**16 executions
+my $exec_redeem = OP_OVER . OP_EXEC . OP_2DROP . OP_DROP . OP_1;
+ok(script_eval(["\x00" x 1000, $counter_leaf->(1), pack_int(100)], $exec_redeem, "", 0), "exec chain of 100");
+ok(!script_eval([$counter_leaf->(1), pack_int(100)], OP_OVER . OP_EXEC . OP_2DROP . OP_1, "", 0), "exec chain of 100 without the budget");
+# The fan-out would take $m**16 executions, the budget cuts it
 $t = time;
-ok(!script_eval([$counter_leaf->(2), pack_int(16)], $exec_redeem, "", 0), "exec fan-out exceeds the count");
-ok(!script_eval([$counter_leaf->(8), pack_int(16)], $exec_redeem, "", 0), "wide exec fan-out exceeds the count");
+ok(!script_eval(["\x00" x 60000, $counter_leaf->(2), pack_int(16)], $exec_redeem, "", 0), "exec fan-out exceeds the budget");
+ok(!script_eval(["\x00" x 60000, $counter_leaf->(8), pack_int(16)], $exec_redeem, "", 0), "wide exec fan-out exceeds the budget");
 cmp_ok(time - $t, '<', 1, "exec fan-out is cut quickly");
-ok(script_eval([$counter_leaf->(2), pack_int(4)], $exec_redeem, "", 0), "small exec fan-out (15 executions)");
+ok(script_eval(["\x00" x 1000, $counter_leaf->(2), pack_int(4)], $exec_redeem, "", 0), "small exec fan-out (15 executions)");
 
 # Stack + altstack at most MAX_STACK_SIZE (1000) elements, as in bitcoin, so OP_ROLL costs a bounded time
 my $fill = (OP_1 x 3) . (OP_3DUP x 332); # 999 elements, the pushed roll index makes 1000
@@ -116,6 +125,11 @@ ok(!script_eval([$sig[0]], OP_1 . join("", @pubkey[0..2]) . OP_3DUP . OP_3DUP . 
 # The cheapest signature which is fully verified is a DER with one-byte r and s
 my $short_sig = pack("CC", SIGHASH_ALL, CRYPT_ALGO_ECDSA) . pack("H*", "3006020101020101");
 ok(!script_eval([$short_sig], $pubkey[0] . OP_CHECKSIG, $tx, 0), "a 10-byte signature is checked and fails");
+# The executed element pays nothing by itself: a key inside it is paid once, by the check
+my $leaf_checksig = $pubkey[0] . OP_CHECKSIG;
+ok(script_eval([$sig[0], $leaf_checksig], OP_EXEC, $tx, 0), "checksig inside an executed element, exact budget");
+ok(script_eval([$sig[0], $leaf_checksig, $sig[0], $leaf_checksig], OP_EXEC . OP_VERIFY . OP_EXEC, $tx, 0), "two explicit copies of the element, exact budget");
+ok(!script_eval([$sig[0], $sig[0], $leaf_checksig], OP_DUP . OP_TOALTSTACK . OP_EXEC . OP_VERIFY . OP_FROMALTSTACK . OP_EXEC, $tx, 0), "the element duplicated and executed twice exceeds the budget");
 
 # An empty signature costs nothing and counts as a failed check (BIP-342), so k-of-n via OP_CHECKSIGADD works
 my $checksigadd_1_of_3 = $pubkey[0] . OP_CHECKSIG . $pubkey[1] . OP_CHECKSIGADD . $pubkey[2] . OP_CHECKSIGADD . OP_1 . OP_NUMEQUAL;

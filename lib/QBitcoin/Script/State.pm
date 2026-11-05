@@ -6,9 +6,9 @@ use QBitcoin::Script::Const;
 
 sub new {
     my $class = shift;
-    my ($script, $stack, $tx, $input_num, $sigbudget, $hashcache) = @_;
-    # script, cp, stack, false if-branches, if-stack, alt-stack, exec-count, tx, input_num, signature check budget, hash cache
-    return bless [$script, 0, $stack // [], 0, [], [], 0, $tx, $input_num, $sigbudget, $hashcache // {}], $class;
+    my ($script, $stack, $tx, $input_num, $budget, $hashcache) = @_;
+    # script, cp, stack, false if-branches, if-stack, alt-stack, tx, input_num, budget, hash cache
+    return bless [$script, 0, $stack // [], 0, [], [], $tx, $input_num, $budget, $hashcache // {}], $class;
 }
 
 sub script  :lvalue { $_[0]->[0] }
@@ -17,11 +17,10 @@ sub stack     { $_[0]->[2] }
 sub iffalse :lvalue { $_[0]->[3] } # number of false entries in ifstack
 sub ifstack   { $_[0]->[4] }
 sub altstack  { $_[0]->[5] }
-sub execcount :lvalue { $_[0]->[6] } # OP_EXEC calls made so far by this input, shared by all exec levels
-sub tx        { $_[0]->[7] }
-sub input_num { $_[0]->[8] }
-sub sigbudget :lvalue { $_[0]->[9] }
-sub hashcache { $_[0]->[10] } # hashes of long elements computed so far by this input, shared by all exec levels
+sub tx        { $_[0]->[6] }
+sub input_num { $_[0]->[7] }
+sub budget  :lvalue { $_[0]->[8] } # units left of the input size, shared by all exec levels (see script_eval)
+sub hashcache { $_[0]->[9] } # hashes of long elements computed so far by this input, shared by all exec levels
 
 # True while no enclosing IF branch is false, O(1) thanks to the iffalse counter
 sub ifstate { !$_[0]->[3] }

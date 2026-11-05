@@ -34,12 +34,6 @@ use constant SEQUENCE_LOCKTIME_DISABLE_FLAG  => 1 << 31;
 use constant SEQUENCE_LOCKTIME_TYPE_FLAG     => 1 << 22;
 use constant QBT_SEQUENCE_LOCKTIME_TYPE_FLAG => 1 << 27;
 
-# Limit the number of OP_EXEC calls per input, not the nesting depth: a script can copy the code
-# it executes (OP_DUP etc), so with a depth limit alone an input of a few bytes could run m**depth
-# executions. With the count limited, the executed code is at most (1 + MAX_SCRIPT_EXEC_COUNT) times
-# the input size, since each execution runs one stack element.
-use constant MAX_SCRIPT_EXEC_COUNT => 16;
-
 # Stack plus altstack size limit, as in bitcoin, so that OP_ROLL (which moves all elements above
 # the one it picks) and the other stack operations cost a bounded time
 use constant MAX_STACK_SIZE => 1000;
@@ -546,20 +540,19 @@ sub cmd_outputsvalue($) {
     return undef;
 }
 
+# The executed element pays nothing by itself: each command it runs pays one unit of the budget,
+# so the executions of an element, however it was made, and the recursion depth are bounded by the input size
 sub cmd_exec {
     my ($state) = @_;
+    no warnings "recursion"; # OP_EXEC nests execute() as deep as the budget allows
     return unless $state->ifstate;
-    $state->execcount < MAX_SCRIPT_EXEC_COUNT
-        or return 0;
     my $stack = $state->stack;
     @$stack or return 0;
     my $script = pop @$stack;
-    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->sigbudget, $state->hashcache);
-    $new_state->execcount = $state->execcount + 1;
+    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->budget, $state->hashcache);
     my $res = execute($new_state);
     return $res if defined $res;
-    $state->sigbudget = $new_state->sigbudget;
-    $state->execcount = $new_state->execcount;
+    $state->budget = $new_state->budget;
     return undef;
 }
 
@@ -615,10 +608,12 @@ sub _check_merkle_path {
 
 sub execute {
     my ($state) = @_;
+    no warnings "recursion"; # OP_EXEC nests execute() as deep as the budget allows
     my $stack = $state->stack;
     my $altstack = $state->altstack;
     @$stack + @$altstack <= MAX_STACK_SIZE or return 0;
     while (defined(my $cmd_code = $state->get_script(1))) {
+        --$state->budget >= 0 or return 0;
         if (my $cmd_func = $OP_CMD[ord($cmd_code)]) {
             my $res = $cmd_func->($state);
             return $res if defined $res;
@@ -635,11 +630,12 @@ sub script_eval($$$$) {
     my ($siglist, $redeem_script, $tx, $input_num) = @_;
 
     my @stack = $siglist ? @$siglist : (); # make a copy to prevent modifying original siglist
-    # The signature check budget is the size of the input: a check pays the bytes of the key and the signature
-    # it consumes, so a script whose keys and signatures are given explicitly is always spendable,
-    # and the number of checks is bounded by the input size however cheaply (OP_DUP, OP_HASH256) the operands were made
-    my $sigbudget = length($redeem_script) + sum0(map { length($_) } @stack);
-    my $state = QBitcoin::Script::State->new($redeem_script, \@stack, $tx, $input_num, $sigbudget);
+    # The budget of an input is its size. Each executed command pays one unit and a signature check pays
+    # the bytes of the key and the signature it consumes, so a script which runs its code once and checks
+    # explicit keys and signatures once is always spendable, while the commands executed (OP_EXEC included)
+    # and the signature checks are bounded by the input size however cheaply (OP_DUP, OP_HASH256) the operands were made
+    my $budget = length($redeem_script) + sum0(map { length($_) } @stack);
+    my $state = QBitcoin::Script::State->new($redeem_script, \@stack, $tx, $input_num, $budget);
     my $res = execute($state);
     return $res if defined($res);
 
