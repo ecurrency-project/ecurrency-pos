@@ -38,15 +38,6 @@ use constant QBT_SEQUENCE_LOCKTIME_TYPE_FLAG => 1 << 27;
 # the one it picks) and the other stack operations cost a bounded time
 use constant MAX_STACK_SIZE => 1000;
 
-# Hashing an element costs its size, and an element may be as large as the siglist or the redeem script,
-# so a script could hash a 64KB element once per three bytes of code. But a long element can only come
-# from the input (siglist or push data) or be a copy of one: there is no way to build a new long element
-# (no OP_CAT), so the results of hashing long elements are kept for the input and each distinct long
-# element is hashed once. The cache is a list per hash function and element size, scanned with eq,
-# which is much cheaper than hashing. Elements up to the bitcoin element size limit are hashed directly.
-# This is an implementation detail, not a consensus rule: the cache does not change any result.
-use constant HASH_CACHE_MIN_SIZE => 520;
-
 # Allow attributes "in1", "in2", etc; store them so attributes::get() can fetch them back
 my %CODE_ATTRS;
 sub MODIFY_CODE_ATTRIBUTES {
@@ -358,33 +349,24 @@ sub cmd_roll($) {
     return undef;
 }
 
-sub cached_hash($$$$) {
-    my ($state, $name, $hash_func, $data) = @_;
-    length($data) > HASH_CACHE_MIN_SIZE
-        or return $hash_func->($data);
-    my $entries = $state->hashcache->{$name}->{length($data)} //= [];
-    foreach my $entry (@$entries) {
-        return $entry->[1] if $entry->[0] eq $data;
-    }
-    my $hash = $hash_func->($data);
-    push @$entries, [$data, $hash];
-    return $hash;
-}
-
-sub hash_op($$$) {
-    my ($state, $name, $hash_func) = @_;
+# A hash pays the bytes it hashes, the second most expensive operation after the signature check,
+# so the bytes an input hashes are bounded by its budget however the hashed elements were made
+# (copies, hashes of hashes, or any opcode which builds a new element)
+sub hash_op($$) {
+    my ($state, $hash_func) = @_;
     return unless $state->ifstate;
     my $stack = $state->stack;
     @$stack or return 0;
-    push @$stack, cached_hash($state, $name, $hash_func, pop @$stack);
+    ($state->budget -= length($stack->[-1])) >= 0 or return 0;
+    push @$stack, $hash_func->(pop @$stack);
     return undef;
 }
 
-sub cmd_hash160($)   { hash_op($_[0], hash160   => \&hash160)   }
-sub cmd_ripemd160($) { hash_op($_[0], ripemd160 => \&ripemd160) }
-sub cmd_sha1($)      { hash_op($_[0], sha1      => \&sha1)      }
-sub cmd_sha256($)    { hash_op($_[0], sha256    => \&sha256)    }
-sub cmd_hash256($)   { hash_op($_[0], hash256   => \&hash256)   }
+sub cmd_hash160($)   { hash_op($_[0], \&hash160)   }
+sub cmd_ripemd160($) { hash_op($_[0], \&ripemd160) }
+sub cmd_sha1($)      { hash_op($_[0], \&sha1)      }
+sub cmd_sha256($)    { hash_op($_[0], \&sha256)    }
+sub cmd_hash256($)   { hash_op($_[0], \&hash256)   }
 
 sub cmd_numequalverify($) {
     my ($state) = @_;
@@ -549,7 +531,7 @@ sub cmd_exec {
     my $stack = $state->stack;
     @$stack or return 0;
     my $script = pop @$stack;
-    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->budget, $state->hashcache);
+    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->budget);
     my $res = execute($new_state);
     return $res if defined $res;
     $state->budget = $new_state->budget;
@@ -565,23 +547,11 @@ sub cmd_mastverify {
     my $stack = $state->stack;
     @$stack >= 3 or return 0;
     my ($hash, $merkle_path, $merkle_root) = splice(@$stack, -3);
-    _cached_merkle_path($state, $hash, $merkle_path, $merkle_root)
+    # 64 bytes are hashed per 32-byte node of the path, paid as by the hash commands
+    ($state->budget -= 2 * length($merkle_path)) >= 0 or return 0;
+    _check_merkle_path($hash, $merkle_path, $merkle_root)
         or return 0;
     return undef;
-}
-
-# The merkle path is a long element hashed node by node, cached as the hash operations are
-sub _cached_merkle_path {
-    my ($state, $hash, $merkle_path, $merkle_root) = @_;
-    length($merkle_path) > HASH_CACHE_MIN_SIZE
-        or return _check_merkle_path($hash, $merkle_path, $merkle_root);
-    my $entries = $state->hashcache->{mastverify}->{length($merkle_path)} //= [];
-    foreach my $entry (@$entries) {
-        return $entry->[3] if $entry->[0] eq $hash && $entry->[1] eq $merkle_root && $entry->[2] eq $merkle_path;
-    }
-    my $res = _check_merkle_path($hash, $merkle_path, $merkle_root) ? 1 : 0;
-    push @$entries, [$hash, $merkle_root, $merkle_path, $res];
-    return $res;
 }
 
 sub _merkle_hash {
@@ -630,11 +600,14 @@ sub script_eval($$$$) {
     my ($siglist, $redeem_script, $tx, $input_num) = @_;
 
     my @stack = $siglist ? @$siglist : (); # make a copy to prevent modifying original siglist
-    # The budget of an input is its size. Each executed command pays one unit and a signature check pays
-    # the bytes of the key and the signature it consumes, so a script which runs its code once and checks
-    # explicit keys and signatures once is always spendable, while the commands executed (OP_EXEC included)
-    # and the signature checks are bounded by the input size however cheaply (OP_DUP, OP_HASH256) the operands were made
-    my $budget = length($redeem_script) + sum0(map { length($_) } @stack);
+    # The budget of an input is the size of its redeem script plus twice the size of its siglist, and every
+    # operation pays the bytes it works on: a command one unit, a hash the bytes it hashes, a signature check
+    # the key once and the signature twice. So a script is spendable whenever each byte of its siglist is
+    # used at most twice (a key is hashed and then checked, a signature is checked) and each byte of its
+    # script at most once, while the commands executed (OP_EXEC included), the bytes hashed and the
+    # signatures checked are all bounded by the input size however the operands were made (OP_DUP, OP_PICK,
+    # hashes of hashes)
+    my $budget = length($redeem_script) + 2 * sum0(map { length($_) } @stack);
     my $state = QBitcoin::Script::State->new($redeem_script, \@stack, $tx, $input_num, $budget);
     my $res = execute($state);
     return $res if defined($res);

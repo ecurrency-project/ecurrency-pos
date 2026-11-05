@@ -6,9 +6,9 @@ use QBitcoin::Script::Const;
 
 sub new {
     my $class = shift;
-    my ($script, $stack, $tx, $input_num, $budget, $hashcache) = @_;
-    # script, cp, stack, false if-branches, if-stack, alt-stack, tx, input_num, budget, hash cache
-    return bless [$script, 0, $stack // [], 0, [], [], $tx, $input_num, $budget, $hashcache // {}], $class;
+    my ($script, $stack, $tx, $input_num, $budget) = @_;
+    # script, cp, stack, false if-branches, if-stack, alt-stack, tx, input_num, budget
+    return bless [$script, 0, $stack // [], 0, [], [], $tx, $input_num, $budget], $class;
 }
 
 sub script  :lvalue { $_[0]->[0] }
@@ -19,8 +19,7 @@ sub ifstack   { $_[0]->[4] }
 sub altstack  { $_[0]->[5] }
 sub tx        { $_[0]->[6] }
 sub input_num { $_[0]->[7] }
-sub budget  :lvalue { $_[0]->[8] } # units left of the input size, shared by all exec levels (see script_eval)
-sub hashcache { $_[0]->[9] } # hashes of long elements computed so far by this input, shared by all exec levels
+sub budget  :lvalue { $_[0]->[8] } # units left of the input budget, shared by all exec levels (see script_eval)
 
 # True while no enclosing IF branch is false, O(1) thanks to the iffalse counter
 sub ifstate { !$_[0]->[3] }

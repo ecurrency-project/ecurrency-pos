@@ -32,11 +32,12 @@ ok(!script_eval([], ((OP_1 . OP_IF) x $depth) . (OP_ENDIF x ($depth-1)) . OP_1, 
 # OP_EXEC: each executed command pays one unit of the budget, the input size, so the executions
 # of an element are bounded by the input whatever the nesting and no count limit is needed
 my $leaf = OP_1 . OP_DROP;
-# n rounds of OP_DUP OP_EXEC run 4n+2 commands while the input has 2n+4 bytes plus the padding element
+# n rounds of OP_DUP OP_EXEC run 4n+2 commands while the budget is the 2n+2 bytes of the script
+# plus twice the leaf and the padding element
 my $rounds = 100;
 my $exec_rounds = ((OP_DUP . OP_EXEC) x $rounds) . OP_2DROP . OP_1;
-ok(script_eval(["\x00" x (2*$rounds - 2), $leaf], $exec_rounds, "", 0), "leaf executed $rounds times within the budget");
-ok(!script_eval(["\x00" x (2*$rounds - 3), $leaf], $exec_rounds, "", 0), "leaf executed $rounds times one byte short");
+ok(script_eval(["\x00" x ($rounds - 2), $leaf], $exec_rounds, "", 0), "leaf executed $rounds times within the budget");
+ok(!script_eval(["\x00" x ($rounds - 3), $leaf], $exec_rounds, "", 0), "leaf executed $rounds times one byte short");
 # A self-replicating element recurses until the budget is exhausted
 my $self_exec = OP_DUP . OP_EXEC;
 $t = time;
@@ -71,31 +72,29 @@ $t = time;
 script_eval([], $fill . ($roll x 10000) . $cleanup . OP_1, "", 0);
 cmp_ok(time - $t, '<', 1, "10000 deep rolls are fast");
 
-# Hashes of long elements are cached per input: a long element comes only from the input or is a copy,
-# so hashing it once per few bytes of code is linear in time
+# A hash pays the bytes it hashes. The siglist counts twice in the budget, so an element of it can be
+# hashed twice whatever its size, and the third hash exceeds the budget
 my $big = "\xaa" x 60000;
-my $big2 = ("\xaa" x 59999) . "\xab";
 my $hash_loop = OP_DUP . OP_HASH256 . OP_DROP;
-$t = time;
-ok(script_eval([$big], ($hash_loop x 20000) . OP_HASH256 . op_pushdata(hash256($big)) . OP_EQUAL, "", 0), "20000 hashes of a 60KB element");
-cmp_ok(time - $t, '<', 1, "repeated hashing of a long element is fast");
-ok(script_eval([$big, $big2], OP_HASH256 . op_pushdata(hash256($big2)) . OP_EQUALVERIFY . OP_SHA256 . op_pushdata(sha256($big)) . OP_EQUAL, "", 0), "distinct elements of the same size hash separately");
-# Many distinct elements of the same size with a common prefix: the worst case for the cache scan
+ok(script_eval([$big], ($hash_loop x 2) . OP_DROP . OP_1, "", 0), "a 60KB element hashed twice, exact budget");
+ok(!script_eval([$big], ($hash_loop x 3) . OP_DROP . OP_1, "", 0), "a 60KB element hashed three times");
+# Hashes of hashes are new 32-byte elements and pay 32 each: 100 of them need 3200 of budget beyond
+# the 102 commands, 64 of which come from the hashed element and the rest from the padding
+ok(script_eval(["\x00" x 1568, "\x55" x 32], (OP_HASH256 x 100) . OP_2DROP . OP_1, "", 0), "100 hashes of hashes, exact budget");
+ok(!script_eval(["\x00" x 1567, "\x55" x 32], (OP_HASH256 x 100) . OP_2DROP . OP_1, "", 0), "100 hashes of hashes one byte short");
+# Many distinct elements: each pays its own hashing, twice at most
 my @same = map { ("\x55" x 520) . pack("C", $_) } 0 .. 125; # 126 elements of 521 bytes
 my $pick_loop = join("", map { op_pushdata(pack_int($_)) . OP_PICK . OP_HASH256 . OP_DROP } 0 .. 125);
-$t = time;
-ok(script_eval([@same], ($pick_loop x 130) . (OP_2DROP x 63) . OP_1, "", 0), "16380 hashes of 126 same-size elements");
-cmp_ok(time - $t, '<', 1, "scanning the cache among same-size elements is fast");
-# OP_MASTVERIFY hashes the whole merkle path, cached the same way
+ok(script_eval([@same], ($pick_loop x 2) . (OP_2DROP x 63) . OP_1, "", 0), "126 elements hashed twice each");
+ok(!script_eval([@same], ($pick_loop x 3) . (OP_2DROP x 63) . OP_1, "", 0), "126 elements hashed three times each");
+# OP_MASTVERIFY hashes 64 bytes per node of the path and pays them: the path is verified once
 my $leaf_hash = hash256("leaf");
 my @path = map { hash256("node $_") } 1 .. 1000;
 my $root = $leaf_hash;
 $root = hash256($_ lt $root ? $_ . $root : $root . $_) foreach @path;
-my $mast_loop = OP_3DUP . OP_MASTVERIFY;
-$t = time;
-ok(script_eval([$leaf_hash, join("", @path), $root], ($mast_loop x 2000) . OP_MASTVERIFY . OP_1, "", 0), "2000 mastverify with a 1000-level path");
-cmp_ok(time - $t, '<', 1, "repeated mastverify of a long path is fast");
-ok(!script_eval([$leaf_hash, join("", @path), hash256("wrong")], $mast_loop . OP_MASTVERIFY . OP_1, "", 0), "mastverify with a wrong root is cached as failed");
+ok(script_eval([$leaf_hash, join("", @path), $root], OP_MASTVERIFY . OP_1, "", 0), "mastverify with a 1000-level path");
+ok(!script_eval([$leaf_hash, join("", @path), $root], OP_3DUP . OP_MASTVERIFY . OP_MASTVERIFY . OP_1, "", 0), "mastverify of the path twice exceeds the budget");
+ok(!script_eval([$leaf_hash, join("", @path), hash256("wrong")], OP_MASTVERIFY . OP_1, "", 0), "mastverify with a wrong root");
 
 # Signatures
 my @addr = map { QBitcoin::MyAddress->new(private_key => wallet_import_format(generate_keypair(CRYPT_ALGO_ECDSA)->pk_serialize)) } 1 .. 20;
@@ -104,8 +103,8 @@ my $tx = TestTx->new(sign_data => $sign_data);
 my @sig = map { signature($sign_data, $_, CRYPT_ALGO_ECDSA, SIGHASH_ALL) } @addr;
 my @pubkey = map { op_pushdata($_->pubkey) } @addr;
 
-# The budget is the size of the input and a check pays the bytes of its key and signature,
-# so any k-of-n with explicit keys is spendable whatever the number of keys
+# A check pays the key once and the signature twice while the siglist counts twice in the budget,
+# so any k-of-n with explicit keys and signatures is spendable whatever the number of keys
 my $multisig_1_of_2 = OP_1 . join("", @pubkey[0..1]) . OP_2 . OP_CHECKMULTISIG;
 ok(script_eval([$sig[1]], $multisig_1_of_2, $tx, 0), "1-of-2 multisig with the last key");
 ok(script_eval([$sig[0]], $multisig_1_of_2, $tx, 0), "1-of-2 multisig with the first key");
@@ -119,17 +118,27 @@ ok(script_eval([@sig[1..19]], $multisig_19_of_20, $tx, 0), "19-of-20 multisig");
 ok(!script_eval([@sig[0..17], $sig[0]], $multisig_19_of_20, $tx, 0), "19-of-20 multisig with a repeated signature");
 # The budget is exact: the key in the siglist and the bare OP_CHECKSIG as the script
 ok(script_eval([$sig[0], $addr[0]->pubkey], OP_CHECKSIG, $tx, 0), "checksig with the key in the siglist");
-# Operands made cheaply (OP_2DUP, OP_3DUP, OP_HASH256) pay their full size, so a check cannot be repeated for free
+# Operands made cheaply (OP_2DUP, OP_3DUP, OP_HASH256) pay their full size, and a signature is paid
+# twice, so the same check cannot be repeated
 ok(!script_eval([$sig[0], $addr[0]->pubkey], OP_2DUP . OP_CHECKSIG . OP_DROP . OP_CHECKSIG, $tx, 0), "the same check twice exceeds the budget");
 ok(!script_eval([$sig[0]], OP_1 . join("", @pubkey[0..2]) . OP_3DUP . OP_3DUP . OP_9 . OP_CHECKMULTISIG, $tx, 0), "multisig keys made by OP_3DUP are paid in full");
 # The cheapest signature which is fully verified is a DER with one-byte r and s
 my $short_sig = pack("CC", SIGHASH_ALL, CRYPT_ALGO_ECDSA) . pack("H*", "3006020101020101");
 ok(!script_eval([$short_sig], $pubkey[0] . OP_CHECKSIG, $tx, 0), "a 10-byte signature is checked and fails");
-# The executed element pays nothing by itself: a key inside it is paid once, by the check
+# The executed element pays nothing by itself: a key inside it is paid by the check, once per check,
+# and the doubled siglist lets the element be executed twice with two signatures
 my $leaf_checksig = $pubkey[0] . OP_CHECKSIG;
-ok(script_eval([$sig[0], $leaf_checksig], OP_EXEC, $tx, 0), "checksig inside an executed element, exact budget");
-ok(script_eval([$sig[0], $leaf_checksig, $sig[0], $leaf_checksig], OP_EXEC . OP_VERIFY . OP_EXEC, $tx, 0), "two explicit copies of the element, exact budget");
-ok(!script_eval([$sig[0], $sig[0], $leaf_checksig], OP_DUP . OP_TOALTSTACK . OP_EXEC . OP_VERIFY . OP_FROMALTSTACK . OP_EXEC, $tx, 0), "the element duplicated and executed twice exceeds the budget");
+ok(script_eval([$sig[0], $leaf_checksig], OP_EXEC, $tx, 0), "checksig inside an executed element");
+ok(script_eval([$sig[0], $leaf_checksig, $sig[0], $leaf_checksig], OP_EXEC . OP_VERIFY . OP_EXEC, $tx, 0), "two explicit copies of the element");
+ok(script_eval([$sig[0], $sig[0], $leaf_checksig], OP_DUP . OP_TOALTSTACK . OP_EXEC . OP_VERIFY . OP_FROMALTSTACK . OP_EXEC, $tx, 0), "the element duplicated and executed twice, exact budget");
+# A key is hashed and then checked: these two uses of its bytes are what the doubled siglist pays for
+my $p2pkh = OP_DUP . OP_HASH256 . op_pushdata(hash256($addr[0]->pubkey)) . OP_EQUALVERIFY . OP_CHECKSIG;
+ok(script_eval([$sig[0], $addr[0]->pubkey], $p2pkh, $tx, 0), "key hashed and checked");
+ok(!script_eval([$sig[0], $addr[0]->pubkey], OP_DUP . OP_HASH256 . OP_DROP . $p2pkh, $tx, 0), "key hashed twice and checked exceeds the budget");
+# One key may check two signatures, not three
+my $two_sigs = OP_DUP . OP_TOALTSTACK . OP_CHECKSIGVERIFY . OP_FROMALTSTACK . OP_CHECKSIG;
+ok(script_eval([$sig[0], $sig[0], $addr[0]->pubkey], $two_sigs, $tx, 0), "two signatures with one key, exact budget");
+ok(!script_eval([$sig[0], $sig[0], $sig[0], $addr[0]->pubkey], OP_DUP . OP_TOALTSTACK . OP_CHECKSIGVERIFY . OP_FROMALTSTACK . $two_sigs, $tx, 0), "three signatures with one key exceed the budget");
 
 # An empty signature costs nothing and counts as a failed check (BIP-342), so k-of-n via OP_CHECKSIGADD works
 my $checksigadd_1_of_3 = $pubkey[0] . OP_CHECKSIG . $pubkey[1] . OP_CHECKSIGADD . $pubkey[2] . OP_CHECKSIGADD . OP_1 . OP_NUMEQUAL;

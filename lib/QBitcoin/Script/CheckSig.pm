@@ -8,8 +8,10 @@ use QBitcoin::Script::Const;
 use QBitcoin::Script::Util qw(pack_int unpack_int);
 use List::Util qw(sum0);
 
-# Each signature check pays the bytes of the key and the signature it consumes from the budget
-# of the input (its size, see script_eval), whatever way they came to the stack.
+# Each signature check pays the bytes of the key once and the bytes of the signature twice from the budget
+# of the input (its script plus twice its siglist, see script_eval), whatever way they came to the stack:
+# the second budget of a siglist byte is there for a key which is hashed and then checked, a signature has
+# no second use and is paid in full.
 # As in tapscript (BIP-342) an empty signature is not checked and costs nothing:
 # it is how a missing signature is given to OP_CHECKSIG/OP_CHECKSIGADD in k-of-n scripts.
 
@@ -24,7 +26,7 @@ sub cmd_checksig($) {
         push @$stack, FALSE;
         return undef;
     }
-    ($state->budget -= length($pubkey) + length($signature)) >= 0 or return 0;
+    ($state->budget -= length($pubkey) + 2 * length($signature)) >= 0 or return 0;
     push @$stack, check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? TRUE : FALSE;
     return undef;
 }
@@ -37,7 +39,7 @@ sub cmd_checksigverify($) {
     my $pubkey = pop @$stack;
     my $signature = pop @$stack;
     $signature ne "" or return 0;
-    ($state->budget -= length($pubkey) + length($signature)) >= 0 or return 0;
+    ($state->budget -= length($pubkey) + 2 * length($signature)) >= 0 or return 0;
     return check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? undef : 0;
 }
 
@@ -63,8 +65,8 @@ sub checkmultisig($) {
     # pop @$stack eq "" or return undef;
     $nkeys >= $nsig or return 0;
     # Each pubkey may be tried once (a signature which does not match a key skips it),
-    # so the cost is up to $nkeys checks whatever $nsig is; all the keys are paid
-    ($state->budget -= sum0(map { length($_) } @pubkeys, @sig)) >= 0 or return undef;
+    # so the cost is up to $nkeys checks whatever $nsig is; all the keys are paid once and the signatures twice
+    ($state->budget -= sum0(map { length($_) } @pubkeys) + 2 * sum0(map { length($_) } @sig)) >= 0 or return undef;
     foreach my $sig (@sig) {
         while (1) {
             @pubkeys or return 0;
@@ -96,7 +98,7 @@ sub cmd_checksigadd($) {
     my $acc_int = unpack_int($accum) // return 0;
     my $result = 0;
     if ($signature ne "") {
-        ($state->budget -= length($pubkey) + length($signature)) >= 0 or return 0;
+        ($state->budget -= length($pubkey) + 2 * length($signature)) >= 0 or return 0;
         $result = check_tx_signature($pubkey, $signature, $state->tx, $state->input_num) ? 1 : 0;
     }
     push @$stack, pack_int($acc_int + $result) // return 0;
