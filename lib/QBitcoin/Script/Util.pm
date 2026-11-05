@@ -15,7 +15,10 @@ sub unpack_int($) {
     my ($data) = @_;
     defined($data) or return undef;
     my $l = length($data);
-    if ($l == 1) {
+    if ($l == 0) {
+        return 0;
+    }
+    elsif ($l == 1) {
         my $n = unpack("C", $data);
         return $n & 0x80 ? -($n ^ 0x80) : $n;
     }
@@ -59,7 +62,10 @@ sub unpack_int($) {
 sub pack_int($) {
     my ($n) = @_;
     if ($n >= 0) {
-        if ($n < 0x80) {
+        if ($n == 0) {
+            return "";
+        }
+        elsif ($n < 0x80) {
             return pack("C", $n);
         }
         elsif ($n < 0x8000) {

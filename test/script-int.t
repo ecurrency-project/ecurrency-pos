@@ -19,7 +19,7 @@ my $MAX_INT = (1 << 63) - 1; # 2**63-1, max script int magnitude
 
 # [ value, expected encoded length ]
 my @round_trip = (
-    [ 0,                    1 ],
+    [ 0,                    0 ],
     [ 1,                    1 ],
     [ 0x7f,                 1 ],
     [ 0x80,                 2 ],
@@ -52,7 +52,7 @@ is(pack_int($MAX_INT + 1),    undef, "pack 2**63 fails");
 is(pack_int(-$MAX_INT - 1),   undef, "pack -2**63 fails");
 is(pack_int(2**64),           undef, "pack float overflow fails");
 is(unpack_int("\x00" x 9),    undef, "unpack 9 bytes fails");
-is(unpack_int(""),            undef, "unpack empty fails");
+is(unpack_int(""),            0,     "unpack empty ok");
 is(unpack_int(undef),         undef, "unpack undef fails");
 
 # Script-level arithmetic on 64-bit values
