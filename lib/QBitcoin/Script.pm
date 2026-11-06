@@ -523,18 +523,15 @@ sub cmd_outputsvalue($) {
 }
 
 # The executed element pays nothing by itself: each command it runs pays one unit of the budget,
-# so the executions of an element, however it was made, and the recursion depth are bounded by the input size
+# so the executions of an element, however it was made, and the nesting depth are bounded by the input size.
+# The element becomes the current level of the state, execute() continues with it and returns to this
+# level when it ends; no execute() is nested, so the depth costs a frame and not a perl recursion
 sub cmd_exec {
     my ($state) = @_;
-    no warnings "recursion"; # OP_EXEC nests execute() as deep as the budget allows
     return unless $state->ifstate;
     my $stack = $state->stack;
     @$stack or return 0;
-    my $script = pop @$stack;
-    my $new_state = QBitcoin::Script::State->new($script, $stack, $state->tx, $state->input_num, $state->budget);
-    my $res = execute($new_state);
-    return $res if defined $res;
-    $state->budget = $new_state->budget;
+    $state->push_frame(pop @$stack);
     return undef;
 }
 
@@ -578,22 +575,21 @@ sub _check_merkle_path {
 
 sub execute {
     my ($state) = @_;
-    no warnings "recursion"; # OP_EXEC nests execute() as deep as the budget allows
     my $stack = $state->stack;
-    my $altstack = $state->altstack;
-    @$stack + @$altstack <= MAX_STACK_SIZE or return 0;
-    while (defined(my $cmd_code = $state->get_script(1))) {
-        --$state->budget >= 0 or return 0;
-        if (my $cmd_func = $OP_CMD[ord($cmd_code)]) {
+    @$stack + @{$state->altstack} <= MAX_STACK_SIZE or return 0;
+    while (1) {
+        # the altstack is per exec level, OP_EXEC replaces it
+        while (defined(my $cmd_code = $state->get_script(1))) {
+            --$state->budget >= 0 or return 0;
+            my $cmd_func = $OP_CMD[ord($cmd_code)]
+                or return 0; # Invalid opcode
             my $res = $cmd_func->($state);
             return $res if defined $res;
-            @$stack + @$altstack <= MAX_STACK_SIZE or return 0;
+            @$stack + @{$state->altstack} <= MAX_STACK_SIZE or return 0;
         }
-        else {
-            return 0; # Invalid opcode
-        }
+        # the executed element ends: back to the enclosing level, or done at the top level
+        $state->pop_frame or return undef;
     }
-    return undef;
 }
 
 sub script_eval($$$$) {
