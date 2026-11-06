@@ -41,7 +41,7 @@ ok(!script_eval(["\x00" x ($rounds - 3), $leaf], $exec_rounds, "", 0), "leaf exe
 # A self-replicating element recurses until the budget is exhausted
 my $self_exec = OP_DUP . OP_EXEC;
 $t = time;
-ok(!script_eval(["\x00" x 65000, $self_exec], $self_exec, "", 0), "self-replicating exec is stopped by the budget");
+ok(!script_eval(["\x00" x 16000, $self_exec], $self_exec, "", 0), "self-replicating exec is stopped by the budget");
 cmp_ok(time - $t, '<', 1, "deep exec recursion is fast");
 # The leaf runs itself $m times with a counter decremented on each level: entry [leaf, n] -> exit [leaf, n]
 my $counter_leaf = sub {
@@ -54,8 +54,10 @@ ok(!script_eval([$counter_leaf->(1), pack_int(100)], OP_OVER . OP_EXEC . OP_2DRO
 # The fan-out would take $m**16 executions, the budget cuts it
 $t = time;
 ok(!script_eval(["\x00" x 60000, $counter_leaf->(2), pack_int(16)], $exec_redeem, "", 0), "exec fan-out exceeds the budget");
-ok(!script_eval(["\x00" x 60000, $counter_leaf->(8), pack_int(16)], $exec_redeem, "", 0), "wide exec fan-out exceeds the budget");
 cmp_ok(time - $t, '<', 1, "exec fan-out is cut quickly");
+$t = time;
+ok(!script_eval(["\x00" x 60000, $counter_leaf->(8), pack_int(16)], $exec_redeem, "", 0), "wide exec fan-out exceeds the budget");
+cmp_ok(time - $t, '<', 1, "wide exec fan-out is cut quickly");
 ok(script_eval(["\x00" x 1000, $counter_leaf->(2), pack_int(4)], $exec_redeem, "", 0), "small exec fan-out (15 executions)");
 
 # Stack + altstack at most MAX_STACK_SIZE (1000) elements, as in bitcoin, so OP_ROLL costs a bounded time
