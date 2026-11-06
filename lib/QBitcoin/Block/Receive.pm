@@ -129,11 +129,17 @@ sub receive {
                 $self->received_from->abort("invalid_block");
             }
         }
-        # If this block failed checkpoint validation, the chain since the previous checkpoint
-        # is from a malicious peer (scripts were skipped during IBD). Roll back to allow
-        # re-syncing from an honest peer.
-        if (checkpoint_hash($self->height)) {
-            _rollback_to_checkpoint($self->height);
+        my $cp_hash = checkpoint_hash($self->height);
+        if ($cp_hash && $self->hash ne $cp_hash) {
+            # A block with a wrong hash at the checkpoint height. If it extends our best branch
+            # below the checkpoint, the chain since the previous checkpoint is from a malicious
+            # peer (scripts were skipped during IBD): roll back to allow re-syncing from an
+            # honest peer. Otherwise it is an invalid block on a side branch, or the checkpoint
+            # block is already in our best branch: nothing to roll back.
+            if (defined($HEIGHT) && $self->height == $HEIGHT + 1 && $self->prev_block
+                && $best_block[$HEIGHT] && $best_block[$HEIGHT]->hash eq $self->prev_block->hash) {
+                _rollback_to_checkpoint($self->height);
+            }
             # Ban the offending peer so it is not selected as sync peer again.
             # decrease_reputation() with -MIN_REPUTATION ensures the peer drops
             # below the ban threshold regardless of its current score.
