@@ -6,6 +6,7 @@ use FindBin '$Bin';
 use lib "$Bin/../lib";
 
 use Test::More;
+use List::Util qw(sum0);
 use Time::HiRes qw(time);
 
 use QBitcoin::Config;
@@ -19,13 +20,22 @@ use QBitcoin::MyAddress;
 
 $config->{debug} = 0;
 
-# Execution time must be linear in the input size (redeem script + siglist)
+# Execution time must be linear in the input size (redeem script + siglist). The time of a script is compared
+# with the time of a flat script of the same number of commands, so the check does not depend on the machine
+my $flat_len = 65000;
+my $flat = (OP_1 . OP_DROP) x $flat_len;
+my $t = time;
+ok(script_eval(["\x00" x $flat_len], $flat . OP_DROP . OP_1, "", 0), "flat script of $flat_len commands");
+my $command_time = (time - $t) / (2 * $flat_len + 2);
+# The budget of script_eval: the commands executed by a script which exhausts it
+sub budget { my ($siglist, $script) = @_; length($script) + 2 * sum0(map { length($_) } @$siglist) }
+sub linear_ok { my ($time, $commands, $name) = @_; cmp_ok($time, '<', 5 * $commands * $command_time, $name) }
 
 # Nested OP_IF: the if-state is maintained in O(1), not by scanning the if-stack
 my $depth = 20000;
-my $t = time;
+$t = time;
 ok(script_eval([], ((OP_1 . OP_IF) x $depth) . (OP_ENDIF x $depth) . OP_1, "", 0), "nested if $depth deep");
-cmp_ok(time - $t, '<', 1, "nested if is linear");
+linear_ok(time - $t, $depth * 3, "nested if is linear");
 ok(script_eval([], OP_0 . (OP_IF x $depth) . OP_RETURN . (OP_ENDIF x $depth) . OP_1, "", 0), "nested false if skips OP_RETURN");
 ok(!script_eval([], ((OP_1 . OP_IF) x $depth) . (OP_ENDIF x ($depth-1)) . OP_1, "", 0), "unbalanced nested if");
 
@@ -40,9 +50,10 @@ ok(script_eval(["\x00" x ($rounds - 2), $leaf], $exec_rounds, "", 0), "leaf exec
 ok(!script_eval(["\x00" x ($rounds - 3), $leaf], $exec_rounds, "", 0), "leaf executed $rounds times one byte short");
 # A self-replicating element recurses until the budget is exhausted
 my $self_exec = OP_DUP . OP_EXEC;
+my @self_siglist = ("\x00" x 65000, $self_exec);
 $t = time;
-ok(!script_eval(["\x00" x 16000, $self_exec], $self_exec, "", 0), "self-replicating exec is stopped by the budget");
-cmp_ok(time - $t, '<', 1, "deep exec recursion is fast");
+ok(!script_eval(\@self_siglist, $self_exec, "", 0), "self-replicating exec is stopped by the budget");
+linear_ok(time - $t, budget(\@self_siglist, $self_exec), "deep exec recursion is linear");
 # The leaf runs itself $m times with a counter decremented on each level: entry [leaf, n] -> exit [leaf, n]
 my $counter_leaf = sub {
     my ($m) = @_;
@@ -52,12 +63,12 @@ my $exec_redeem = OP_OVER . OP_EXEC . OP_2DROP . OP_DROP . OP_1;
 ok(script_eval(["\x00" x 1000, $counter_leaf->(1), pack_int(100)], $exec_redeem, "", 0), "exec chain of 100");
 ok(!script_eval([$counter_leaf->(1), pack_int(100)], OP_OVER . OP_EXEC . OP_2DROP . OP_1, "", 0), "exec chain of 100 without the budget");
 # The fan-out would take $m**16 executions, the budget cuts it
-$t = time;
-ok(!script_eval(["\x00" x 60000, $counter_leaf->(2), pack_int(16)], $exec_redeem, "", 0), "exec fan-out exceeds the budget");
-cmp_ok(time - $t, '<', 1, "exec fan-out is cut quickly");
-$t = time;
-ok(!script_eval(["\x00" x 60000, $counter_leaf->(8), pack_int(16)], $exec_redeem, "", 0), "wide exec fan-out exceeds the budget");
-cmp_ok(time - $t, '<', 1, "wide exec fan-out is cut quickly");
+foreach my $m (2, 8) {
+    my @siglist = ("\x00" x 60000, $counter_leaf->($m), pack_int(16));
+    $t = time;
+    ok(!script_eval(\@siglist, $exec_redeem, "", 0), "exec fan-out $m exceeds the budget");
+    linear_ok(time - $t, budget(\@siglist, $exec_redeem), "exec fan-out $m is cut in linear time");
+}
 ok(script_eval(["\x00" x 1000, $counter_leaf->(2), pack_int(4)], $exec_redeem, "", 0), "small exec fan-out (15 executions)");
 
 # Stack + altstack at most MAX_STACK_SIZE (1000) elements, as in bitcoin, so OP_ROLL costs a bounded time
