@@ -87,6 +87,9 @@ sub validate {
         if ($tx_in_block{$transaction->hash}++) {
             return "Transaction " . $transaction->hash_str . " included in the block twice";
         }
+        if ($transaction->is_stake && $num > 0) { # Check this before valid_for_block() which calls check_input_script()
+            return "Stake transaction " . $transaction->hash_str . " must be the first transaction in the block";
+        }
         if ($transaction->valid_for_block($block) != 0) {
             return "Transaction " . $transaction->hash_str . " can't be included in block " . $block->height;
         }
@@ -131,9 +134,6 @@ sub validate {
             $was_standard = $transaction->hash_str;
         }
         elsif ($transaction->is_stake) {
-            if ($num > 0) {
-                return "Stake transaction " . $transaction->hash_str . " must be the first transaction in the block";
-            }
             # Equivocated stake: we hold a slashing tx proving this UTXO signed another
             # block in this timeslot. Such a block is invalid no matter how heavy its
             # branch is, so we never select it (and drop it if already best).
