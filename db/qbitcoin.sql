@@ -65,9 +65,11 @@ CREATE TABLE `slashing` (
   prev_hash1 binary(32) NOT NULL,
   digest1    binary(32) NOT NULL,
   raw1       longblob   NOT NULL,
+  prevouts1  longblob   NOT NULL,
   prev_hash2 binary(32) NOT NULL,
   digest2    binary(32) NOT NULL,
   raw2       longblob   NOT NULL,
+  prevouts2  longblob   NOT NULL,
   FOREIGN KEY (tx_id) REFERENCES `transaction` (id) ON DELETE CASCADE
 );
 

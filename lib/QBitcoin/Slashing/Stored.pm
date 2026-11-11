@@ -15,12 +15,14 @@ use constant TABLE => 'slashing';
 use constant FIELDS => {
     tx_id      => NUMERIC, # transaction.id of the slashing transaction
     timeslot   => NUMERIC, # shared timeslot of both equivocating blocks
-    prev_hash1 => BINARY,  # proof 1: previous-block hash, tx-set digest, stake-tx bytes
-    digest1    => BINARY,
+    prev_hash1 => BINARY,  # proof 1: previous-block hash, tx-set digest, stake-tx bytes,
+    digest1    => BINARY,  #          value and scripthash length of the outputs it spends
     raw1       => BINARY,
+    prevouts1  => BINARY,
     prev_hash2 => BINARY,  # proof 2
     digest2    => BINARY,
     raw2       => BINARY,
+    prevouts2  => BINARY,
 };
 
 use constant PRIMARY_KEY => qw(tx_id);

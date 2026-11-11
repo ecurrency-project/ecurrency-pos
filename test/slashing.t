@@ -126,6 +126,7 @@ my ($row) = QBitcoin::Slashing::Stored->find(tx_id => 1);
 ok($row, "stored evidence row found");
 is($row->timeslot, $slash->slashing->proofs->[0]{timeslot}, "stored shared timeslot matches");
 is(unpack("H*", $row->raw1), unpack("H*", $slash->slashing->proofs->[0]{raw}), "stored proof-1 stake bytes match");
+is(unpack("H*", $row->prevouts1), unpack("H*", pack("Q<C", 1000, 20)), "stored proof-1 spent output matches");
 my $ev = QBitcoin::Slashing->from_row($row);
 my $rebuilt = QBitcoin::Transaction->new(
     in       => $slash->in,

@@ -9,17 +9,28 @@ use strict;
 # is not signed: any node that observes the two conflicting stakes can build it, and
 # every node builds the byte-identical transaction from the same evidence.
 #
-# Evidence layout (placed right after tx_type in the transaction,
-# two proofs ordered by the stake-tx hash ascending:
+# Evidence layout (placed right after tx_type in the transaction),
+# two proofs ordered by their block_sign_data ascending:
 #
-#   proof  := prev_hash(32) . pack("N", timeslot) . digest(32) . varstr(stake_tx_bytes)
-#   payload:= proof[0] . proof[1]
+#   proof   := prev_hash(32) . pack("N", timeslot) . digest(32) . varstr(stake_tx_bytes) . varstr(prevouts)
+#   prevouts:= pack("Q<", value) . pack("C", length(scripthash)) for each input of the stake, in its order
+#   payload := proof[0] . proof[1]
 #
 # prev_hash/timeslot/digest are exactly the three components of the block's
 # Block::sign_data (the message the stake signed); stake_tx_bytes is the tx-level
 # serialization of the stake (its inputs with signatures, and its outputs). From
 # these the verifier reconstructs the signed message and checks the signature on the
 # shared input(s) - the proof that the same key endorsed two different blocks.
+#
+# The stake bytes name the outputs the stake spends only by reference, while its input
+# scripts may read their value and scripthash (OP_INPUTSVALUE, OP_INPUTSCRIPTHASH: the
+# delegation covenant does). So the proof states them (the scripthash by its length, it
+# is the hash160 or the hash256 of the redeem_script) and the verifier runs the scripts
+# exactly as the block validation did: a stake accepted in a block is always a
+# verifiable proof. For the slashed inputs the stated data must be that of the real
+# UTXO (Transaction::validate_slashing). For the other inputs of the stakes it is taken
+# as given: these outputs may be unknown to the verifier, and since the value and the
+# scripthash of an input are not signed, a false one never makes a signature valid.
 #
 # The slashing transaction then spends the shared (equivocated) UTXOs WITHOUT a
 # signature and refunds each owner scripthash its value minus SLASHING_FINE; the fine
@@ -49,6 +60,7 @@ use constant ATTR => qw(proofs);
 mk_accessors(ATTR);
 
 use constant PROOF_HEAD_LEN => 32 + 4 + 32; # prev_hash . timeslot . digest
+use constant PREVOUT_LEN    => 8 + 1;       # value . length(scripthash)
 
 # Watched stakes for equivocation detection. Retaining an entry here keeps the stake's
 # evidence alive past the moment its block is dropped, which is exactly the retention
@@ -75,7 +87,7 @@ sub serialize {
     my $self = shift;
     my $data = "";
     foreach my $p (@{$self->proofs}) {
-        $data .= $p->{prev_hash} . pack("N", $p->{timeslot}) . $p->{digest} . varstr($p->{raw});
+        $data .= $p->{prev_hash} . pack("N", $p->{timeslot}) . $p->{digest} . varstr($p->{raw}) . varstr($p->{prevouts});
     }
     return $data;
 }
@@ -85,13 +97,15 @@ sub deserialize {
     my ($data) = @_;
     my @proofs;
     for (1 .. 2) {
-        my $head = $data->get(PROOF_HEAD_LEN) // return undef;
-        my $raw  = $data->get_string() // return undef;
+        my $head     = $data->get(PROOF_HEAD_LEN) // return undef;
+        my $raw      = $data->get_string() // return undef;
+        my $prevouts = $data->get_string() // return undef;
         push @proofs, {
             prev_hash => substr($head, 0, 32),
             timeslot  => unpack("N", substr($head, 32, 4)),
             digest    => substr($head, 36, 32),
             raw       => $raw,
+            prevouts  => $prevouts,
         };
     }
     return $class->new(proofs => \@proofs);
@@ -104,8 +118,8 @@ sub stored_fields {
     my ($p1, $p2) = @{$self->proofs};
     return {
         timeslot   => $p1->{timeslot},
-        prev_hash1 => $p1->{prev_hash}, digest1 => $p1->{digest}, raw1 => $p1->{raw},
-        prev_hash2 => $p2->{prev_hash}, digest2 => $p2->{digest}, raw2 => $p2->{raw},
+        prev_hash1 => $p1->{prev_hash}, digest1 => $p1->{digest}, raw1 => $p1->{raw}, prevouts1 => $p1->{prevouts},
+        prev_hash2 => $p2->{prev_hash}, digest2 => $p2->{digest}, raw2 => $p2->{raw}, prevouts2 => $p2->{prevouts},
     };
 }
 
@@ -113,8 +127,8 @@ sub from_row {
     my $class = shift;
     my ($row) = @_;
     return $class->new(proofs => [
-        { prev_hash => $row->prev_hash1, timeslot => $row->timeslot, digest => $row->digest1, raw => $row->raw1 },
-        { prev_hash => $row->prev_hash2, timeslot => $row->timeslot, digest => $row->digest2, raw => $row->raw2 },
+        { prev_hash => $row->prev_hash1, timeslot => $row->timeslot, digest => $row->digest1, raw => $row->raw1, prevouts => $row->prevouts1 },
+        { prev_hash => $row->prev_hash2, timeslot => $row->timeslot, digest => $row->digest2, raw => $row->raw2, prevouts => $row->prevouts2 },
     ]);
 }
 
@@ -125,18 +139,6 @@ sub _block_sign_data {
 }
 
 # --- building (from two in-memory conflicting stakes) -----------------------
-
-# Does $redeem_script hash (either way) to $scripthash? Slashing binds the evidence's
-# redeem_script to the real slashed UTXO this way, without needing to know the address
-# algorithm (hash160 for pre-quantum, hash256 for post-quantum).
-sub redeem_matches_scripthash {
-    my $class = shift;
-    my ($redeem_script, $scripthash) = @_;
-    return 0 unless defined($redeem_script) && defined($scripthash);
-    return 1 if hash160($redeem_script) eq $scripthash;
-    return 1 if hash256($redeem_script) eq $scripthash;
-    return 0;
-}
 
 # Deterministic refund outputs for a list of slashed input TXOs: one output per
 # scripthash (sorted), value = total minus the fine. Used by both builder and
@@ -174,6 +176,7 @@ sub _proof_of_stake {
         timeslot  => unpack("N", substr($bsd, 32, 4)),
         digest    => substr($bsd, 36, 32),
         raw       => $stake->serialize,
+        prevouts  => join("", map { pack("Q<C", $_->{txo}->value, length($_->{txo}->scripthash)) } @{$stake->in}),
     };
 }
 
@@ -233,17 +236,23 @@ sub _verify_stake {
         or return undef; # trailing garbage
     $stake->is_stake
         or return undef;
+    my $in_raw = delete $stake->{in_raw};
+    length($p->{prevouts}) == PREVOUT_LEN * @$in_raw
+        or return undef;
+    my @prevouts = unpack("(Q<C)*", $p->{prevouts});
     my @in;
-    foreach my $raw (@{$stake->{in_raw} // []}) {
-        # The transient scripthash is internal only (it makes set_redeem_script accept
-        # the script); signature verification depends on redeem_script + siglist + the
-        # signed message, not on the scripthash. Binding to the real slashed UTXO's
-        # scripthash is done later, in validate_slashing.
+    foreach my $raw (@$in_raw) {
+        # The spent output as the proof states it. Whether it is the real slashed UTXO
+        # is checked later, in validate_slashing.
+        my ($value, $hash_len) = splice(@prevouts, 0, 2);
+        my $scripthash = $hash_len == 20 ? hash160($raw->{redeem_script})
+                       : $hash_len == 32 ? hash256($raw->{redeem_script})
+                       : return undef;
         my $txo = QBitcoin::TXO->new_txo({
             tx_in      => $raw->{tx_out},
             num        => $raw->{num},
-            scripthash => hash256($raw->{redeem_script}),
-            data       => "",
+            value      => $value,
+            scripthash => $scripthash,
         });
         $txo->set_redeem_script($raw->{redeem_script}) == 0
             or return undef;
@@ -252,7 +261,6 @@ sub _verify_stake {
     @in
         or return undef;
     $stake->{in} = \@in;
-    delete $stake->{in_raw};
     $stake->block_sign_data = _block_sign_data($p);
     $stake->check_input_script == 0
         or return undef;
@@ -260,8 +268,8 @@ sub _verify_stake {
 }
 
 # Verify the equivocation evidence. Returns a hashref { timeslot => ..., shared =>
-# { $utxo_key => { redeem_script => ..., scripthash => ... } } } describing the
-# slashable inputs, or undef if the evidence is not a valid equivocation proof.
+# { $utxo_key => { scripthash => ..., value => ... } } } describing the slashable
+# inputs as the evidence states them, or undef if it is not a valid equivocation proof.
 sub verify {
     my $self = shift;
     my $proofs = $self->proofs;
@@ -285,11 +293,14 @@ sub verify {
         my $key = $in->{txo}->key;
         my $in1 = $k1{$key}
             or next;
-        # same owner: the redeem_script in both stakes must match
-        $in1->{txo}->redeem_script eq $in->{txo}->redeem_script
+        # one and the same output for both stakes: the same scripthash (and so the same
+        # redeem_script, the same owner) and value
+        my ($txo1, $txo2) = ($in1->{txo}, $in->{txo});
+        $txo1->scripthash eq $txo2->scripthash && $txo1->value == $txo2->value
             or return undef;
         $shared{$key} = {
-            redeem_script => $in->{txo}->redeem_script,
+            scripthash => $txo2->scripthash,
+            value      => $txo2->value,
         };
     }
     %shared

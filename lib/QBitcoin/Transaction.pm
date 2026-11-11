@@ -1274,10 +1274,11 @@ sub validate_slashing {
                 $self->hash_str, $txo->tx_in_str, $txo->num);
             return -1;
         }
-        # The slashed UTXO must really belong to the equivocating signer: the evidence's
-        # redeem_script must hash to the real UTXO's scripthash.
-        if (!QBitcoin::Slashing->redeem_matches_scripthash($s->{redeem_script}, $txo->scripthash)) {
-            Warningf("Slashing transaction %s input %s:%u scripthash does not match the evidence",
+        # The slashed UTXO must really be the output the equivocating stakes spent: the
+        # evidence must state its real scripthash and value, the scripts of the stakes
+        # were verified against them.
+        if ($s->{scripthash} ne $txo->scripthash || $s->{value} != $txo->value) {
+            Warningf("Slashing transaction %s input %s:%u does not match the evidence",
                 $self->hash_str, $txo->tx_in_str, $txo->num);
             return -1;
         }
