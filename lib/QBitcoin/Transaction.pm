@@ -830,8 +830,10 @@ sub deserialize {
     my $tx_raw_data = $data->get($end_index - $start_index);
     my $hash = tx_data_hash($tx_raw_data);
 
-    if ($end_index - $start_index > MAX_TX_SIZE) {
-        Warningf("Transaction size %u exceeds maximum %u", $end_index - $start_index, MAX_TX_SIZE);
+    # A slashing transaction carries two stake transactions
+    my $max_size = $tx_type == TX_TYPE_SLASHING ? MAX_SLASHING_TX_SIZE : MAX_TX_SIZE;
+    if ($end_index - $start_index > $max_size) {
+        Warningf("Transaction size %u exceeds maximum %u", $end_index - $start_index, $max_size);
         return undef;
     }
 

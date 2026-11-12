@@ -34,6 +34,7 @@ use constant QBITCOIN_CONST => {
     MAX_BLOCK_SIZE          => 8*1024*1024,
     MAX_TX_IN_BLOCK         => 65535,
     MAX_TX_SIZE             => 2*1024*1024,
+    MAX_SLASHING_TX_SIZE    => 7*1024*1024, # two stakes and up to 79 bytes for each of their MAX_INPUTS_PER_TX inputs fit with a margin
     MAX_INPUTS_PER_TX       => 16383, # a slashing transaction adds an input and a refund output to each input of its stakes
     MAX_OUTPUTS_PER_TX      => 65535,
     MAX_REDEEM_SCRIPT_SIZE  => 65535,
