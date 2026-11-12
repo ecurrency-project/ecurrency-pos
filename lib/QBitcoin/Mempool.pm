@@ -66,7 +66,13 @@ sub choose_for_block {
     my @standard =                       grep { !($_->coins_created || $_->is_slashing) } @mempool;
 
     foreach my $tx (@front) {
-        if ($size + $tx->size > MAX_BLOCK_SIZE || $tx_in_block + 1 > MAX_TX_IN_BLOCK) {
+        if ($tx_in_block + 1 > MAX_TX_IN_BLOCK) {
+            return @selected; # block is full
+        }
+        if ($size + $tx->size > MAX_BLOCK_SIZE) {
+            # A slashing transaction may be several times larger than any other one, so
+            # there may be room for the other transactions when it does not fit
+            next if $tx->is_slashing;
             return @selected; # block is full
         }
         if (UPGRADE_POW && $tx->is_coinbase) {

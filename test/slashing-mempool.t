@@ -25,6 +25,7 @@ use QBitcoin::Transaction;
 use QBitcoin::Block;
 use QBitcoin::Slashing;
 use QBitcoin::Generate;
+use QBitcoin::Mempool;
 
 $config->{regtest} = 1;
 
@@ -138,6 +139,29 @@ ok(!QBitcoin::Generate::_have_weight_tx(), "a slashing tx that can not be includ
     QBitcoin::Block->max_db_height(11);
     is(QBitcoin::Slashing->banned_height_in_best(), undef,
         "an equivocated block already stored in the database is too deep to drop");
+}
+
+# --- a slashing tx too large for the block must not stop the block assembling ---
+
+{
+    my ($large) = mempool_slashing();
+    my ($small) = mempool_slashing();
+    $large->size = MAX_BLOCK_SIZE; # no room for it next to a stake transaction
+    my $coin = make_coin(pack("H*", "c1" x 32), 0, 1000);
+    my $std = QBitcoin::Transaction->new(
+        in            => [ { txo => $coin, siglist => [] } ],
+        out           => [ QBitcoin::TXO->new_txo({ value => 1000, scripthash => $scripthash, data => "" }) ],
+        fee           => 0,
+        tx_type       => TX_TYPE_STANDARD,
+        received_time => time(),
+    );
+    $std->{min_tx_time} = $std->{min_tx_block_height} = -1; # no timelocks: skip the lazy script check
+    $std->calculate_hash;
+    $std->add_to_cache;
+    my %chosen = map { $_->hash => 1 } QBitcoin::Mempool->choose_for_block(1, $timeslot, undef, 1);
+    ok(!$chosen{$large->hash}, "a slashing tx larger than the room left in the block is not taken");
+    ok($chosen{$small->hash}, "a smaller slashing tx is taken into the same block");
+    ok($chosen{$std->hash}, "and so is a standard transaction");
 }
 
 done_testing();
