@@ -89,4 +89,15 @@ cmp_ok($max_size + MAX_TX_SIZE, '<=', MAX_BLOCK_SIZE, "...and a block with any s
     is($received && $received->hash, $slash->hash, "...the same transaction");
 }
 
+# --- the size limit holds for a slashing transaction the node builds itself as well: it
+# is not deserialized, but peers have to receive it. Stakes within their own limits never
+# make such a transaction (see above), so its size is just set here.
+{
+    my ($slash) = double_stake(2, 8, 0);
+    $slash->size = MAX_SLASHING_TX_SIZE;
+    is($slash->validate, 0, "built slashing tx of the maximum size is valid");
+    $slash->size = MAX_SLASHING_TX_SIZE + 1;
+    isnt($slash->validate, 0, "built slashing tx over the size limit is not");
+}
+
 done_testing();

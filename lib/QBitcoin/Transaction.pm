@@ -1245,6 +1245,13 @@ sub validate_slashing {
         Warningf("Slashing transaction %s has no outputs", $self->hash_str);
         return -1;
     }
+    # A received transaction is limited on deserialization; the one this node builds
+    # for the stakes it has seen is not deserialized, and peers must be able to receive it
+    if ($self->size > MAX_SLASHING_TX_SIZE) {
+        Warningf("Slashing transaction %s size %u exceeds maximum %u",
+            $self->hash_str, $self->size, MAX_SLASHING_TX_SIZE);
+        return -1;
+    }
     my $info = $evidence->verify($self->in);
     if (!$info) {
         Warningf("Slashing transaction %s carries invalid equivocation evidence", $self->hash_str);
