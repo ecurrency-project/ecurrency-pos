@@ -105,6 +105,8 @@ ok($slashP, "slashing built for partial overlap");
 is(scalar @{$slashP->in}, 1, "only the shared UTXO is slashed");
 is($slashP->in->[0]->{txo}->value, 2000, "shared UTXO is the overlapping one");
 is($slashP->validate, 0, "partial-overlap slashing validates");
+is_deeply([ map { unpack("H*", $_->{prevouts}) } @{$slashP->slashing->proofs} ], [ map { unpack("H*", pack("Q<C", $_, 20)) } 1000, 4000 ],
+    "each proof states the output only its stake spends");
 
 # weight: a slashing tx contributes the same age-weighted weight as a stake spending
 # the same UTXOs, so it can outweigh the stake it punishes.
@@ -126,7 +128,7 @@ my ($row) = QBitcoin::Slashing::Stored->find(tx_id => 1);
 ok($row, "stored evidence row found");
 is($row->timeslot, $slash->slashing->proofs->[0]{timeslot}, "stored shared timeslot matches");
 is(unpack("H*", $row->raw1), unpack("H*", $slash->slashing->proofs->[0]{raw}), "stored proof-1 stake bytes match");
-is(unpack("H*", $row->prevouts1), unpack("H*", pack("Q<C", 1000, 20)), "stored proof-1 spent output matches");
+is($row->prevouts1, "", "no outputs stored for proof 1, both stakes spend the same: an empty value, not NULL");
 my $ev = QBitcoin::Slashing->from_row($row);
 my $rebuilt = QBitcoin::Transaction->new(
     in       => $slash->in,
@@ -137,6 +139,12 @@ my $rebuilt = QBitcoin::Transaction->new(
 );
 $rebuilt->calculate_hash;
 is(unpack("H*", $rebuilt->hash), unpack("H*", $slash->hash), "tx rebuilt from stored evidence has the same hash");
+# ...and so does the evidence stating the outputs only one of its stakes spends
+QBitcoin::Slashing::Stored->create({ tx_id => 2, %{$slashP->slashing->stored_fields} });
+my ($rowP) = QBitcoin::Slashing::Stored->find(tx_id => 2);
+is(unpack("H*", $rowP->prevouts1), unpack("H*", pack("Q<C", 1000, 20)), "stored proof-1 unshared output matches");
+is(unpack("H*", QBitcoin::Slashing->from_row($rowP)->serialize), unpack("H*", $slashP->slashing->serialize),
+    "partial-overlap evidence is the same after store and load");
 
 # detection: observe() reports a previously seen conflicting stake
 {

@@ -1243,7 +1243,7 @@ sub validate_slashing {
         Warningf("Slashing transaction %s has no outputs", $self->hash_str);
         return -1;
     }
-    my $info = $evidence->verify;
+    my $info = $evidence->verify($self->in);
     if (!$info) {
         Warningf("Slashing transaction %s carries invalid equivocation evidence", $self->hash_str);
         return -1;
@@ -1256,8 +1256,7 @@ sub validate_slashing {
     }
     foreach my $in (@{$self->in}) {
         my $txo = $in->{txo};
-        my $s = $shared->{$txo->key};
-        if (!$s) {
+        if (!$shared->{$txo->key}) {
             Warningf("Slashing transaction %s spends non-equivocated input %s:%u",
                 $self->hash_str, $txo->tx_in_str, $txo->num);
             return -1;
@@ -1271,14 +1270,6 @@ sub validate_slashing {
         # an owner's standard spend the only way out for a refund.
         if (!(ref $self)->txo_stakeable($txo)) {
             Warningf("Slashing transaction %s spends slashing refund %s:%u",
-                $self->hash_str, $txo->tx_in_str, $txo->num);
-            return -1;
-        }
-        # The slashed UTXO must really be the output the equivocating stakes spent: the
-        # evidence must state its real scripthash and value, the scripts of the stakes
-        # were verified against them.
-        if ($s->{scripthash} ne $txo->scripthash || $s->{value} != $txo->value) {
-            Warningf("Slashing transaction %s input %s:%u does not match the evidence",
                 $self->hash_str, $txo->tx_in_str, $txo->num);
             return -1;
         }

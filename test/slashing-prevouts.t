@@ -2,11 +2,13 @@
 use warnings;
 use strict;
 
-# The equivocation evidence states the value and the scripthash of every output its
-# stakes spend, so the input scripts of the stakes are verified exactly as they were in
-# the block. A script reading the spent output (OP_INPUTSVALUE, OP_INPUTSCRIPTHASH: the
-# delegation covenant does) must give the same result there, otherwise a stake valid in
-# a block would be no proof, i.e. free to equivocate.
+# The input scripts of the stakes in equivocation evidence are verified exactly as they
+# were in the block. A script reading the output it spends (OP_INPUTSVALUE,
+# OP_INPUTSCRIPTHASH: the delegation covenant does) must give the same result there,
+# otherwise a stake valid in a block would be no proof, i.e. free to equivocate.
+# The inputs shared by both stakes are the inputs of the slashing transaction, the real
+# UTXO. The value and the scripthash of the other inputs are stated by the evidence
+# (prevouts); only the scripts of the shared inputs are run.
 
 use FindBin '$Bin';
 use lib ("$Bin/../lib", "$Bin/lib");
@@ -26,6 +28,7 @@ use QBitcoin::Script::Delegation qw(delegation_script SELECTOR_DELEGATE);
 use QBitcoin::TXO;
 use QBitcoin::Transaction;
 use QBitcoin::Slashing;
+use Bitcoin::Serialized qw(varstr);
 
 $config->{regtest} = 1;
 
@@ -69,7 +72,7 @@ sub signed_stake {
     return $stake;
 }
 
-# The slashing transaction for the same coins double-signed
+# The slashing transaction for the coins double-signed
 sub double_sign {
     my ($coins1, $coins2, @siglist_tail) = @_;
     my $stake1 = signed_stake($coins1, $bsd[0], @siglist_tail);
@@ -77,7 +80,21 @@ sub double_sign {
     return (QBitcoin::Slashing->new_tx($stake1, $stake2), $stake1, $stake2);
 }
 
-# The same slashing transaction with other spent outputs stated in its evidence:
+sub slashing_tx {
+    my ($evidence, @txo) = @_;
+    my @in = map +{ txo => $_, siglist => [] }, @txo;
+    my $tx = QBitcoin::Transaction->new(
+        in       => \@in,
+        out      => [ QBitcoin::Slashing->canonical_outputs(\@in) ],
+        tx_type  => TX_TYPE_SLASHING,
+        slashing => $evidence,
+    );
+    $tx->calculate_fee;
+    $tx->calculate_hash;
+    return $tx;
+}
+
+# The same slashing transaction with other prevouts stated in its evidence:
 # $change gets the two proofs, each with its prevouts as a list of [ value, hash_len ]
 sub restate {
     my ($slash, $change) = @_;
@@ -85,21 +102,26 @@ sub restate {
     $_->{prevouts} = [ map { [ unpack("Q<C", $_) ] } unpack("(a9)*", $_->{prevouts}) ] foreach @proofs;
     $change->(@proofs);
     $_->{prevouts} = join("", map { pack("Q<C", @$_) } @{$_->{prevouts}}) foreach @proofs;
-    my $tx = QBitcoin::Transaction->new(
-        in       => $slash->in,
-        out      => $slash->out,
-        tx_type  => TX_TYPE_SLASHING,
-        slashing => QBitcoin::Slashing->new(proofs => \@proofs),
-    );
-    $tx->calculate_fee;
-    $tx->calculate_hash;
-    return $tx;
+    return slashing_tx(QBitcoin::Slashing->new(proofs => \@proofs), map { $_->{txo} } @{$slash->in});
 }
 
-# --- scripts reading the spent output remain slashable
+# A real output with the same reference but other data
+sub other_coin {
+    my ($coin, %data) = @_;
+    return QBitcoin::TXO->new_txo({ tx_in => $coin->tx_in, num => $coin->num, value => $coin->value, scripthash => $coin->scripthash, %data });
+}
+
+sub deserialize {
+    my ($tx) = @_;
+    my $data = Bitcoin::Serialized->new($tx->serialize);
+    my $res = QBitcoin::Transaction->deserialize($data);
+    return $res && $data->length == 0 ? $res : undef;
+}
+
+# --- scripts reading the output they spend remain slashable
+my $min_value = OP_INPUTSCRIPTHASH . OP_INPUTSVALUE . op_pushdata(pack_int(1000)) . OP_GREATERTHANOREQUAL . OP_VERIFY . $p2pk;
 my @reading = (
-    [ "value of the spent output", \&hash256,
-        OP_INPUTSCRIPTHASH . OP_INPUTSVALUE . OP_1 . OP_GREATERTHANOREQUAL . OP_VERIFY . $p2pk ],
+    [ "value of the spent output", \&hash256, $min_value ],
     [ "form of the own scripthash", \&hash160,
         OP_INPUTSCRIPTHASH . OP_SIZE . OP_NIP . op_pushdata(pack_int(20)) . OP_NUMEQUALVERIFY . $p2pk ],
 );
@@ -130,43 +152,73 @@ foreach my $case (@reading) {
     is("@warnings", "", "delegation: no perl warnings verifying the evidence");
 }
 
-# --- the evidence must state the real slashed output
+# --- stakes of the same inputs: nothing to state, the shared outputs are the real ones
 {
-    my $coin = make_coin($p2pk, \&hash256, 1000);
+    my $coin = make_coin($min_value, \&hash256, 1000);
     my ($slash) = double_sign([ $coin ], [ $coin ]);
-    is($slash->validate, 0, "p2pk: slashing tx validates");
-    is($slash->slashing->proofs->[0]->{prevouts}, pack("Q<C", 1000, 32), "p2pk: the proof states the value and the scripthash length");
-    is(restate($slash, sub {})->hash, $slash->hash, "restated unchanged: the same transaction");
+    my $evidence = $slash->slashing;
+    is($slash->validate, 0, "shared: slashing tx validates");
+    is(join("", map { $_->{prevouts} } @{$evidence->proofs}), "", "shared: no prevouts");
+    is($evidence->serialize, join("", map { $_->{prev_hash} . pack("N", $_->{timeslot}) . $_->{digest} . varstr($_->{raw}) } @{$evidence->proofs}),
+        "shared: the evidence is just the two proofs");
+    is(deserialize($slash)->hash, $slash->hash, "shared: wire round-trip");
 
-    my %invalid = (
-        "another value"               => sub { $_->{prevouts}->[0]->[0] = 999 foreach @_ },
-        "another form of scripthash"  => sub { $_->{prevouts}->[0]->[1] = 20 foreach @_ },
-        "the proofs disagree"         => sub { $_[0]->{prevouts}->[0]->[0] = 999 },
-        "unknown form of scripthash"  => sub { $_->{prevouts}->[0]->[1] = 21 foreach @_ },
-        "no data for an input"        => sub { $_->{prevouts} = [] foreach @_ },
-        "data for a missing input"    => sub { push @{$_->{prevouts}}, [ 1000, 32 ] foreach @_ },
-    );
-    foreach my $name (sort keys %invalid) {
-        isnt(restate($slash, $invalid{$name})->validate, 0, "slashed output, $name: rejected");
-    }
+    isnt(slashing_tx($evidence, other_coin($coin, scripthash => hash256($p2pk)))->validate, 0,
+        "shared: the redeem script of the stakes must be the script of the real output");
+    isnt(slashing_tx($evidence, other_coin($coin, value => 999))->validate, 0,
+        "shared: the scripts are run for the value of the real output");
+    is(slashing_tx($evidence, other_coin($coin, value => 2000))->validate, 0,
+        "shared: ...whatever value the stakes were made for");
 }
 
-# --- the other inputs of the stakes are not the verifier's to know: their stated data
-# is not checked against anything, so that the validity of a slashing transaction never
-# depends on which outputs a node happens to have
+# --- inputs of one stake only: the evidence states their value and scripthash
 {
-    my ($coin_a, $coin_b, $coin_c) = map { make_coin($p2pk, \&hash256, $_) } 1000, 2000, 4000;
-    my ($slash) = double_sign([ $coin_a, $coin_b ], [ $coin_b, $coin_c ]);
-    is($slash->validate, 0, "partial overlap: slashing tx validates");
-    is(scalar @{$slash->in}, 1, "partial overlap: only the shared output is slashed");
-    my $other = restate($slash, sub {
-        my ($p1, $p2) = @_;
-        $p1->{prevouts}->[0]->[0] = 1; # coin_a in stake 1
-        $p2->{prevouts}->[1]->[0] = 2; # coin_c in stake 2
-    });
-    isnt($other->hash, $slash->hash, "other inputs restated: another transaction");
-    is($other->validate, 0, "other inputs restated: still valid");
-    is($other->out->[0]->value, 1800, "other inputs restated: refund by the real slashed output");
+    # The address stakes at least 1000 in a transaction: the first coin alone is not enough
+    my ($coin, $coin_a, $coin_b) = map { make_coin($min_value, \&hash160, $_) } 400, 600, 700;
+    my ($slash, $stake1, $stake2) = double_sign([ $coin, $coin_a ], [ $coin, $coin_b ]);
+    is($stake1->check_input_script, 0, "unshared: stake 1 is valid for its block");
+    is($stake2->check_input_script, 0, "unshared: stake 2 is valid for its block");
+    is(scalar @{$slash->in}, 1, "unshared: only the shared output is slashed");
+    is_deeply([ map { $_->{prevouts} } @{$slash->slashing->proofs} ], [ pack("Q<C", 600, 20), pack("Q<C", 700, 20) ],
+        "unshared: each proof states the output only its stake spends");
+    is($slash->validate, 0, "unshared: slashing tx validates, the stated outputs are counted by the script");
+    my $received = deserialize($slash);
+    ok($received, "unshared: wire round-trip");
+    is($received->hash, $slash->hash, "unshared: ...with the same hash");
+    is_deeply($received->slashing->proofs, $slash->slashing->proofs, "unshared: ...and the same evidence");
+
+    my %invalid = (
+        "too low value"              => sub { $_[0]->{prevouts}->[0]->[0] = 599 },
+        "another form of scripthash" => sub { $_[0]->{prevouts}->[0]->[1] = 32 },
+        "unknown form of scripthash" => sub { $_[0]->{prevouts}->[0]->[1] = 21 },
+        "nothing stated"             => sub { $_[0]->{prevouts} = [] },
+        "more than inputs stated"    => sub { push @{$_[0]->{prevouts}}, [ 600, 20 ] },
+    );
+    foreach my $name (sort keys %invalid) {
+        my $tx = restate($slash, $invalid{$name});
+        isnt($tx->validate, 0, "unshared, $name: rejected");
+    }
+    is(deserialize(restate($slash, $invalid{"nothing stated"})), undef, "unshared, nothing stated: not a transaction on the wire");
+    is(deserialize(restate($slash, $invalid{"more than inputs stated"})), undef, "unshared, more than inputs stated: not a transaction on the wire");
+
+    # The stated data is not checked against anything: these outputs are not the
+    # verifier's to know, so the validity of a slashing transaction never depends on
+    # which outputs a node happens to have
+    my $other = restate($slash, sub { $_->{prevouts}->[0]->[0] += 1_000_000 foreach @_ });
+    isnt($other->hash, $slash->hash, "unshared restated: another transaction");
+    is($other->validate, 0, "unshared restated: still valid");
+    is($other->out->[0]->value, 360, "unshared restated: refund by the real slashed output");
+}
+
+# --- the scripts of the inputs of one stake only are not run: they are not slashed
+{
+    my ($coin, $coin_a) = map { make_coin($p2pk, \&hash256, $_) } 1000, 2000;
+    my $stake1 = signed_stake([ $coin, $coin_a ], $bsd[0]);
+    my $stake2 = signed_stake([ $coin ], $bsd[1]);
+    $stake1->in->[1]->{siglist} = [ "\x01\x01" . "\x00" x 70 ]; # not a signature
+    isnt($stake1->check_input_script, 0, "unsigned other input: the stake is not valid for a block");
+    my $slash = QBitcoin::Slashing->new_tx($stake1, $stake2);
+    is($slash->validate, 0, "unsigned other input: but it proves the shared output double-signed");
 }
 
 done_testing();

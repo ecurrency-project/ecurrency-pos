@@ -9,12 +9,13 @@ use strict;
 # is not signed: any node that observes the two conflicting stakes can build it, and
 # every node builds the byte-identical transaction from the same evidence.
 #
-# Evidence layout (placed right after tx_type in the transaction),
-# two proofs ordered by their block_sign_data ascending:
+# Evidence layout (placed right after tx_type in the transaction): two proofs ordered
+# by their block_sign_data ascending, then the prevouts of each of them:
 #
-#   proof   := prev_hash(32) . pack("N", timeslot) . digest(32) . varstr(stake_tx_bytes) . varstr(prevouts)
-#   prevouts:= pack("Q<", value) . pack("C", length(scripthash)) for each input of the stake, in its order
-#   payload := proof[0] . proof[1]
+#   proof   := prev_hash(32) . pack("N", timeslot) . digest(32) . varstr(stake_tx_bytes)
+#   prevouts:= pack("Q<", value) . pack("C", length(scripthash)) for each input of the
+#              stake which is not an input of the other stake, in the order of the inputs
+#   payload := proof[0] . proof[1] . prevouts[0] . prevouts[1]
 #
 # prev_hash/timeslot/digest are exactly the three components of the block's
 # Block::sign_data (the message the stake signed); stake_tx_bytes is the tx-level
@@ -24,13 +25,16 @@ use strict;
 #
 # The stake bytes name the outputs the stake spends only by reference, while its input
 # scripts may read their value and scripthash (OP_INPUTSVALUE, OP_INPUTSCRIPTHASH: the
-# delegation covenant does). So the proof states them (the scripthash by its length, it
-# is the hash160 or the hash256 of the redeem_script) and the verifier runs the scripts
-# exactly as the block validation did: a stake accepted in a block is always a
-# verifiable proof. For the slashed inputs the stated data must be that of the real
-# UTXO (Transaction::validate_slashing). For the other inputs of the stakes it is taken
-# as given: these outputs may be unknown to the verifier, and since the value and the
-# scripthash of an input are not signed, a false one never makes a signature valid.
+# delegation covenant does), and the verifier has to run the scripts exactly as the
+# block validation did: a stake accepted in a block must always be a verifiable proof.
+# The inputs shared by both stakes are the inputs of the slashing transaction itself,
+# so they are the real UTXO. The other inputs are not slashed and their scripts are not
+# run, but a script of a shared input may count them (OP_INPUTSVALUE), so the prevouts
+# state their value and scripthash (by its length, it is the hash160 or the hash256 of
+# the redeem_script). These are taken as given: such an output may be unknown to the
+# verifier, and since the value and the scripthash of an input are not signed, a false
+# one never makes a signature valid. The prevouts have no length of their own (it is
+# the number of such inputs), so two stakes of the same inputs add nothing to the proofs.
 #
 # The slashing transaction then spends the shared (equivocated) UTXOs WITHOUT a
 # signature and refunds each owner scripthash its value minus SLASHING_FINE; the fine
@@ -85,11 +89,9 @@ my %BANNED;     # $utxo_key => { timeslot => $T, txo => $txo }
 
 sub serialize {
     my $self = shift;
-    my $data = "";
-    foreach my $p (@{$self->proofs}) {
-        $data .= $p->{prev_hash} . pack("N", $p->{timeslot}) . $p->{digest} . varstr($p->{raw}) . varstr($p->{prevouts});
-    }
-    return $data;
+    my $proofs = $self->proofs;
+    return join("", map { $_->{prev_hash} . pack("N", $_->{timeslot}) . $_->{digest} . varstr($_->{raw}) } @$proofs)
+        . join("", map { $_->{prevouts} } @$proofs);
 }
 
 sub deserialize {
@@ -97,16 +99,21 @@ sub deserialize {
     my ($data) = @_;
     my @proofs;
     for (1 .. 2) {
-        my $head     = $data->get(PROOF_HEAD_LEN) // return undef;
-        my $raw      = $data->get_string() // return undef;
-        my $prevouts = $data->get_string() // return undef;
+        my $head = $data->get(PROOF_HEAD_LEN) // return undef;
+        my $raw  = $data->get_string() // return undef;
         push @proofs, {
             prev_hash => substr($head, 0, 32),
             timeslot  => unpack("N", substr($head, 32, 4)),
             digest    => substr($head, 36, 32),
             raw       => $raw,
-            prevouts  => $prevouts,
         };
+    }
+    # The stakes tell how many prevouts follow: one for each of their unshared inputs
+    my @stakes = map { _stake($_) // return undef } @proofs;
+    my $shared = _shared(@stakes);
+    foreach my $n (0, 1) {
+        my $unshared = grep { !$shared->{_prevout($_)->key} } @{$stakes[$n]->in_raw};
+        $proofs[$n]->{prevouts} = $data->get(PREVOUT_LEN * $unshared) // return undef;
     }
     return $class->new(proofs => \@proofs);
 }
@@ -176,8 +183,14 @@ sub _proof_of_stake {
         timeslot  => unpack("N", substr($bsd, 32, 4)),
         digest    => substr($bsd, 36, 32),
         raw       => $stake->serialize,
-        prevouts  => join("", map { pack("Q<C", $_->{txo}->value, length($_->{txo}->scripthash)) } @{$stake->in}),
     };
+}
+
+# Value and scripthash length of the outputs an in-memory stake spends, except the shared ones
+sub _prevouts {
+    my ($stake, $shared) = @_;
+    return join("", map { pack("Q<C", $_->value, length($_->scripthash)) }
+        grep { !$shared->{$_->key} } map { $_->{txo} } @{$stake->in});
 }
 
 # Build a slashing transaction from two conflicting in-memory stake transactions
@@ -206,6 +219,9 @@ sub new_tx {
         or return undef; # no common stake UTXO
     my @in = map { +{ txo => $_->{txo}, siglist => [] } } @shared;
     my @out = $class->canonical_outputs(\@in);
+    my %shared = map { $_->{txo}->key => 1 } @shared;
+    $p1->{prevouts} = _prevouts($stake1, \%shared);
+    $p2->{prevouts} = _prevouts($stake2, \%shared);
     # Canonical order of the two proofs by block_sign_data (the signed message). Not by
     # stake-tx hash: two stakes that endorse different blocks with the same UTXO/outputs
     # can serialize identically (e.g. staking the same coins on two branches), so the
@@ -225,9 +241,9 @@ sub new_tx {
 
 # --- verification ----------------------------------------------------------
 
-# Reconstruct a stake transaction from a proof and verify its signatures against the
-# reassembled block_sign_data. Returns the stake (with ->in populated) or undef.
-sub _verify_stake {
+# The stake transaction of a proof as it is serialized there: its inputs only refer to
+# the outputs they spend (in_raw). Undef if the proof carries no stake transaction.
+sub _stake {
     my ($p) = @_;
     my $data = Bitcoin::Serialized->new($p->{raw});
     my $stake = QBitcoin::Transaction->deserialize($data)
@@ -236,42 +252,70 @@ sub _verify_stake {
         or return undef; # trailing garbage
     $stake->is_stake
         or return undef;
-    my $in_raw = delete $stake->{in_raw};
-    length($p->{prevouts}) == PREVOUT_LEN * @$in_raw
-        or return undef;
-    my @prevouts = unpack("(Q<C)*", $p->{prevouts});
-    my @in;
-    foreach my $raw (@$in_raw) {
-        # The spent output as the proof states it. Whether it is the real slashed UTXO
-        # is checked later, in validate_slashing.
-        my ($value, $hash_len) = splice(@prevouts, 0, 2);
-        my $scripthash = $hash_len == 20 ? hash160($raw->{redeem_script})
-                       : $hash_len == 32 ? hash256($raw->{redeem_script})
-                       : return undef;
-        my $txo = QBitcoin::TXO->new_txo({
-            tx_in      => $raw->{tx_out},
-            num        => $raw->{num},
-            value      => $value,
-            scripthash => $scripthash,
-        });
-        $txo->set_redeem_script($raw->{redeem_script}) == 0
-            or return undef;
-        push @in, { txo => $txo, siglist => $raw->{siglist} };
-    }
-    @in
-        or return undef;
-    $stake->{in} = \@in;
-    $stake->block_sign_data = _block_sign_data($p);
-    $stake->check_input_script == 0
-        or return undef;
     return $stake;
 }
 
-# Verify the equivocation evidence. Returns a hashref { timeslot => ..., shared =>
-# { $utxo_key => { scripthash => ..., value => ... } } } describing the slashable
-# inputs as the evidence states them, or undef if it is not a valid equivocation proof.
+# The output an input of such a stake spends: only its reference is known
+sub _prevout {
+    my ($in) = @_;
+    return QBitcoin::TXO->new_txo({ tx_in => $in->{tx_out}, num => $in->{num} });
+}
+
+# Keys of the outputs spent by both stakes
+sub _shared {
+    my ($stake1, $stake2) = @_;
+    my %in1 = map { _prevout($_)->key => 1 } @{$stake1->in_raw};
+    return { map { $_ => 1 } grep { $in1{$_} } map { _prevout($_)->key } @{$stake2->in_raw} };
+}
+
+# Verify that the stake of a proof spends the shared outputs: run their input scripts
+# against the reassembled block_sign_data, exactly as the block validation did.
+# $utxo are the real shared outputs by key.
+sub _verify_stake {
+    my ($stake, $p, $utxo) = @_;
+    my $in_raw = delete $stake->{in_raw};
+    my $unshared = grep { !$utxo->{_prevout($_)->key} } @$in_raw;
+    length($p->{prevouts}) == PREVOUT_LEN * $unshared
+        or return undef;
+    my @prevouts = unpack("(Q<C)*", $p->{prevouts});
+    my @in;
+    my @shared; # numbers of the stake inputs spending the shared outputs
+    foreach my $raw (@$in_raw) {
+        my $txo = _prevout($raw);
+        if (my $real = $utxo->{$txo->key}) {
+            # The redeem script of the stake must be the script of the real output
+            $txo->value = $real->value;
+            $txo->scripthash = $real->scripthash;
+            $txo->set_redeem_script($raw->{redeem_script}) == 0
+                or return undef;
+            push @shared, scalar @in;
+        }
+        else {
+            # An output only this stake spends, as the proof states it
+            my ($value, $hash_len) = splice(@prevouts, 0, 2);
+            $txo->value = $value;
+            $txo->scripthash = $hash_len == 20 ? hash160($raw->{redeem_script})
+                             : $hash_len == 32 ? hash256($raw->{redeem_script})
+                             : return undef;
+        }
+        push @in, { txo => $txo, siglist => $raw->{siglist} };
+    }
+    $stake->{in} = \@in;
+    $stake->block_sign_data = _block_sign_data($p);
+    foreach my $num (@shared) {
+        $in[$num]->{txo}->check_script($in[$num]->{siglist}, $stake, $num) == 0
+            or return undef;
+    }
+    return 1;
+}
+
+# Verify the equivocation evidence for the inputs of its slashing transaction (the real
+# UTXO). Returns a hashref { timeslot => ..., shared => { $utxo_key => 1 } } with the
+# outputs both stakes are proven to spend, each of them being one of these inputs; or
+# undef if the evidence is not a valid equivocation proof.
 sub verify {
     my $self = shift;
+    my ($inputs) = @_;
     my $proofs = $self->proofs;
     @$proofs == 2
         or return undef;
@@ -282,30 +326,18 @@ sub verify {
     # serialization and guarantees the two proofs endorse different blocks.
     _block_sign_data($p1) lt _block_sign_data($p2)
         or return undef;
-    my $stake1 = _verify_stake($p1) // return undef;
-    my $stake2 = _verify_stake($p2) // return undef;
-    my %k1;
-    foreach my $in (@{$stake1->in}) {
-        $k1{$in->{txo}->key} = $in;
-    }
-    my %shared;
-    foreach my $in (@{$stake2->in}) {
-        my $key = $in->{txo}->key;
-        my $in1 = $k1{$key}
-            or next;
-        # one and the same output for both stakes: the same scripthash (and so the same
-        # redeem_script, the same owner) and value
-        my ($txo1, $txo2) = ($in1->{txo}, $in->{txo});
-        $txo1->scripthash eq $txo2->scripthash && $txo1->value == $txo2->value
-            or return undef;
-        $shared{$key} = {
-            scripthash => $txo2->scripthash,
-            value      => $txo2->value,
-        };
-    }
-    %shared
+    my @stakes = map { _stake($_) // return undef } @$proofs;
+    my $shared = _shared(@stakes);
+    %$shared
         or return undef; # no shared stake UTXO -> not an equivocation
-    return { timeslot => $p1->{timeslot}, shared => \%shared };
+    my %utxo = map { $_->{txo}->key => $_->{txo} } grep { $shared->{$_->{txo}->key} } @$inputs;
+    keys %utxo == keys %$shared
+        or return undef; # a shared output is not an input of the slashing transaction
+    foreach my $n (0, 1) {
+        _verify_stake($stakes[$n], $proofs->[$n], \%utxo)
+            or return undef;
+    }
+    return { timeslot => $p1->{timeslot}, shared => $shared };
 }
 
 # --- detection -------------------------------------------------------------
