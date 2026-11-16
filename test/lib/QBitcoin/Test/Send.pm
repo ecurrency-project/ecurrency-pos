@@ -45,6 +45,14 @@ sub send_block {
     $connection->protocol->command("block");
     $connection->protocol->cmd_block($block_data) == 0
         or return undef;
+    # The node takes a stake transaction only when it is delivered for a block which waits for it
+    if (QBitcoin::Block->pending_block($block->hash)) {
+        foreach my $stake (grep { $_->is_stake } @{$block->transactions}) {
+            $connection->protocol->command("tx");
+            $connection->protocol->cmd_tx($stake->serialize . "\x00"x16) == 0
+                or return undef;
+        }
+    }
     return $block;
 }
 

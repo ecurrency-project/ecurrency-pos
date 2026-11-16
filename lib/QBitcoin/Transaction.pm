@@ -1371,8 +1371,13 @@ sub valid_for_block {
 
 sub check_input_script {
     my $self = shift;
+    # The scripts set the locks anew, nothing is kept from the previous check:
+    # a stake transaction is checked for each block, and its scripts may set other locks there
     $self->{min_tx_time} = -1;
     $self->{min_tx_block_height} = -1;
+    delete $self->{min_tx_rel_time};
+    delete $self->{min_tx_rel_block_height};
+    delete @$_{qw(min_rel_time min_rel_block_height)} foreach @{$self->in};
     # Slashing inputs are spent without a signature, so there is no input script to
     # evaluate (the txo may not even have its redeem_script revealed); the equivocation
     # evidence is checked by validate_slashing instead. Reached lazily via
