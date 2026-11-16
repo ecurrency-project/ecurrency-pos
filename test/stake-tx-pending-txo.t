@@ -9,7 +9,7 @@ use Test::More;
 use Test::MockModule;
 use QBitcoin::Test::ORM;
 use QBitcoin::Test::BlockSerialize qw(block_hash);
-use QBitcoin::Test::Send qw($connection);
+use QBitcoin::Test::Send qw(send_block);
 use QBitcoin::Test::MakeTx;
 use QBitcoin::Const;
 use QBitcoin::Config;
@@ -21,7 +21,8 @@ use QBitcoin::Generate;
 # Demonstrate the "Attempt to override already loaded txo" crash in generate().
 #
 # Scenario:
-#   A stake tx S is received via cmd_tx while its input (coinbase) is unknown.
+#   A stake tx S is received for a pending block while its input (coinbase) is unknown
+#   (a stake tx is taken only when it is delivered for a block which waits for it).
 #   S goes to PENDING_TX_INPUT; its output S:0 is saved to %TXO.
 #   make_stake_tx is mocked to return the same S, bypassing the need for real
 #   confirmed staking UTXOs.  generate() then hits the guard that should skip
@@ -57,11 +58,11 @@ my $stake_tx  = make_tx($coinbase, -2);  # TX_TYPE_STAKE, fee < 0
 # generate() reads $stake_tx->size after the first make_stake_tx call.
 $stake_tx->size = length($stake_tx->serialize);
 
-# Receive only the stake tx.  Its input (coinbase:0) is absent from %TXO
-# and the DB, so load_txo puts the tx into PENDING_TX_INPUT and saves its
-# output S:0 to %TXO.
-$connection->protocol->command("tx");
-$connection->protocol->cmd_tx($stake_tx->serialize . "\x00"x16);
+# Receive a block with the stake tx and then the stake tx itself.  Its input
+# (coinbase:0) is absent from %TXO and the DB, so load_txo puts the tx into
+# PENDING_TX_INPUT and saves its output S:0 to %TXO.
+# height, hash, prev_hash, weight, $tx
+send_block(0, "p0", undef, 100, $stake_tx);
 
 ok(QBitcoin::Transaction->has_pending($stake_tx->hash),
     "Stake tx is in PENDING_TX_INPUT (coinbase input unknown)");

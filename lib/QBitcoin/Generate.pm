@@ -672,6 +672,8 @@ sub _generate {
         QBitcoin::Generate::Control->record_stake($timeslot, $stake_tx);
         $stake_private = 1;
         $stake_tx->process_pending();
+        # Our own stake transaction needs no delivery, it is for any pending block which waits for it
+        QBitcoin::Block->stake_delivered($stake_tx->hash);
         if (defined(my $height = QBitcoin::Block->recv_pending_tx($stake_tx))) {
             # A pending peer block references this stake's hash: the stake is out (or at
             # least its hash is), so its commitment must stand whatever happens below

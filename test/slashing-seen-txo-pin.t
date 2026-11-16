@@ -11,11 +11,12 @@ use List::Util qw(sum0);
 use QBitcoin::Test::ORM;
 use QBitcoin::Test::BlockSerialize;
 use QBitcoin::Test::MakeTx;
-use QBitcoin::Test::Send qw(send_raw_tx $connection);
+use QBitcoin::Test::Send qw(send_raw_tx send_block);
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
 use QBitcoin::ProtocolState qw(blockchain_synced);
+use QBitcoin::Block;
 use QBitcoin::Transaction;
 use QBitcoin::TXO;
 use QBitcoin::Slashing;
@@ -24,7 +25,7 @@ use QBitcoin::Slashing;
 #   - stake S2 (spending S1:0) gets into a validated block, so
 #     QBitcoin::Slashing->observe(S2) stores it in the %SEEN watch list
 #   - the branch is reorged away, blocks are freed, S1 and S2 are dropped
-#     from the mempool
+#     with them
 #   - the %SEEN snapshot must not pin the real input txo S1:0 in the %TXO
 #     cache, otherwise re-receiving S1 dies in TXO::save
 
@@ -42,41 +43,41 @@ $transaction_module->mock('deserialize_coinbase', sub { unpack("C", shift->get(1
 
 blockchain_synced(1);
 
-# Mempool chain: coinbase C <- stake S1 <- stake S2 (no pending inputs)
+# Chain: coinbase C <- stake S1 <- stake S2 (no pending inputs)
 my $tx_c  = make_tx(undef, 0);
 my $tx_s1 = make_tx($tx_c, -1);
 my $tx_s2 = make_tx($tx_s1, -1);
 
 send_raw_tx($tx_c);
-send_raw_tx($tx_s1);
-send_raw_tx($tx_s2);
+# A stake transaction is taken only when it is delivered for a block which waits for it;
+# the ancestor of the blocks is unknown, so they stay pending
+# height, hash, prev_hash, weight, $tx
+send_block(1, "b1", "b0", 100, $tx_s1);
+send_block(2, "b2", "b1", 200, $tx_s2);
 
 {
     my $s2 = QBitcoin::Transaction->get($tx_s2->hash);
-    ok($s2, "stake S2 is in the mempool");
+    ok($s2, "stake S2 is received");
 
     # The block with S2 was validated: Block::Receive calls observe() on its stake
     $s2->{block_sign_data} = "\x11" x 32 . pack("N", timeslot(GENESIS_TIME)) . "\xaa" x 32;
     QBitcoin::Slashing->observe($s2, timeslot(GENESIS_TIME));
-    # $s2 goes out of scope here: only the mempool and the %SEEN watch list keep refs
+    # $s2 goes out of scope here: only its block and the %SEEN watch list keep refs
 }
 
-# Reorg drops the branch: the stake transactions leave the mempool
-QBitcoin::Transaction->get($tx_s1->hash)->drop();
-is(QBitcoin::Transaction->get($tx_s1->hash), undef, "S1 dropped from mempool");
-is(QBitcoin::Transaction->get($tx_s2->hash), undef, "S2 dropped from mempool");
+# Reorg drops the branch: the blocks are freed and their stake transactions are dropped
+QBitcoin::Block->pending_block("b1")->drop_pending(); # with its descendant b2
+is(QBitcoin::Transaction->get($tx_s1->hash), undef, "S1 dropped with its block");
+is(QBitcoin::Transaction->get($tx_s2->hash), undef, "S2 dropped with its block");
 
 # The %SEEN watch list may keep the stake evidence, but must not keep
 # the real S1:0 txo object registered in the %TXO cache
 is(QBitcoin::TXO->get({ tx_out => $tx_s1->hash, num => 0 }), undef,
     "txo S1:0 released from TXO cache");
 
-# Re-receiving S1 (e.g. relayed by another peer) must not die
-my $res = eval {
-    $connection->protocol->command("tx");
-    $connection->protocol->cmd_tx($tx_s1->serialize . "\x00"x16);
-};
+# Re-receiving S1 (its block comes again, e.g. from another peer) must not die
+eval { send_block(1, "b1", "b0", 100, $tx_s1) };
 is($@, '', "re-receiving S1 does not crash");
-is($res, 0, "S1 accepted again") if !$@;
+ok(QBitcoin::Transaction->get($tx_s1->hash), "S1 accepted again") if !$@;
 
 done_testing();

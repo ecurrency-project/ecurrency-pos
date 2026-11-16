@@ -653,11 +653,30 @@ sub cmd_tx {
         Debugf("Ignore tx %s from peer %s: BTC blockchain is not synced", $tx->hash_str, $self->peer->id);
         return 0;
     }
+    if ($tx->is_stake && !QBitcoin::Block->stake_delivered($tx->hash, $self)) {
+        # A stake transaction is a part of its block: it is taken only for a pending block
+        # which waits for it, each delivery for one block (see QBitcoin::Block::stake_delivered)
+        Debugf("Ignore stake transaction %s from peer %s: no block waits for it", $tx->hash_str, $self->peer->id);
+        return 0;
+    }
     if (QBitcoin::Transaction->has_pending($tx->hash)) {
         Debugf("Transaction %s already pending", $tx->hash_str);
         return 0;
     }
-    if (QBitcoin::Transaction->check_by_hash($tx->hash)) {
+    if ($tx->is_stake) {
+        if (my $known = QBitcoin::Transaction->get_by_hash($tx->hash)) {
+            # It is already known as the stake transaction of another block and is delivered for this one
+            $known->add_to_cache() unless $known->is_cached;
+            if (defined(my $height = QBitcoin::Block->recv_pending_tx($known))) {
+                return -1 if $height == -1;
+                # The block is received, request the next ones as in process_tx()
+                $self->syncing(0);
+                $self->request_new_block();
+            }
+            return 0;
+        }
+    }
+    elsif (QBitcoin::Transaction->check_by_hash($tx->hash)) {
         Debugf("Transaction %s already known", $tx->hash_str);
         return 0;
     }
@@ -745,6 +764,7 @@ sub continue_pending_branch {
         && (QBitcoin::Block->block_pool($bottom->prev_hash) || QBitcoin::Block->find(hash => $bottom->prev_hash))) {
         # The ancestor is already known, the bottom block waits only for its transactions
         $self->request_tx($bottom->pending_tx);
+        $bottom->{pending_tx_requested} = $self;
     }
     else {
         $self->send_message("sendblock", $bottom->prev_hash);

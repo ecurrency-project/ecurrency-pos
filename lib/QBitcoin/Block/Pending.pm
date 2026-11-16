@@ -9,6 +9,8 @@ use Role::Tiny;
 
 my %PENDING_BLOCK;
 tie(%PENDING_BLOCK, 'Tie::IxHash'); # Ordered by age
+# $tx_hash => { $block_hash => $delivered }: the pending blocks which wait for the transaction;
+# $delivered is true when a stake transaction has been delivered for this block (see stake_delivered)
 my %PENDING_TX_BLOCK;
 my %PENDING_BLOCK_BLOCK;
 
@@ -94,7 +96,7 @@ sub process_pending {
                             ? $pending_block->received_from : undef;
                     if ($from) {
                         $from->request_tx($pending_block->pending_tx);
-                        $pending_block->{pending_tx_requested} = 1;
+                        $pending_block->{pending_tx_requested} = $from;
                     }
                 }
                 next;
@@ -137,12 +139,48 @@ sub awaits_tx {
     return exists $PENDING_TX_BLOCK{$tx_hash};
 }
 
+# The scripts of a stake transaction are executed for each block it is included in (see
+# Transaction::valid_for_block), so the transaction is a part of its block: a block takes it only when
+# it is delivered for this block, and one delivery is for one block. Then each execution of the scripts
+# is paid by the delivery of the transaction, a small block can not have a large stake transaction
+# checked again for free.
+# The transaction delivered by the peer is for a pending block which waits for it and was received from
+# this peer, or has its transactions requested from this peer. Our own stake transaction (no peer)
+# is for all the blocks which wait for it.
+# Returns the number of the blocks the transaction is delivered for.
+sub stake_delivered {
+    my $class = shift;
+    my ($tx_hash, $peer) = @_;
+    my $blocks = $PENDING_TX_BLOCK{$tx_hash}
+        or return 0;
+    # A block the transaction was already delivered for waits for nothing more while the transaction
+    # waits for its inputs; if the transaction was lost (dropped) since then, the block needs it again
+    my $waits_inputs = QBitcoin::Transaction->has_pending($tx_hash);
+    my $delivered = 0;
+    foreach my $block_hash (grep { !($blocks->{$_} && $waits_inputs) } keys %$blocks) {
+        if ($peer) {
+            my $block = $PENDING_BLOCK{$block_hash};
+            grep { $_ && $_->peer->id eq $peer->peer->id } $block->received_from, $block->{pending_tx_requested}
+                or next;
+        }
+        $blocks->{$block_hash} = 1;
+        $delivered++;
+        last if $peer;
+    }
+    return $delivered;
+}
+
 sub recv_pending_tx {
     my $class = shift;
     my ($tx) = @_;
     my $height;
-    if (my $blocks = delete $PENDING_TX_BLOCK{$tx->hash}) {
-        foreach my $block_hash (keys %$blocks) {
+    if (my $blocks = $PENDING_TX_BLOCK{$tx->hash}) {
+        # A stake transaction is taken only by the blocks it was delivered for,
+        # the others go on waiting for their own delivery
+        my @block_hashes = grep { !$tx->is_stake || $blocks->{$_} } keys %$blocks;
+        delete @$blocks{@block_hashes};
+        delete $PENDING_TX_BLOCK{$tx->hash} unless %$blocks;
+        foreach my $block_hash (@block_hashes) {
             my $block = $PENDING_BLOCK{$block_hash};
             if (!$block) {
                 # In rare cases the block may be dropped by previous iteration of this loop
@@ -173,14 +211,17 @@ sub load_transactions {
     my $self = shift;
     if (!$self->pending_tx) {
         foreach my $tx_hash (@{$self->tx_hashes}) {
-            my $transaction = QBitcoin::Transaction->get_by_hash($tx_hash);
+            # A known stake transaction is not taken from the cache or the database,
+            # the block waits for its own delivery of the transaction (see stake_delivered)
+            my $tx_type = QBitcoin::Transaction->type_by_hash($tx_hash);
+            my $transaction = defined($tx_type) && $tx_type != TX_TYPE_STAKE ? QBitcoin::Transaction->get_by_hash($tx_hash) : undef;
             if ($transaction) {
                 $transaction->add_to_cache() unless $transaction->is_cached;
                 $self->add_tx($transaction);
             }
             else {
                 $self->pending_tx($tx_hash);
-                $PENDING_TX_BLOCK{$tx_hash}->{$self->hash} = 1;
+                $PENDING_TX_BLOCK{$tx_hash}->{$self->hash} = 0;
                 Debugf("Set pending_tx %s block %s time %u", unpack("H*", substr($tx_hash, 0, 4)), $self->hash_str, $self->time);
             }
         }
