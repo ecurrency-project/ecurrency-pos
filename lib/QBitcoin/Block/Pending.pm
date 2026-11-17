@@ -130,6 +130,13 @@ sub pending_block {
     return $PENDING_BLOCK{$hash};
 }
 
+# Is the transaction awaited by a pending block?
+sub awaits_tx {
+    my $class = shift;
+    my ($tx_hash) = @_;
+    return exists $PENDING_TX_BLOCK{$tx_hash};
+}
+
 sub recv_pending_tx {
     my $class = shift;
     my ($tx) = @_;

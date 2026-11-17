@@ -83,7 +83,10 @@ my $MAX_SLOT = 0;
 # spends one of these UTXOs in the banned timeslot is INVALID regardless of its branch
 # weight - we never select such a branch and actively drop it if it is already best.
 # This is the robust rule: it does not rely on out-weighing the equivocator.
-my %BANNED;     # $utxo_key => { timeslot => $T, txo => $txo }
+# The block is rejected or dropped only while the slashing tx may be included in a block
+# built instead of it (QBitcoin::Block::slashable): a stake too light to win a block is
+# not slashed, so its block must not be lost either.
+my %BANNED;    # $utxo_key => { timeslot => $T, txo => $txo, tx => $slashing_tx_hash }
 
 # --- (de)serialization -----------------------------------------------------
 
@@ -453,15 +456,16 @@ sub ban_from_tx {
         or return;
     my $timeslot = $ev->proofs->[0]{timeslot};
     foreach my $in (@{$tx->in}) {
-        $BANNED{$in->{txo}->key} = { timeslot => $timeslot, txo => $in->{txo} };
+        $BANNED{$in->{txo}->key} = { timeslot => $timeslot, txo => $in->{txo}, tx => $tx->hash };
     }
     if ($timeslot > $MAX_SLOT) {
         $MAX_SLOT = $timeslot;
     }
 }
 
-# Is this stake one we hold equivocation evidence for at the given timeslot? Used by
-# block validation to reject a block built on an equivocated stake.
+# Is this stake one we hold equivocation evidence for at the given timeslot? Returns the
+# hash of the slashing transaction then. Used by block validation to reject a block built
+# on an equivocated stake.
 sub is_banned_stake {
     my $class = shift;
     my ($stake, $timeslot) = @_;
@@ -470,9 +474,32 @@ sub is_banned_stake {
     foreach my $in (@{$stake->in}) {
         my $b = $BANNED{$in->{txo}->key}
             or next;
-        return 1 if $b->{timeslot} == $timeslot;
+        return $b->{tx} if $b->{timeslot} == $timeslot;
     }
     return 0;
+}
+
+# The height of the best-branch block whose stake is the equivocated one spending this
+# output in the given timeslot, while the block can still be dropped (it is not stored).
+sub _equivocated_height {
+    my ($txo, $timeslot) = @_;
+    my $out = $txo->tx_out
+        or return undef; # not spent in the best branch (already dropped / never confirmed)
+    my $sp = QBitcoin::Transaction->get($out)
+        or return undef;
+    # Punishable is only the equivocated stake itself: the confirmed slashing tx
+    # spends the same UTXO (that is the penalty, not equivocation), and the UTXO
+    # may be legitimately staked in a different timeslot. A stake is confirmed in
+    # the block it signed, so the block time identifies the stake's timeslot.
+    $sp->is_stake
+        or return undef;
+    my $h = $sp->block_height
+        // return undef; # spender not confirmed in the best branch
+    $h > QBitcoin::Block->max_db_height
+        or return undef;
+    defined($sp->block_time) && timeslot($sp->block_time) == $timeslot
+        or return undef;
+    return $h;
 }
 
 # The lowest best-branch height that rests on an equivocated stake we can slash (its
@@ -481,27 +508,41 @@ sub is_banned_stake {
 sub banned_height_in_best {
     my $class = shift;
     my $min;
-    my $max_db_height = QBitcoin::Block->max_db_height;
     foreach my $key (keys %BANNED) {
         my $b = $BANNED{$key};
         my $txo = $b->{txo}
             or next;
-        my $out = $txo->tx_out
-            or next; # not spent in the best branch (already dropped / never confirmed)
-        my $sp = QBitcoin::Transaction->get($out)
-            or next;
-        # Punishable is only the equivocated stake itself: the confirmed slashing tx
-        # spends the same UTXO (that is the penalty, not equivocation), and the UTXO
-        # may be legitimately staked in a different timeslot. A stake is confirmed in
-        # the block it signed, so the block time identifies the stake's timeslot.
-        next unless $sp->is_stake;
-        my $h = $sp->block_height;
-        next unless defined $h; # spender not confirmed in the best branch
-        next if $h <= $max_db_height;
-        next unless defined($sp->block_time) && timeslot($sp->block_time) == $b->{timeslot};
+        my $h = _equivocated_height($txo, $b->{timeslot})
+            // next;
+        # Do not drop a block the slashing tx can not be included instead of
+        my $block = QBitcoin::Block->best_block($h);
+        my $tx = QBitcoin::Transaction->get($b->{tx});
+        next if $block && $tx && !$block->slashable($tx);
         $min = $h if !defined($min) || $h < $min;
     }
     return $min;
+}
+
+# Can the slashing transaction be included in the best branch now: in the next block if
+# the outputs it spends are not spent there, or in the block built instead of the block of
+# the equivocated stake which spends them? If not, it punishes a stake too light to win a
+# block (QBitcoin::Block::slashing_weight_ok), and we neither keep nor relay it.
+sub includable {
+    my $class = shift;
+    my ($tx) = @_;
+    my $best = QBitcoin::Block->best_block
+        or return 1;
+    my $timeslot = $tx->slashing->proofs->[0]{timeslot};
+    foreach my $in (@{$tx->in}) {
+        $in->{txo}->tx_out
+            or next;
+        my $h = _equivocated_height($in->{txo}, $timeslot)
+            // return 1; # spent by something else, see Transaction::cleanup_mempool
+        my $block = QBitcoin::Block->best_block($h)
+            or return 1;
+        return $block->slashable($tx);
+    }
+    return $best->slashing_weight_ok($tx, timeslot(time()));
 }
 
 # Build, validate and inject into the mempool a slashing transaction for an observed
@@ -514,6 +555,10 @@ sub report_equivocation {
         or return undef;
     if (QBitcoin::Transaction->check_by_hash($tx->hash) || QBitcoin::Transaction->has_pending($tx->hash)) {
         return undef; # already known
+    }
+    if (!$class->includable($tx)) {
+        Debugf("Ignore equivocation of a stake too light to win a block, slashing transaction %s", $tx->hash_str);
+        return undef;
     }
     $_->{txo}->spent_add($tx) foreach @{$tx->in};
     QBitcoin::TXO->save_all($tx->hash, $tx->out);

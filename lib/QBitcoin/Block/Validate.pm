@@ -136,9 +136,16 @@ sub validate {
         elsif ($transaction->is_stake) {
             # Equivocated stake: we hold a slashing tx proving this UTXO signed another
             # block in this timeslot. Such a block is invalid no matter how heavy its
-            # branch is, so we never select it (and drop it if already best).
-            if (!skip_scripts() && QBitcoin::Slashing->is_banned_stake($transaction, timeslot($block->time))) {
-                return "Stake transaction " . $transaction->hash_str . " is equivocated (slashed); block invalid";
+            # branch is, so we never select it (and drop it if already best). Unless the
+            # slashing tx can not be included in a block instead of this one: its stake is
+            # too light to win a block (see QBitcoin::Block::slashing_weight_ok).
+            my $slashing = !skip_scripts() && QBitcoin::Slashing->is_banned_stake($transaction, timeslot($block->time));
+            if ($slashing) {
+                # A slashing tx which is not in the memory was confirmed and stored
+                my $slashing_tx = QBitcoin::Transaction->get($slashing);
+                if (!$slashing_tx || $block->slashable($slashing_tx)) {
+                    return "Stake transaction " . $transaction->hash_str . " is equivocated (slashed); block invalid";
+                }
             }
             $stake_reward = -$transaction->fee; # fee is negative for stake transactions
         }
@@ -239,6 +246,17 @@ sub validate_chain {
             Warningf("Incorrect weight for block %s: %Lu != %Lu", $block->hash_str,
                 $block->weight, $self_weight + ( $block->prev_block ? $block->prev_block->weight : 0 ));
             $fail_tx = "block";
+        }
+        elsif ($block->prev_block) {
+            # The weights are known here only: a stake and the outputs of a slashing
+            # transaction are weighed by the blocks they are confirmed in
+            foreach my $tx (grep { $_->is_slashing } @{$block->transactions}) {
+                next if $block->prev_block->slashing_weight_ok($tx, $block->time);
+                Warningf("Slashing transaction %s in block %s punishes a stake too light to win a block",
+                    $tx->hash_str, $block->hash_str);
+                $fail_tx = "block";
+                last;
+            }
         }
     }
     if ($fail_tx) {

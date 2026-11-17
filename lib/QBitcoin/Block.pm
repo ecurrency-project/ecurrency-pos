@@ -110,6 +110,55 @@ sub self_weight {
     return $self->{self_weight};
 }
 
+# The weight of the lightest of the last SLASHING_BARRIER_STAKES stakes in the branch ending
+# with this block; blocks without a stake transaction are skipped. The block must be in the
+# best branch or being added to it: a stake is weighed by the blocks its inputs are
+# confirmed in. Undef if a stake can not be weighed.
+sub min_stake_weight {
+    my $self = shift;
+    my $min;
+    my $stakes = 0;
+    for (my $block = $self; $block; $block = $block->prev_block_load) {
+        my $stake = $block->transactions->[0];
+        $stake && $stake->is_stake
+            or next;
+        my $weight = $block->{stake_weight} //= $stake->stake_weight($block)
+            // return undef;
+        $min = $weight if !defined($min) || $weight < $min;
+        last if ++$stakes >= SLASHING_BARRIER_STAKES; # do not load one more block
+    }
+    return $min // 0;
+}
+
+# May the slashing transaction be included in a block of the given time built on this one?
+# Only if the stake it punishes could win a block, i.e. the outputs it spends are less than
+# SLASHING_BARRIER_MARGIN times lighter than the lightest recent stake. Undef if the
+# weights are not known.
+sub slashing_weight_ok {
+    my $self = shift;
+    my ($tx, $time) = @_;
+    my $weight = $tx->slashing_weight($time)
+        // return undef;
+    my $min = $self->min_stake_weight
+        // return undef;
+    return $weight * SLASHING_BARRIER_MARGIN >= $min;
+}
+
+# May the slashing transaction be included in a block built instead of this one? The block
+# of an equivocated stake is rejected, or dropped from the best branch, only if it may:
+# otherwise there would be nothing to replace the block with. Stakes are weighed in the
+# best branch, so a block on top of another branch is not rejected.
+sub slashable {
+    my $self = shift;
+    my ($tx) = @_;
+    my $prev = $self->prev_block_load
+        or return 1;
+    my $best = (ref $self)->best_block($prev->height);
+    $best && $best->hash eq $prev->hash
+        or return 0;
+    return $prev->slashing_weight_ok($tx, $self->time);
+}
+
 sub add_tx {
     my $self = shift;
     my ($tx) = @_;

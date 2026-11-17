@@ -408,11 +408,14 @@ sub build_stake_tx {
 # Is there an uncommitted, weight-increasing transaction in the mempool? Only such a
 # transaction (coinbase / slashing - not a plain fee) can make a
 # sibling block built with a smaller free stake address outweigh our already-published
-# block, so we build a sibling only when one is pending.
+# block, so we build a sibling only when one is pending. $prev_block and $timeslot are
+# those of the sibling block: a slashing transaction must be valid there.
 sub _have_weight_tx {
+    my ($prev_block, $timeslot) = @_;
     foreach my $tx (QBitcoin::Transaction->mempool_list()) {
         return 1 if $tx->is_coinbase;
-        return 1 if $tx->is_slashing && !grep { $_->{txo}->tx_out } @{$tx->in};
+        next unless $tx->is_slashing && !grep { $_->{txo}->tx_out } @{$tx->in};
+        return 1 if !$prev_block || $prev_block->slashing_weight_ok($tx, $timeslot);
     }
     return 0;
 }
@@ -484,7 +487,7 @@ sub generate {
                     # appeared, build a SIBLING competing block with a still-free stake
                     # address (make_stake_tx skips published UTXOs) - like a second
                     # independent validator - WITHOUT unconfirming the published block.
-                    if (!_have_weight_tx()) {
+                    if (!_have_weight_tx(QBitcoin::Block->best_block($height - 1), $timeslot)) {
                         Debugf("Keep our published block %s height %u for slot %u, nothing new to add",
                             $prev_block->hash_str, $height, $timeslot);
                         # The decision stands until a new trigger (generate_new) or the next

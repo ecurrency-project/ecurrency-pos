@@ -100,6 +100,8 @@ sub choose_for_block {
             $spent{$key} = 1;
         }
         next if _obstructed($tx, $block_height, \%spent, \%in_block);
+        # The block would be invalid with a slashing transaction of a stake too light to win a block
+        next if $tx->is_slashing && $prev_block && !$prev_block->slashing_weight_ok($tx, $block_time);
         foreach my $in (@{$tx->in}) {
             $spent{$in->{txo}->key} = 1;
         }

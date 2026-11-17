@@ -62,6 +62,13 @@ use constant QBITCOIN_CONST => {
     # equivocation. Beyond INCORE_LEVELS + FORCE_BLOCKS a reorg is penalized, so an
     # equivocation buried deeper can no longer be profitably slashed anyway.
     SLASHING_WINDOW         => 6 + 100, # INCORE_LEVELS + FORCE_BLOCKS
+    # A slashing transaction is accepted to a block only if the stake it punishes could win
+    # a block: the weight of the outputs it spends, multiplied by SLASHING_BARRIER_MARGIN,
+    # must be not less than the weight of the lightest of the last SLASHING_BARRIER_STAKES
+    # stakes before the block. Equivocation evidence can be made of any coins, and it must
+    # not be a way to put megabytes into the blockchain for the fine of a few satoshi.
+    SLASHING_BARRIER_STAKES => 4,
+    SLASHING_BARRIER_MARGIN => 4,
     CONFIG_DIR              => "/etc",
     CONFIG_NAME             => "qbitcoin.conf",
     ZERO_HASH               => "\x00" x 32,

@@ -456,6 +456,14 @@ sub cleanup_mempool {
             next;
         }
         if ($tx->is_slashing) {
+            # A slashing tx is kept only while it can be included (see want_tx): it may be
+            # accepted for a block which is gone now, or the last stakes became heavier.
+            if (!QBitcoin::Slashing->includable($tx)) {
+                if ($tx->drop()) {
+                    Infof("Drop slashing tx %s: its stake is too light to win a block", $tx->hash_str);
+                }
+                next;
+            }
             # A slashing tx intentionally double-spends the equivocating stake's UTXO:
             # its input is "already spent" by the block we mean to slash. Keep it so we
             # can land it by unconfirming that block (see QBitcoin::Generate). Drop only
@@ -1885,6 +1893,13 @@ sub _cmp_evict {
 
 sub want_tx {
     my ($tx) = @_;
+
+    # A slashing transaction which can not be included now (its stake is too light to win
+    # a block) is of no use, and it may be megabytes of somebody's data. It is not invalid:
+    # a block of another branch may contain it, then it is requested for that block.
+    if ($tx->is_slashing && !skip_scripts()) {
+        return QBitcoin::Block->awaits_tx($tx->hash) || QBitcoin::Slashing->includable($tx);
+    }
 
     # Coinbase, burn, and stake transactions are never limited
     return 1 unless $tx->is_mempool_limited;
