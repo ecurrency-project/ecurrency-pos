@@ -14,6 +14,7 @@ our @EXPORT_OK = qw(
     sha1
     checksum32
     signature
+    signature_hash
     pk_serialize
     pk_import
     pk_alg
@@ -121,11 +122,17 @@ sub pk_alg {
 
 sub signature {
     my ($data, $address, $algo, $sighash_type) = @_;
+    return signature_hash(hash256($data), $address, $algo, $sighash_type);
+}
+
+# Sign already hashed data (hash256), so the caller can cache the hash
+sub signature_hash {
+    my ($hash, $address, $algo, $sighash_type) = @_;
     #defined($algo) && defined($sighash_type)
     #    or die "Incorrect params for signature";
     my $pk = $address->privkey($algo)
         or return undef;
-    return pack("CC", $sighash_type, $algo) . $pk->signature(hash256($data));
+    return pack("CC", $sighash_type, $algo) . $pk->signature($hash);
 }
 
 sub generate_keypair {

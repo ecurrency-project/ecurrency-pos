@@ -9,7 +9,7 @@ use QBitcoin::Log;
 use QBitcoin::Config;
 use QBitcoin::Script qw(op_pushdata);
 use QBitcoin::Script::Delegation qw(SELECTOR_OWNER SELECTOR_DELEGATE);
-use QBitcoin::Crypto qw(signature);
+use QBitcoin::Crypto qw(signature_hash);
 use QBitcoin::RedeemScript;
 use Role::Tiny;
 
@@ -58,9 +58,9 @@ sub make_sign {
         $sign_alg = $pk_alg[0];
     }
     my $sighash_type = SIGHASH_ALL;
-    my $sign_data = $self->sign_data($input_num, $sighash_type)
-        or die "Can't get sign data for input $input_num";
-    my $signature = signature($sign_data, $address, $sign_alg, $sighash_type);
+    my $sign_hash = $self->sign_hash($input_num, $sighash_type)
+        or die "Can't get sign hash for input $input_num";
+    my $signature = signature_hash($sign_hash, $address, $sign_alg, $sighash_type);
     $in->{txo}->set_redeem_script($redeem_script);
     my $script_type = QBitcoin::RedeemScript->script_type($redeem_script);
     if ($script_type eq "P2PKH") {
@@ -81,9 +81,9 @@ sub make_delegation_sign {
 
     my $staking_key = $delegation->staking_key;
     my $sighash_type = SIGHASH_ALL;
-    my $sign_data = $self->sign_data($input_num, $sighash_type)
-        or die "Can't get sign data for input $input_num";
-    my $signature = signature($sign_data, $staking_key, $staking_key->algo, $sighash_type);
+    my $sign_hash = $self->sign_hash($input_num, $sighash_type)
+        or die "Can't get sign hash for input $input_num";
+    my $signature = signature_hash($sign_hash, $staking_key, $staking_key->algo, $sighash_type);
     $in->{txo}->set_redeem_script($delegation->redeem_script);
     $in->{siglist} = [ $signature, $staking_key->pubkey, SELECTOR_DELEGATE ];
 }

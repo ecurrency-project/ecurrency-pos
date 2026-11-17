@@ -4,6 +4,7 @@ use strict;
 use feature 'state';
 
 use Tie::IxHash;
+use Digest::SHA;
 use List::Util qw(sum0);
 use Scalar::Util qw(refaddr);
 use QBitcoin::Const;
@@ -12,7 +13,7 @@ use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
 use QBitcoin::Accessors qw(mk_accessors);
 use QBitcoin::ORM qw(find fetch create delete :types);
-use QBitcoin::Crypto qw(hash160 hash256);
+use QBitcoin::Crypto qw(hash160 hash256 sha256);
 use QBitcoin::Address qw(address_by_hash);
 use QBitcoin::TXO;
 use QBitcoin::Delegation;
@@ -584,58 +585,53 @@ sub serialize_unsigned {
     return $data;
 }
 
-sub sign_data {
-    my $self = shift;
-    my ($input_num, $sighash_type) = @_;
-
-    my $data;
-    my $per_input = ($sighash_type & SIGHASH_ANYONECANPAY) || $sighash_type == SIGHASH_SINGLE;
-    my $cached_data = $per_input ?  \$self->{sign_data}->[$sighash_type]->[$input_num] : \$self->{sign_data}->[$sighash_type];
-    if (!defined($data = $$cached_data)) {
-        $data = pack("C", $self->tx_type);
-        if ($sighash_type & SIGHASH_ANYONECANPAY) {
-            # Only the current input is signed, not all inputs
-            $data .= serialize_input_for_sign($self->in->[$input_num]);
-        }
-        else {
-            $data .= varint(scalar @{$self->in});
-            $data .= serialize_input_for_sign($_) foreach @{$self->in};
-        }
-        $sighash_type &= ~SIGHASH_ANYONECANPAY;
-        if ($sighash_type == SIGHASH_ALL) {
-            $data .= varint(scalar @{$self->out});
-            $data .= serialize_output($_) foreach @{$self->out};
-        }
-        elsif ($sighash_type == SIGHASH_SINGLE) {
-            # We do not need to sign coinbase transactions
-            $data .= defined($self->out->[$input_num]) ? serialize_output($self->out->[$input_num]) : "";
-        }
-        elsif ($sighash_type != SIGHASH_NONE) {
-            Warningf("Unsupported sighash type %s in transaction %s", $sighash_type, $self->hash_str);
-            return undef;
-        }
-        # We do not need to sign coinbase transactions
-        $$cached_data = $data;
-    }
-    if ($self->is_tokens && length($self->token_hash // "")) {
-        $data .= $self->token_hash;
-    }
-    if ($self->is_stake) {
-        # It's stake tx which signs block, add block info
-        $data .= $self->block_sign_data;
-    }
-    return $data;
-}
-
-# hash256 of sign_data, cached the same way, so that checking many signatures of a large transaction
-# does not rehash the whole transaction for each of them. Reset when block_sign_data changes.
+# The hash signed by an input: hash256 of the transaction type, its inputs, the outputs chosen by the sighash type,
+# the token hash and the block sign data of a stake.
+# The signed data is hashed by parts and is never built as a string. The type and all the inputs are the same for
+# all the signatures without SIGHASH_ANYONECANPAY: they are hashed once and each signature continues from that state,
+# so the signatures of all the inputs hash the transaction once and not once per input.
+# The exception is SIGHASH_ALL | SIGHASH_ANYONECANPAY: its own input goes before all the outputs there,
+# so each input signed this way hashes all the outputs again.
+# The hash is cached, so many checks of the same input do not repeat it. Reset when block_sign_data changes.
 sub sign_hash {
     my $self = shift;
     my ($input_num, $sighash_type) = @_;
 
     my $per_input = ($sighash_type & SIGHASH_ANYONECANPAY) || $sighash_type == SIGHASH_SINGLE;
     my $cached_hash = $per_input ? \$self->{sign_hash}->[$sighash_type]->[$input_num] : \$self->{sign_hash}->[$sighash_type];
-    return $$cached_hash //= hash256($self->sign_data($input_num, $sighash_type) // return undef);
+    return $$cached_hash if defined($$cached_hash);
+
+    my $data = pack("C", $self->tx_type);
+    my $sha;
+    if ($sighash_type & SIGHASH_ANYONECANPAY) {
+        # Only the current input is signed, not all inputs
+        $sha = Digest::SHA->new(256)->add($data, serialize_input_for_sign($self->in->[$input_num]));
+    }
+    else {
+        $self->{sign_inputs} //= Digest::SHA->new(256)->add($data, varint(scalar @{$self->in}),
+            map { serialize_input_for_sign($_) } @{$self->in});
+        $sha = $self->{sign_inputs}->clone;
+    }
+    $sighash_type &= ~SIGHASH_ANYONECANPAY;
+    if ($sighash_type == SIGHASH_ALL) {
+        $sha->add($self->{sign_outputs} //= join("", varint(scalar @{$self->out}), map { serialize_output($_) } @{$self->out}));
+    }
+    elsif ($sighash_type == SIGHASH_SINGLE) {
+        $sha->add(serialize_output($self->out->[$input_num])) if defined($self->out->[$input_num]);
+    }
+    elsif ($sighash_type != SIGHASH_NONE) {
+        Warningf("Unsupported sighash type %s in transaction %s", $sighash_type, $self->hash_str);
+        return undef;
+    }
+    # We do not need to sign coinbase transactions
+    if ($self->is_tokens && length($self->token_hash // "")) {
+        $sha->add($self->token_hash);
+    }
+    if ($self->is_stake) {
+        # It's stake tx which signs block, add block info
+        $sha->add($self->block_sign_data);
+    }
+    return $$cached_hash = sha256($sha->digest);
 }
 
 sub type_as_text {

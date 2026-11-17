@@ -18,7 +18,7 @@ use QBitcoin::Test::ORM;
 use QBitcoin::Const;
 use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
-use QBitcoin::Crypto qw(signature generate_keypair hash160 hash256);
+use QBitcoin::Crypto qw(signature_hash generate_keypair hash160 hash256);
 use QBitcoin::Address qw(wallet_import_format);
 use QBitcoin::MyAddress;
 use QBitcoin::Script qw(op_pushdata);
@@ -65,7 +65,7 @@ sub signed_stake {
         block_sign_data => $bsd,
     );
     foreach my $num (0 .. $#{$stake->in}) {
-        my $sig = signature($stake->sign_data($num, SIGHASH_ALL), $key, CRYPT_ALGO_ECDSA, SIGHASH_ALL);
+        my $sig = signature_hash($stake->sign_hash($num, SIGHASH_ALL), $key, CRYPT_ALGO_ECDSA, SIGHASH_ALL);
         $stake->in->[$num]->{siglist} = [ $sig, @siglist_tail ];
     }
     $stake->calculate_hash;
