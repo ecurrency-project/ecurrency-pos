@@ -122,8 +122,9 @@ foreach my $type (@SIGHASH) {
     ok($token1->sign_hash(1, $SIGHASH{$type}) ne $token2->sign_hash(1, $SIGHASH{$type}), "$type: signs the token hash");
 }
 {
-    # The hash without SIGHASH_ANYONECANPAY and SIGHASH_SINGLE is one for all the inputs, it is cached this way
-    my $tx = tx(\@in, \@out);
+    # The hash without SIGHASH_ANYONECANPAY and SIGHASH_SINGLE is one for all the inputs, it is cached this way.
+    # The other ones are for their input only, even if all the inputs have the same output
+    my $tx = tx(\@in, [ 5, 5, 5 ]);
     foreach my $type (@SIGHASH) {
         my $per_input = $type ne "ALL" && $type ne "NONE";
         is($tx->sign_hash(0, $SIGHASH{$type}) ne $tx->sign_hash(2, $SIGHASH{$type}), $per_input,
@@ -139,6 +140,7 @@ foreach my $type (@SIGHASH) {
 
 # The sighash type is not a part of the signed data, so the data itself must tell what is signed: two signatures
 # of any sighash types in any transactions have the same hash if and only if they sign the same inputs and outputs.
+# The own output of SIGHASH_SINGLE is signed as the output of its input and not just as an output.
 # The transactions are random ones of a few coins and outputs, so many of them have the same inputs or outputs
 {
     srand(1);
@@ -165,7 +167,7 @@ foreach my $type (@SIGHASH) {
                 my $signed = join(", ", $kind,
                     $sighash_type & SIGHASH_ANYONECANPAY ? "input $in[$num]" : "inputs @in",
                     $outputs_type == SIGHASH_ALL ? "outputs @out"
-                        : $outputs_type == SIGHASH_SINGLE && defined($out[$num]) ? "output $out[$num]" : "no outputs");
+                        : $outputs_type == SIGHASH_SINGLE && defined($out[$num]) ? "output $out[$num] of input $in[$num]" : "no outputs");
                 my $hash = $tx->sign_hash($num, $sighash_type);
                 $wrong{"one hash for different things signed"}++ if ($signed_by{$hash} //= $signed) ne $signed;
                 $wrong{"different hashes for the same signed"}++ if ($hash_of{$signed} //= $hash) ne $hash;
@@ -176,15 +178,16 @@ foreach my $type (@SIGHASH) {
     is_deeply(\%wrong, {}, "$signatures signatures of random transactions: " . keys(%hash_of) . " different things signed, each has its own hash");
 }
 
-# The signatures of each sighash type are checked by the script of the input
+# The signatures of each sighash type are checked by the script of the input. Both inputs are of the same key
+# and have the same output, so only what is signed tells a signature of one input from a signature of another one
 foreach my $type (@SIGHASH) {
-    my $signed = tx([ 0, 1 ], [ 0, 1 ]);
+    my $signed = tx([ 0, 1 ], [ 5, 5 ]);
     my @sig = map { sign($signed, $_, $SIGHASH{$type}) } 0, 1;
-    my $tx = tx([ 0, 1 ], [ 0, 1 ]);
+    my $tx = tx([ 0, 1 ], [ 5, 5 ]);
     is($tx->in->[$_]->{txo}->check_script([ $sig[$_] ], $tx, $_), 0, "$type: signature of input $_") foreach 0, 1;
     isnt($tx->in->[1]->{txo}->check_script([ $sig[0] ], $tx, 1), 0, "$type: signature of another input")
         if $type ne "ALL" && $type ne "NONE";
-    my $other = tx([ 0, 1 ], [ 0, 9 ]);
+    my $other = tx([ 0, 1 ], [ 5, 9 ]);
     is($other->in->[0]->{txo}->check_script([ $sig[0] ], $other, 0) == 0, $type !~ /ALL/, "$type: signature of input 0 with output 1 replaced");
 }
 {
