@@ -585,13 +585,26 @@ sub serialize_unsigned {
     return $data;
 }
 
-# The hash signed by an input: hash256 of the transaction type, its inputs, the outputs chosen by the sighash type,
-# the token hash and the block sign data of a stake.
-# The signed data is hashed by parts and is never built as a string. The type and all the inputs are the same for
-# all the signatures without SIGHASH_ANYONECANPAY: they are hashed once and each signature continues from that state,
+# The hash signed by an input: hash256 of the signed data. The data has the same parts in the same order
+# for all the sighash types:
+#   the transaction type;
+#   the count of the inputs signed by all the signatures and these inputs: all the inputs of the transaction,
+#   or none with SIGHASH_ANYONECANPAY;
+#   the count of the outputs signed by all the signatures and these outputs: all the outputs of the transaction
+#   with SIGHASH_ALL, or none;
+#   if none of the outputs: the count of the own outputs of the input and these outputs, that is the output
+#   with the number of the input for SIGHASH_SINGLE if the transaction has it, or none;
+#   if none of the inputs: the input itself;
+#   the token hash, the block sign data of a stake.
+# The sighash type is not a part of the signed data, so the data itself must tell what it covers: otherwise
+# a signature of one type would fit another transaction as a signature of another type. Each part has a fixed size
+# or goes after its count, so the data is read back in one way only. A signature without SIGHASH_ANYONECANPAY
+# has at least its own input among all the inputs and a valid transaction has an output, so the data of SIGHASH_ALL
+# has two non-zero counts where each other type has a zero.
+# The signed data is hashed by parts and is never built as a string. All the inputs are the same for all
+# the signatures without SIGHASH_ANYONECANPAY, all the outputs are the same for all the signatures with
+# SIGHASH_ALL | SIGHASH_ANYONECANPAY: they are hashed once and each signature continues from that state,
 # so the signatures of all the inputs hash the transaction once and not once per input.
-# The exception is SIGHASH_ALL | SIGHASH_ANYONECANPAY: its own input goes before all the outputs there,
-# so each input signed this way hashes all the outputs again.
 # The hash is cached, so many checks of the same input do not repeat it. Reset when block_sign_data changes.
 sub sign_hash {
     my $self = shift;
@@ -602,27 +615,38 @@ sub sign_hash {
     return $$cached_hash if defined($$cached_hash);
 
     my $data = pack("C", $self->tx_type);
+    my $anyonecanpay = $sighash_type & SIGHASH_ANYONECANPAY;
+    $sighash_type &= ~SIGHASH_ANYONECANPAY;
     my $sha;
-    if ($sighash_type & SIGHASH_ANYONECANPAY) {
-        # Only the current input is signed, not all inputs
-        $sha = Digest::SHA->new(256)->add($data, serialize_input_for_sign($self->in->[$input_num]));
+    if ($anyonecanpay) {
+        # None of the inputs is signed by all the signatures, the own input goes after the outputs
+        $sha = Digest::SHA->new(256)->add($data, varint(0));
     }
     else {
         $self->{sign_inputs} //= Digest::SHA->new(256)->add($data, varint(scalar @{$self->in}),
             map { serialize_input_for_sign($_) } @{$self->in});
         $sha = $self->{sign_inputs}->clone;
     }
-    $sighash_type &= ~SIGHASH_ANYONECANPAY;
     if ($sighash_type == SIGHASH_ALL) {
-        $sha->add($self->{sign_outputs} //= join("", varint(scalar @{$self->out}), map { serialize_output($_) } @{$self->out}));
+        if ($anyonecanpay && $self->{sign_outputs}) {
+            $sha = $self->{sign_outputs}->clone;
+        }
+        else {
+            $sha->add(varint(scalar @{$self->out}), map { serialize_output($_) } @{$self->out});
+            # The own input goes after the outputs, so they are hashed once for all the inputs signed this way
+            $self->{sign_outputs} = $sha->clone if $anyonecanpay;
+        }
     }
-    elsif ($sighash_type == SIGHASH_SINGLE) {
-        $sha->add(serialize_output($self->out->[$input_num])) if defined($self->out->[$input_num]);
+    elsif ($sighash_type == SIGHASH_SINGLE || $sighash_type == SIGHASH_NONE) {
+        # None of the outputs is signed by all the signatures, the own outputs of the input follow: one or none
+        my @own = $sighash_type == SIGHASH_SINGLE && defined($self->out->[$input_num]) ? ( $self->out->[$input_num] ) : ();
+        $sha->add(varint(0), varint(scalar @own), map { serialize_output($_) } @own);
     }
-    elsif ($sighash_type != SIGHASH_NONE) {
+    else {
         Warningf("Unsupported sighash type %s in transaction %s", $sighash_type, $self->hash_str);
         return undef;
     }
+    $sha->add(serialize_input_for_sign($self->in->[$input_num])) if $anyonecanpay;
     # We do not need to sign coinbase transactions
     if ($self->is_tokens && length($self->token_hash // "")) {
         $sha->add($self->token_hash);

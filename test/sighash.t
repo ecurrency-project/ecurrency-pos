@@ -3,9 +3,10 @@ use warnings;
 use strict;
 
 # The hash signed by a transaction input (Transaction::sign_hash): which changes of the transaction each
-# sighash type covers, and how much data is hashed, serialized and kept for the signatures of a transaction
-# with many inputs. The amounts are counted instead of measuring the time: they must be linear in the size
-# of the transaction. The format of the signed data is not checked here, it is not the same in all the coins.
+# sighash type covers, that one hash is never for two different things signed, and how much data is hashed,
+# serialized and kept for the signatures of a transaction with many inputs. The amounts are counted instead
+# of measuring the time: they must be linear in the size of the transaction. The format of the signed data
+# is not checked here, it is not the same in all the coins.
 
 use FindBin '$Bin';
 use lib ("$Bin/../lib", "$Bin/lib");
@@ -136,6 +137,45 @@ foreach my $type (@SIGHASH) {
     ok($short->sign_hash(0, SIGHASH_SINGLE) ne $short->sign_hash(0, SIGHASH_NONE), "SINGLE with its output does not sign as NONE");
 }
 
+# The sighash type is not a part of the signed data, so the data itself must tell what is signed: two signatures
+# of any sighash types in any transactions have the same hash if and only if they sign the same inputs and outputs.
+# The transactions are random ones of a few coins and outputs, so many of them have the same inputs or outputs
+{
+    srand(1);
+    my %kind = (
+        "standard"       => [],
+        "stake, block a" => [ tx_type => TX_TYPE_STAKE, block_sign_data => "a" x 68 ],
+        "stake, block b" => [ tx_type => TX_TYPE_STAKE, block_sign_data => "b" x 68 ],
+        "token a"        => [ tx_type => TX_TYPE_TOKENS, token_hash => "a" x 32 ],
+        "token b"        => [ tx_type => TX_TYPE_TOKENS, token_hash => "b" x 32 ],
+        "new token"      => [ tx_type => TX_TYPE_TOKENS ],
+    );
+    my @kind = sort keys %kind;
+    my (%signed_by, %hash_of, %wrong);
+    my $signatures = 0;
+    foreach (1 .. 500) {
+        my @in = grep { rand() < 0.5 } 1 .. 4;
+        @in = (1 + int(rand(4))) if !@in;
+        my @out = map { 1 + int(rand(3)) } 0 .. int(rand(4));
+        my $kind = $kind[rand(@kind)];
+        my $tx = tx(\@in, \@out, @{$kind{$kind}});
+        foreach my $num (0 .. $#in) {
+            foreach my $sighash_type (values %SIGHASH) {
+                my $outputs_type = $sighash_type & ~SIGHASH_ANYONECANPAY;
+                my $signed = join(", ", $kind,
+                    $sighash_type & SIGHASH_ANYONECANPAY ? "input $in[$num]" : "inputs @in",
+                    $outputs_type == SIGHASH_ALL ? "outputs @out"
+                        : $outputs_type == SIGHASH_SINGLE && defined($out[$num]) ? "output $out[$num]" : "no outputs");
+                my $hash = $tx->sign_hash($num, $sighash_type);
+                $wrong{"one hash for different things signed"}++ if ($signed_by{$hash} //= $signed) ne $signed;
+                $wrong{"different hashes for the same signed"}++ if ($hash_of{$signed} //= $hash) ne $hash;
+                $signatures++;
+            }
+        }
+    }
+    is_deeply(\%wrong, {}, "$signatures signatures of random transactions: " . keys(%hash_of) . " different things signed, each has its own hash");
+}
+
 # The signatures of each sighash type are checked by the script of the input
 foreach my $type (@SIGHASH) {
     my $signed = tx([ 0, 1 ], [ 0, 1 ]);
@@ -208,14 +248,7 @@ foreach my $type (@SIGHASH) {
     my $kept = kept($tx, {});
     ($hashed, $serialized) = (0, 0);
     my @hash = map { $tx->sign_hash($_, $SIGHASH{$type}) } 0 .. $n - 1;
-    if ($type eq "ALL|ANYONECANPAY") {
-        # The input goes before the outputs in the signed data, so the outputs are hashed for each input:
-        # the hashing is not linear, but nothing else is
-        cmp_ok($hashed, '<=', $n * ($outputs_size + $own), "$type: all the outputs are hashed once for each input");
-    }
-    else {
-        cmp_ok($hashed, '<=', $linear, "$type: the transaction is hashed once for all the inputs");
-    }
+    cmp_ok($hashed, '<=', $linear, "$type: the transaction is hashed once for all the inputs");
     cmp_ok($serialized, '<=', 2 * $n + $n, "$type: inputs and outputs are serialized once");
     cmp_ok(kept($tx, {}) - $kept, '<=', $linear, "$type: the signed data is not kept for each input");
     # Many checks of an input (multisig) do not repeat the hash
@@ -225,14 +258,16 @@ foreach my $type (@SIGHASH) {
     is($hashed + $serialized, 0, "$type: nothing is hashed on the second check");
 }
 {
-    # All the sighash types in one transaction share the hashed inputs and the serialized outputs
+    # All the sighash types in one transaction share the hashed inputs. The outputs are hashed twice:
+    # after all the inputs (SIGHASH_ALL) and without them (SIGHASH_ALL | SIGHASH_ANYONECANPAY)
     my $tx = tx([ 1 .. $n ], [ 1 .. $n ]);
     my %hash = map { $_ => tx([ 1 .. $n ], [ 1 .. $n ])->sign_hash(7, $SIGHASH{$_}) } @SIGHASH;
     ($hashed, $serialized) = (0, 0);
     foreach my $type (reverse @SIGHASH) {
         ok($tx->sign_hash(7, $SIGHASH{$type}) eq $hash{$type}, "$type: the same hash after the other sighash types");
     }
-    cmp_ok($serialized, '<=', 2 * $n + 2 * @SIGHASH, "all the sighash types serialize inputs and outputs once");
+    cmp_ok($hashed, '<=', $inputs_size + 2 * $outputs_size + 2 * $own * @SIGHASH, "all the sighash types hash the inputs once and the outputs twice");
+    cmp_ok($serialized, '<=', 3 * $n + 2 * @SIGHASH, "all the sighash types serialize the inputs once and the outputs twice");
     # A signature with unsupported sighash type fails without any work with the whole transaction
     my $checks = 10 * $n;
     ($hashed, $serialized) = (0, 0);
