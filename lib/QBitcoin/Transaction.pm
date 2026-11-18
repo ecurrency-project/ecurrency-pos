@@ -593,15 +593,17 @@ sub serialize_unsigned {
 #   the count of the outputs signed by all the signatures and these outputs: all the outputs of the transaction
 #   with SIGHASH_ALL, or none;
 #   if none of the outputs: the count of the own outputs of the input and these outputs, that is the output
-#   with the number of the input for SIGHASH_SINGLE if the transaction has it, or none;
+#   with the number of the input for SIGHASH_SINGLE, or none;
 #   after the own output, if all the inputs are signed: its number, which is the number of the input among them;
 #   if none of the inputs: the input itself;
 #   the token hash, the block sign data of a stake.
+# An input without the output of its number has nothing to sign with SIGHASH_SINGLE: there is no hash for it,
+# so the signature is not valid. Signing no outputs instead would make it a signature of SIGHASH_NONE.
 # The sighash type is not a part of the signed data, so the data itself must tell what it covers: otherwise
 # a signature of one type would fit another transaction as a signature of another type. Each part tells its own size
 # and the counts before a part tell if it is there, so the data is read back in one way only. A signature without
 # SIGHASH_ANYONECANPAY has at least its own input among all the inputs and a valid transaction has an output,
-# so the data of SIGHASH_ALL has two non-zero counts where each other type has a zero.
+# so the counts are not the same for any two sighash types: a signature fits one type only.
 # The signed data is hashed by parts and is never built as a string. All the inputs are the same for all
 # the signatures without SIGHASH_ANYONECANPAY, all the outputs are the same for all the signatures with
 # SIGHASH_ALL | SIGHASH_ANYONECANPAY: they are hashed once and each signature continues from that state,
@@ -640,7 +642,7 @@ sub sign_hash {
     }
     elsif ($sighash_type == SIGHASH_SINGLE || $sighash_type == SIGHASH_NONE) {
         # None of the outputs is signed by all the signatures, the own outputs of the input follow: one or none
-        my @own = $sighash_type == SIGHASH_SINGLE && defined($self->out->[$input_num]) ? ( $self->out->[$input_num] ) : ();
+        my @own = $sighash_type == SIGHASH_SINGLE ? ( $self->out->[$input_num] // return undef ) : ();
         $sha->add(varint(0), varint(scalar @own), map { serialize_output($_) } @own);
         # The number of the own output is the number of the input among all the signed inputs: without it
         # the signature would fit any other input of the same key with the same output

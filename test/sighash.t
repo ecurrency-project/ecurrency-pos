@@ -130,17 +130,18 @@ foreach my $type (@SIGHASH) {
         is($tx->sign_hash(0, $SIGHASH{$type}) ne $tx->sign_hash(2, $SIGHASH{$type}), $per_input,
             "$type: sign hash is " . ($per_input ? "its own for each input" : "the same for all the inputs"));
     }
-    # An input without the output of its number signs no outputs with SIGHASH_SINGLE
+    # An input without the output of its number has nothing to sign with SIGHASH_SINGLE
     my $short = tx(\@in, [ 0 ]);
-    ok($short->sign_hash(2, SIGHASH_SINGLE) eq $short->sign_hash(2, SIGHASH_NONE), "SINGLE without its output signs as NONE");
-    ok($short->sign_hash(2, SIGHASH_SINGLE | SIGHASH_ANYONECANPAY) eq $short->sign_hash(2, SIGHASH_NONE | SIGHASH_ANYONECANPAY),
-        "SINGLE|ANYONECANPAY without its output signs as NONE|ANYONECANPAY");
-    ok($short->sign_hash(0, SIGHASH_SINGLE) ne $short->sign_hash(0, SIGHASH_NONE), "SINGLE with its output does not sign as NONE");
+    foreach my $type ("SINGLE", "SINGLE|ANYONECANPAY") {
+        is(length($short->sign_hash(0, $SIGHASH{$type})), 32, "$type: sign hash of the input with its output");
+        is($short->sign_hash(2, $SIGHASH{$type}), undef, "$type: no sign hash of an input without its output");
+    }
 }
 
 # The sighash type is not a part of the signed data, so the data itself must tell what is signed: two signatures
 # of any sighash types in any transactions have the same hash if and only if they sign the same inputs and outputs.
-# The own output of SIGHASH_SINGLE is signed as the output of its input and not just as an output.
+# The own output of SIGHASH_SINGLE is signed as the output of its input and not just as an output,
+# and there is no hash if the input has no output to sign.
 # The transactions are random ones of a few coins and outputs, so many of them have the same inputs or outputs
 {
     srand(1);
@@ -154,7 +155,7 @@ foreach my $type (@SIGHASH) {
     );
     my @kind = sort keys %kind;
     my (%signed_by, %hash_of, %wrong);
-    my $signatures = 0;
+    my ($signatures, $no_hash) = (0, 0);
     foreach (1 .. 500) {
         my @in = grep { rand() < 0.5 } 1 .. 4;
         @in = (1 + int(rand(4))) if !@in;
@@ -164,18 +165,25 @@ foreach my $type (@SIGHASH) {
         foreach my $num (0 .. $#in) {
             foreach my $sighash_type (values %SIGHASH) {
                 my $outputs_type = $sighash_type & ~SIGHASH_ANYONECANPAY;
+                my $hash = $tx->sign_hash($num, $sighash_type);
+                if ($outputs_type == SIGHASH_SINGLE && !defined($out[$num])) {
+                    $wrong{"hash for nothing to sign"}++ if defined($hash);
+                    $no_hash++;
+                    next;
+                }
+                $wrong{"no hash"}++, next if !defined($hash);
                 my $signed = join(", ", $kind,
                     $sighash_type & SIGHASH_ANYONECANPAY ? "input $in[$num]" : "inputs @in",
                     $outputs_type == SIGHASH_ALL ? "outputs @out"
-                        : $outputs_type == SIGHASH_SINGLE && defined($out[$num]) ? "output $out[$num] of input $in[$num]" : "no outputs");
-                my $hash = $tx->sign_hash($num, $sighash_type);
+                        : $outputs_type == SIGHASH_SINGLE ? "output $out[$num] of input $in[$num]" : "no outputs");
                 $wrong{"one hash for different things signed"}++ if ($signed_by{$hash} //= $signed) ne $signed;
                 $wrong{"different hashes for the same signed"}++ if ($hash_of{$signed} //= $hash) ne $hash;
                 $signatures++;
             }
         }
     }
-    is_deeply(\%wrong, {}, "$signatures signatures of random transactions: " . keys(%hash_of) . " different things signed, each has its own hash");
+    is_deeply(\%wrong, {}, "$signatures signatures of random transactions: " . keys(%hash_of) . " different things signed, each has its own hash; " .
+        "no hash for $no_hash more with nothing to sign");
 }
 
 # The signatures of each sighash type are checked by the script of the input. Both inputs are of the same key
@@ -191,10 +199,18 @@ foreach my $type (@SIGHASH) {
     is($other->in->[0]->{txo}->check_script([ $sig[0] ], $other, 0) == 0, $type !~ /ALL/, "$type: signature of input 0 with output 1 replaced");
 }
 {
-    my $tx = tx([ 0, 1 ], [ 0, 1 ]);
-    my $sig = sign($tx, 0, SIGHASH_ALL);
-    substr($sig, 0, 1) = pack("C", SIGHASH_NONE);
-    isnt($tx->in->[0]->{txo}->check_script([ $sig ], $tx, 0), 0, "the sighash type of a signature cannot be changed");
+    # The signed data tells its sighash type, so the type of a signature cannot be changed.
+    # Input 1 has no output of its number: there is no signature of it with SIGHASH_SINGLE
+    my $signed = tx([ 0, 1 ], [ 5 ]);
+    my $tx = tx([ 0, 1 ], [ 5 ]);
+    foreach my $num (0, 1) {
+        foreach my $type (grep { defined($signed->sign_hash($num, $SIGHASH{$_})) } @SIGHASH) {
+            my $sig = sign($signed, $num, $SIGHASH{$type});
+            my @valid_as = grep { $tx->in->[$num]->{txo}->check_script([ pack("C", $SIGHASH{$_}) . substr($sig, 1) ], $tx, $num) == 0 } @SIGHASH;
+            is("@valid_as", $type, "$type: signature of input $num is of this sighash type only");
+        }
+    }
+    my $sig = sign($signed, 0, SIGHASH_ALL);
     foreach my $type (0, 4, SIGHASH_ANYONECANPAY, SIGHASH_ANYONECANPAY | 4) {
         is($tx->sign_hash(0, $type), undef, "no sign hash for unsupported sighash type $type");
         substr($sig, 0, 1) = pack("C", $type);
@@ -279,6 +295,14 @@ foreach my $type (@SIGHASH) {
     }
     cmp_ok($hashed, '<=', $own * 4 * $checks, "unsupported sighash type: the transaction is not hashed for each check");
     cmp_ok($serialized, '<=', 4 * $checks, "unsupported sighash type: the inputs are not serialized for each check");
+    # The same for SIGHASH_SINGLE of an input without its output: the inputs are hashed once for the transaction
+    my $short = tx([ 1 .. $n ], [ 1 ]);
+    ($hashed, $serialized) = (0, 0);
+    foreach my $type (SIGHASH_SINGLE, SIGHASH_SINGLE | SIGHASH_ANYONECANPAY) {
+        $short->sign_hash(1 + $_ % ($n - 1), $type) foreach 1 .. $checks;
+    }
+    cmp_ok($hashed, '<=', $inputs_size + $own * 2 * $checks, "SINGLE without its output: the transaction is not hashed for each check");
+    cmp_ok($serialized, '<=', $n + 2 * $checks, "SINGLE without its output: the inputs are not serialized for each check");
 }
 
 # Signing: the hash signed by all the inputs is calculated once, so twice as many inputs hash twice as much
