@@ -115,9 +115,15 @@ foreach my $type (@SIGHASH) {
             ok($changed_hash ne $hash, "$type: signature is not valid with $change");
         }
     }
-    # The block signed by a stake and the token are signed with any sighash type
+    # The token is signed with any sighash type. A stake signs its block, so it is signed as a whole only:
+    # there is no hash of it for the sighash types which do not sign all its inputs and outputs
     my ($stake1, $stake2) = map { tx(\@in, \@out, tx_type => TX_TYPE_STAKE, block_sign_data => $_ x 68) } "a", "b";
-    ok($stake1->sign_hash(1, $SIGHASH{$type}) ne $stake2->sign_hash(1, $SIGHASH{$type}), "$type: signs the block of a stake");
+    if ($type eq "ALL") {
+        ok($stake1->sign_hash(1, $SIGHASH{$type}) ne $stake2->sign_hash(1, $SIGHASH{$type}), "$type: signs the block of a stake");
+    }
+    else {
+        is($stake1->sign_hash(1, $SIGHASH{$type}), undef, "$type: no sign hash of a stake");
+    }
     my ($token1, $token2) = map { tx(\@in, \@out, tx_type => TX_TYPE_TOKENS, token_hash => $_ x 32) } "a", "b";
     ok($token1->sign_hash(1, $SIGHASH{$type}) ne $token2->sign_hash(1, $SIGHASH{$type}), "$type: signs the token hash");
 }
@@ -140,8 +146,8 @@ foreach my $type (@SIGHASH) {
 
 # The sighash type is not a part of the signed data, so the data itself must tell what is signed: two signatures
 # of any sighash types in any transactions have the same hash if and only if they sign the same inputs and outputs.
-# The own output of SIGHASH_SINGLE is signed as the output of its input and not just as an output,
-# and there is no hash if the input has no output to sign.
+# The own output of SIGHASH_SINGLE is signed as the output of its input and not just as an output.
+# There is no hash if the input has no output to sign, and for a stake if not all of it is signed.
 # The transactions are random ones of a few coins and outputs, so many of them have the same inputs or outputs
 {
     srand(1);
@@ -166,8 +172,8 @@ foreach my $type (@SIGHASH) {
             foreach my $sighash_type (values %SIGHASH) {
                 my $outputs_type = $sighash_type & ~SIGHASH_ANYONECANPAY;
                 my $hash = $tx->sign_hash($num, $sighash_type);
-                if ($outputs_type == SIGHASH_SINGLE && !defined($out[$num])) {
-                    $wrong{"hash for nothing to sign"}++ if defined($hash);
+                if ($outputs_type == SIGHASH_SINGLE && !defined($out[$num]) || $kind =~ /^stake/ && $sighash_type != SIGHASH_ALL) {
+                    $wrong{"hash for what is not signed"}++ if defined($hash);
                     $no_hash++;
                     next;
                 }
@@ -183,7 +189,7 @@ foreach my $type (@SIGHASH) {
         }
     }
     is_deeply(\%wrong, {}, "$signatures signatures of random transactions: " . keys(%hash_of) . " different things signed, each has its own hash; " .
-        "no hash for $no_hash more with nothing to sign");
+        "no hash for $no_hash more which are not signed");
 }
 
 # The signatures of each sighash type are checked by the script of the input. Both inputs are of the same key
@@ -218,14 +224,12 @@ foreach my $type (@SIGHASH) {
     }
 }
 
-# A stake signs its block: the cached hashes are reset when it is validated for another block,
-# whatever is kept from the previous check
+# A stake signs its block: the cached hash is reset when it is validated for another block
 {
     my @block = map { TestBlock->new(sign_data => $_ x 68, time => GENESIS_TIME + 1000, height => 1) } "a", "b";
     my $signed = tx(\@in, \@out, tx_type => TX_TYPE_STAKE, block_sign_data => $block[0]->sign_data);
-    my @type = (SIGHASH_ALL, SIGHASH_SINGLE, SIGHASH_ALL | SIGHASH_ANYONECANPAY);
     my $stake = tx(\@in, \@out, tx_type => TX_TYPE_STAKE);
-    $stake->in->[$_]->{siglist} = [ sign($signed, $_, $type[$_]) ] foreach 0 .. 2;
+    $stake->in->[$_]->{siglist} = [ sign($signed, $_, SIGHASH_ALL) ] foreach 0 .. 2;
     is($stake->valid_for_block($block[0]),  0, "stake is valid for the block it signs");
     is($stake->valid_for_block($block[1]), -1, "stake is not valid for another block");
     is($stake->valid_for_block($block[0]),  0, "stake is valid for its block again");
@@ -303,6 +307,13 @@ foreach my $type (@SIGHASH) {
     }
     cmp_ok($hashed, '<=', $inputs_size + $own * 2 * $checks, "SINGLE without its output: the transaction is not hashed for each check");
     cmp_ok($serialized, '<=', $n + 2 * $checks, "SINGLE without its output: the inputs are not serialized for each check");
+    # A stake with a sighash type but SIGHASH_ALL: nothing is hashed at all
+    my $stake = tx([ 1 .. $n ], [ 1 .. $n ], tx_type => TX_TYPE_STAKE, block_sign_data => "a" x 68);
+    ($hashed, $serialized) = (0, 0);
+    foreach my $type (grep { $_ != SIGHASH_ALL } values %SIGHASH) {
+        $stake->sign_hash($_ % $n, $type) foreach 1 .. $checks;
+    }
+    is($hashed + $serialized, 0, "stake with another sighash type: nothing is hashed for a check");
 }
 
 # Signing: the hash signed by all the inputs is calculated once, so twice as many inputs hash twice as much

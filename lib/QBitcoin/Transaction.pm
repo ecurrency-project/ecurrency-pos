@@ -599,6 +599,10 @@ sub serialize_unsigned {
 #   the token hash, the block sign data of a stake.
 # An input without the output of its number has nothing to sign with SIGHASH_SINGLE: there is no hash for it,
 # so the signature is not valid. Signing no outputs instead would make it a signature of SIGHASH_NONE.
+# The signatures of a stake sign the block too, and the block sign data does not cover the stake itself:
+# only a signature of all its inputs and outputs signs the whole block. There is no hash of a stake for the other
+# sighash types: anyone could change what such a signature does not sign, and that would be another valid block
+# with the same signature.
 # The sighash type is not a part of the signed data, so the data itself must tell what it covers: otherwise
 # a signature of one type would fit another transaction as a signature of another type. Each part tells its own size
 # and the counts before a part tell if it is there, so the data is read back in one way only. A signature without
@@ -612,6 +616,9 @@ sub serialize_unsigned {
 sub sign_hash {
     my $self = shift;
     my ($input_num, $sighash_type) = @_;
+
+    # A stake is signed as a whole only: its signature is the signature of the block
+    return undef if $self->is_stake && $sighash_type != SIGHASH_ALL;
 
     my $per_input = ($sighash_type & SIGHASH_ANYONECANPAY) || $sighash_type == SIGHASH_SINGLE;
     my $cached_hash = $per_input ? \$self->{sign_hash}->[$sighash_type]->[$input_num] : \$self->{sign_hash}->[$sighash_type];
