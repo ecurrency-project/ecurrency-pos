@@ -574,7 +574,7 @@ sub cmd_blocks {
             if (!$block->prev_block_load) {
                 # some of ancestor blocks are pending tx?
                 $block->load_transactions();
-                $self->request_tx($block->pending_tx);
+                $block->request_pending_tx($self);
                 $block->add_pending_block();
                 $got_new++;
                 next;
@@ -585,7 +585,7 @@ sub cmd_blocks {
                 Debugf("Received block %s has pending ancestor %s",
                     $block->hash_str, $block->hash_str($block->prev_hash));
                 $block->load_transactions();
-                $self->request_tx($block->pending_tx);
+                $block->request_pending_tx($self);
                 $block->add_pending_block();
                 next;
             }

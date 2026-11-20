@@ -32,6 +32,17 @@ sub add_pending_block {
     $self->add_pending();
 }
 
+# Request the missing transactions of the block which waits for its ancestor.
+# They are requested once: either with the block itself, when its ancestor is in the same
+# batch (see cmd_blocks), or when the ancestor chain connects (see process_pending);
+# the request is repeated only if the peer which was asked is gone
+sub request_pending_tx {
+    my $self = shift;
+    my ($peer) = @_;
+    $peer->request_tx($self->pending_tx);
+    $self->{pending_tx_requested} = $peer;
+}
+
 sub pending_descendants {
     my $self = shift;
 
@@ -90,14 +101,12 @@ sub process_pending {
             $pending_block->prev_block($block);
             $pending_block->add_as_descendant();
             if ($pending_block->pending_tx) {
-                if (!$pending_block->{pending_tx_requested}) {
+                my $asked = $pending_block->{pending_tx_requested};
+                if (!$asked || !$asked->connection) {
                     my $from = $peer && $peer->connection ? $peer
                         : $pending_block->received_from && $pending_block->received_from->connection
                             ? $pending_block->received_from : undef;
-                    if ($from) {
-                        $from->request_tx($pending_block->pending_tx);
-                        $pending_block->{pending_tx_requested} = $from;
-                    }
+                    $pending_block->request_pending_tx($from) if $from;
                 }
                 next;
             }
