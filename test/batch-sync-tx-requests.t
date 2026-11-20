@@ -21,6 +21,7 @@ use QBitcoin::Config;
 use QBitcoin::BlockchainParams;
 use QBitcoin::Peer;
 use QBitcoin::Connection;
+use QBitcoin::ProtocolState qw(blockchain_synced);
 use QBitcoin::Block;
 use QBitcoin::Transaction;
 use QBitcoin::TXO;
@@ -111,10 +112,20 @@ my $batch = 20;
 is(send_blocks($protocol, 1, $batch), 0, "batch of blocks received");
 is(scalar(grep { $_->[0] eq "sendtx" } @sent), $batch, "transactions of all blocks of the batch requested at once");
 ok(!(grep { $_->[0] eq "getblks" } @sent), "next batch is not requested until this one is processed");
+
+# A new block announced by the same peer in the middle of the batch must not cause
+# a request of the same batch again; the next batch is requested when this one is processed
+my $announced_weight = ($batch + 10) * 100;
+$protocol->command("ihave");
+$protocol->cmd_ihave(pack("VQ<a32", GENESIS_TIME, $announced_weight, "n" x 32));
+ok(!blockchain_synced(), "blockchain is not synced");
+ok(!(grep { $_->[0] eq "getblks" } @sent), "no batch request on the announce in the middle of the batch");
+is($protocol->has_weight, $announced_weight, "the announced weight is remembered");
 my $requested = feed_requested_tx($protocol);
 is(QBitcoin::Block->blockchain_height, $batch, "the batch is connected");
 is(scalar(keys %$requested), $batch, "all transactions were requested");
 is(scalar(grep { $_ != 1 } values %$requested), 0, "each transaction was requested once");
+is(scalar(grep { $_->[0] eq "getblks" } @sent), 1, "next batch requested when the batch is processed");
 
 # The request is repeated via the current driver of the branch if the peer which was
 # asked for the transactions is gone. Its blocks survive the disconnect only if they

@@ -787,8 +787,10 @@ sub request_new_block {
         my $best_block = QBitcoin::Block->best_block;
         my $best_weight = $best_block ? $best_block->weight : -1;
         # Do not request block(s) if we have block pending for tx with more weight from the same peer,
-        # simple set $self->syncing(1) in this case to avoid many unneeded blocks requests in initial synchronization
-        if ($best_block && !$hash) {
+        # simple set $self->syncing(1) in this case to avoid many unneeded blocks requests in initial synchronization.
+        # The announced block ($hash) is requested anyway only if the blockchain is synced: a batch request
+        # does not depend on it, and the next batch will be requested when the received one is processed
+        if ($best_block && (!$hash || !blockchain_synced())) {
             foreach my $descendant ($best_block->descendants) {
                 if ($descendant->received_from && $descendant->received_from->peer->id eq $self->peer->id) {
                     $self->syncing(1);
