@@ -205,7 +205,6 @@ sub validate_outputs {
                 else {
                     return 0;
                 }
-                $token_control = 1;
             }
             elsif ($key eq "data") {
                 (defined($out->{$key}) && !ref($out->{$key})
