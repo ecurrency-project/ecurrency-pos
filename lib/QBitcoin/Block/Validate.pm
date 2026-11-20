@@ -169,7 +169,7 @@ sub validate {
     my $static_reward = $block_reward ? (ref $block)->static_reward($block->prev_block, $block->time) : 0;
     $block->reward_fund = $block->prev_block ? $block->prev_block->reward_fund + $fee + $static_reward - $block_reward : 0;
     $block->size = $block_size;
-    $block->min_fee = $block_size > MAX_BLOCK_SIZE / 2 ? $min_block_fee : $min_fee;
+    $block->min_fee = $block_size > MAX_BLOCK_SIZE / 2 ? $min_block_fee // $min_fee : $min_fee;
     return "";
 }
 
