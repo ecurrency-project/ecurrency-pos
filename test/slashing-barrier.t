@@ -138,7 +138,14 @@ sub send_block {
     $block->merkle_root = $block->calculate_merkle_root();
     block_hash($hash);
     $connection->protocol->command("block");
-    return $connection->protocol->cmd_block($block->serialize);
+    my $rc = $connection->protocol->cmd_block($block->serialize);
+    # The node takes a stake transaction only when it is delivered for a block which waits for it
+    my ($stake) = grep { $_->is_stake } @tx;
+    if ($rc == 0 && $stake && QBitcoin::Block->pending_block($hash)) {
+        $connection->protocol->command("tx");
+        $rc = $connection->protocol->cmd_tx($stake->serialize . "\x00" x 16);
+    }
+    return $rc;
 }
 
 sub best_height { QBitcoin::Block->blockchain_height }
@@ -184,11 +191,9 @@ is(best_height(), 1, "blocks without a stake accepted");
 my $fee_tx = spend($coin{fee}, 600, TX_TYPE_STANDARD);
 send_raw_tx($fee_tx);
 my $stake = stake($coin{s2}, block_time(2), $fee_tx);
-send_raw_tx($stake);
 send_block(2, "a2", "a1", 70, $stake, $fee_tx);
 foreach my $height (3 .. 6) {
     $stake = stake($coin{"s$height"}, block_time($height));
-    send_raw_tx($stake);
     send_block($height, "a$height", "a" . ($height - 1), 50 + 10 * $height, $stake);
 }
 is(best_height(), 6, "staked blocks accepted");
@@ -228,13 +233,11 @@ ok($chosen{$tx500->hash}, "the one which is heavy enough is chosen");
 # --- the consensus rule --------------------------------------------------------
 
 $stake = stake($coin{s7a}, block_time(7), $tx499);
-send_raw_tx($stake);
 isnt(send_block(7, "b7", "a6", 120, $stake, $tx499), 0, "block with a slashing tx of a too light stake is rejected");
 is(best_height(), 6, "it is not in the best branch");
 ok(in_mempool($tx499), "the slashing tx stays in the mempool: it fits a later block");
 
 $stake = stake($coin{s7b}, block_time(7), $tx500);
-send_raw_tx($stake);
 is(send_block(7, "a7", "a6", 120, $stake, $tx500), 0, "block with a slashing tx of a stake heavy enough is accepted");
 is(best_height(), 7, "it is the best block");
 is(QBitcoin::Block->best_block(7)->min_stake_weight, 2000, "the weight of a slashing tx is not the weight of a stake");
@@ -243,7 +246,6 @@ is(QBitcoin::Block->best_block(7)->min_stake_weight, 2000, "the weight of a slas
 
 $tx_light = slashing($coin{light}, block_time(8));
 $stake = stake($coin{s8a}, block_time(8), $tx_light);
-send_raw_tx($stake);
 is(send_block(8, "b8", "a7", 130, $stake, $tx_light), 0, "block with an unknown slashing tx is waiting for it");
 is(best_height(), 7, "the block is pending");
 send_raw_tx($tx_light);
@@ -262,7 +264,6 @@ send_raw_tx($tx_late);
 ok(in_mempool($tx_late), "slashing tx is accepted while its outputs are unspent and heavy enough now");
 my $stake8 = stake($coin{late}, block_time(8));
 ok(QBitcoin::Slashing->is_banned_stake($stake8, block_time(8)), "we hold the evidence against the stake");
-send_raw_tx($stake8);
 is(send_block(8, "a8", "a7", 130, $stake8), 0, "block of the stake is accepted: the slashing tx could not replace it");
 is(best_height(), 8, "it is the best block");
 is(QBitcoin::Slashing->banned_height_in_best(), undef, "and it is not dropped from the best branch");
@@ -270,7 +271,6 @@ is(QBitcoin::Block->best_block(8)->min_stake_weight, 488, "now it is the lightes
 
 # The equivocated block is in the best branch already, then the slashing tx comes
 $stake = stake($coin{heavy}, block_time(9));
-send_raw_tx($stake);
 is(send_block(9, "a9", "a8", 140, $stake), 0, "block of a heavy stake accepted");
 my $tx_heavy = slashing($coin{heavy}, block_time(9));
 send_raw_tx($tx_heavy);
@@ -296,7 +296,6 @@ sub slashing_of {
 }
 
 my $twin9 = twin($coin{heavy}, $stake);
-send_raw_tx($twin9);
 isnt(send_block(9, "b9", "a8", 141, $twin9), 0, "another block of the equivocated stake is rejected");
 is(QBitcoin::Block->best_block->hash, block_id("a9"), "the best block is the same");
 
@@ -305,7 +304,6 @@ is(QBitcoin::Block->best_block->hash, block_id("a9"), "the best block is the sam
 # The stake signs the list of the other transactions of its block, so another block of the
 # same parent and timeslot is a different one if it has some
 my $twin8 = twin($coin{late}, $stake8);
-send_raw_tx($twin8);
 my $other_tx = coins(2);
 send_raw_tx($other_tx);
 is(send_block(8, "c8", "a7", 125, $twin8, $other_tx), 0, "another block of the stake too light to be slashed is accepted");
@@ -313,7 +311,6 @@ is(scalar(slashing_of($coin{late})), 1, "its equivocation is not reported: no ne
 
 # The stakes are weighed in the best branch only, so a block on top of another branch is
 # not rejected while it is there
-send_raw_tx($twin9); # it was dropped with the rejected block
 is(send_block(9, "c9", "c8", 135, $twin9), 0, "block of the equivocated stake on top of another branch is not rejected");
 is(QBitcoin::Block->best_block->hash, block_id("a9"), "it is not the best block");
 is(scalar(slashing_of($coin{heavy})), 2, "equivocation of the heavy stake is reported: one more slashing tx");
