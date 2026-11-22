@@ -81,9 +81,11 @@ ok(!script_eval([], $fill . OP_TOALTSTACK . OP_1 . OP_1 . OP_2DROP . OP_FROMALTS
 ok(script_eval([], $fill . OP_TOALTSTACK . OP_1 . OP_DROP . OP_FROMALTSTACK . $cleanup . OP_1, "", 0), "1000 elements over stack and altstack");
 ok(!script_eval([("") x 1001], (OP_2DROP x 500) . OP_DROP . OP_1, "", 0), "1001 siglist elements");
 ok(script_eval([("") x 1000], (OP_2DROP x 500) . OP_1, "", 0), "1000 siglist elements");
+# A deep roll moves up to 1000 elements, a memmove which costs about as much as a command
+my $rolls = 10000;
 $t = time;
-script_eval([], $fill . ($roll x 10000) . $cleanup . OP_1, "", 0);
-cmp_ok(time - $t, '<', 1, "10000 deep rolls are fast");
+ok(script_eval([], $fill . ($roll x $rolls) . $cleanup . OP_1, "", 0), "$rolls deep rolls");
+linear_ok(time - $t, 2 * $rolls + 335 + 500 + 1, "$rolls deep rolls are fast");
 
 # A hash pays the bytes it hashes. The siglist counts twice in the budget, so an element of it can be
 # hashed twice whatever its size, and the third hash exceeds the budget
