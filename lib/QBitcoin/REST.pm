@@ -760,14 +760,22 @@ sub vin_obj {
     };
     if ($tx->is_tokens) {
         my $token_hash = $tx->token_hash || $tx->hash;
-        if (($vin->{txo}->token_hash // "") eq $token_hash && $vin->{txo}->is_token_transfer) {
-            $res->{prevout}->{token_id} = unpack("H*", $token_hash);
-            $res->{prevout}->{token_amount} = unpack("Q<", substr($vin->{txo}->data // "", 1, 8));
-            my $decimals;
-            if (my $token_info = $tx->token_info) {
-                $decimals = $token_info->{decimals};
+        if (($vin->{txo}->token_hash // "") eq $token_hash && length($vin->{txo}->data // "")) {
+            if ($vin->{txo}->is_token_transfer) {
+                $res->{prevout}->{token_id} = unpack("H*", $token_hash);
+                $res->{prevout}->{token_amount} = unpack("Q<", substr($vin->{txo}->data, 1, 8));
+                my $decimals;
+                if (my $token_info = $tx->token_info) {
+                    $decimals = $token_info->{decimals};
+                }
+                $res->{prevout}->{token_decimals} = $decimals // TOKEN_DEFAULT_DECIMALS;
             }
-            $res->{prevout}->{token_decimals} = $decimals // TOKEN_DEFAULT_DECIMALS;
+            elsif (my $token_info = $tx->unpack_token_info($vin->{txo}->data)) {
+                if ($token_info->{permissions}) {
+                    $res->{prevout}->{token_id} = unpack("H*", $token_hash);
+                    $res->{prevout}->{token_permissions} = sprintf("0x%02x", $token_info->{permissions});
+                }
+            }
         }
     }
     return $res;
