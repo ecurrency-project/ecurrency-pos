@@ -208,9 +208,13 @@ sub op_pushdata($) {
     return $cmd . $data;
 }
 
+# The truth of an element is the truth of its number: zero is false, with either sign and in
+# any length of the encoding (see QBitcoin::Script::Util for the place of the sign bit).
+# An element too long for a number is false if all its bytes are zero
 sub is_true($) {
     my ($data) = @_;
-    return $data !~ /^\x80?\x00*\z/;
+    my $n = unpack_int($data);
+    return defined($n) ? $n != 0 : $data =~ /[^\x00]/;
 }
 
 sub pushdatan($$) {

@@ -48,6 +48,37 @@ foreach my $check (@round_trip) {
     }
 }
 
+# The truth of an element is the truth of its number, in any length of the encoding
+foreach my $check (@round_trip) {
+    my ($value) = @$check;
+    foreach my $n ($value, $value == 0 ? () : -$value) {
+        is(!!script_eval([], push_int($n) . OP_0NOTEQUAL, "", 0), !!$n, "truth of $n");
+    }
+}
+# The numbers which have 0x80 in the first byte and zeroes after it, for each operation which takes a boolean
+foreach my $n (0x80, 0x8000) {
+    ok(script_eval([], push_int($n) . OP_VERIFY . OP_1, "", 0), "OP_VERIFY $n");
+    ok(script_eval([], push_int($n) . OP_NOT . OP_0 . OP_EQUAL, "", 0), "OP_NOT $n");
+    ok(script_eval([], push_int($n) . OP_1 . OP_BOOLAND, "", 0), "OP_BOOLAND $n");
+    ok(script_eval([], push_int($n) . OP_0 . OP_BOOLOR, "", 0), "OP_BOOLOR $n");
+    ok(script_eval([], push_int($n) . OP_IFDUP . OP_2DROP . OP_1, "", 0), "OP_IFDUP $n");
+}
+# Zero is false with either sign: the sign bit is in the first byte of a one-byte number, in the second
+# byte of a number of 2-3 bytes and in the fourth byte of a longer one
+my @false = ("", "\x00", "\x80", "\x00\x00", "\x00\x80", "\x00\x80\x00", "\x00\x00\x00\x80",
+    "\x00\x00\x00\x80\x00", "\x00\x00\x00\x80" . "\x00" x 4, "\x00" x 8);
+# The same bytes at another place are a number, also when the encoding is longer than needed
+my @true = ("\x80\x00", "\x80\x00\x00", "\x80\x00\x00\x00", "\x00\x00\x80", "\x00\x00\x00\x00\x80", "\x01\x00");
+# An element longer than a number is false if all its bytes are zero
+push @false, "\x00" x 9, "\x00" x 100;
+push @true,  "\x80" . "\x00" x 8, "\x00\x00\x00\x80" . "\x00" x 5, "\x00" x 99 . "\x01";
+foreach my $element (@false) {
+    ok(!script_eval([], op_pushdata($element) . OP_0NOTEQUAL, "", 0), "false: " . (unpack("H*", $element) || "empty"));
+}
+foreach my $element (@true) {
+    ok(script_eval([], op_pushdata($element) . OP_0NOTEQUAL, "", 0), "true: " . unpack("H*", $element));
+}
+
 is(pack_int($MAX_INT + 1),    undef, "pack 2**63 fails");
 is(pack_int(-$MAX_INT - 1),   undef, "pack -2**63 fails");
 is(pack_int(2**64),           undef, "pack float overflow fails");
