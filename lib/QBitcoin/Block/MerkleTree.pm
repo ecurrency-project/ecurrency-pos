@@ -56,6 +56,8 @@ sub merkle_path {
     return join "", @path;
 }
 
+# A transaction of the block has exactly one position: the proof of the same transaction
+# cannot be restated with another $tx_num
 sub check_merkle_path {
     my $self = shift;
     my ($hash, $tx_num, $merkle_path) = @_;
@@ -67,9 +69,21 @@ sub check_merkle_path {
     while ($ndx < $pathlen) {
         my $next_hash = substr($merkle_path, $ndx, $hashlen);
         $ndx += $hashlen;
-        $cur_hash = _merkle_hash($tx_num & 1 ? ( $next_hash, $cur_hash ) : ( $cur_hash, $next_hash ));
+        if ($tx_num & 1) {
+            # The last node of an odd level is paired with its own copy;
+            # the copy is not a position, the node itself is the left one
+            $next_hash ne $cur_hash
+                or return 0;
+            $cur_hash = _merkle_hash($next_hash, $cur_hash);
+        }
+        else {
+            $cur_hash = _merkle_hash($cur_hash, $next_hash);
+        }
         $tx_num >>= 1;
     }
+    # The position must fit the depth of the path
+    $tx_num == 0
+        or return 0;
     return $cur_hash eq $self->merkle_root;
 }
 

@@ -222,6 +222,14 @@ sub validate {
         return -1;
     }
     $self->{btc_block_height} //= $btc_block->height;
+    # The block is identified by its hash, and the height stated next to it must be the height of
+    # this block: the confirmation time and the order of the upgrades are counted from the height,
+    # and the stored record is found by it
+    if ($self->{btc_block_height} != $btc_block->height) {
+        Warningf("Incorrect block height %u in upgrade transaction %s, the block %s has height %u",
+            $self->{btc_block_height}, unpack("H*", scalar reverse $self->btc_tx_hash), $btc_block->hash_hex, $btc_block->height);
+        return -1;
+    }
 
     return 0;
 }

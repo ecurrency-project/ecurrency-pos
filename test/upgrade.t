@@ -134,6 +134,17 @@ if (!$up->scripthash) {
     delete local $up->{btc_block_hash};
     isnt($tx->validate(), 0, "Incorrect btc block");
 }
+{
+    # The block is identified by its hash, the height stated with it must be the height of this block
+    local $up->{btc_block_hash} = $btc_block[1]->hash;
+    local $up->{btc_block_height} = 2;
+    isnt($tx->validate(), 0, "Height of another btc block");
+}
+{
+    # The only transaction of the block has the only position
+    local $up->{btc_tx_num} = 2;
+    isnt($tx->validate(), 0, "Position outside of the merkle path");
+}
 
 is($tx->validate(), 0, "Correct coinbase");
 
@@ -149,5 +160,40 @@ $tx = tx();
 $btc_block[COINBASE_CONFIRM_BLOCKS + 1]->delete;
 delete $up->{btc_confirm_time};
 isnt($tx->valid_for_block($block), 0, "Not enough confirmations");
+
+# The same btc output with another position in its block, or with another height of the block, is not
+# another upgrade: such a transaction from a peer is invalid. It must not reach the storage, where the
+# record of our own btc scan is kept under the key of the btc output
+QBitcoin::Coinbase->create(
+    btc_block_height => $btc_block[1]->height,
+    btc_block_hash   => $btc_block[1]->hash,
+    btc_tx_num       => $btc_tx_num,
+    btc_out_num      => $btc_out_num,
+    btc_tx_hash      => $btc_tx->hash,
+    btc_tx_data      => $btc_tx->data,
+    merkle_path      => $btc_block[1]->merkle_path($btc_tx_num),
+    value_btc        => $value,
+    scripthash       => $up->scripthash,
+);
+
+sub from_peer {
+    my $peer_tx = QBitcoin::Transaction->deserialize(Bitcoin::Serialized->new(tx()->serialize));
+    $peer_tx->load_txo;
+    return $peer_tx->receive;
+}
+
+$up->{btc_block_hash} = $btc_block[1]->hash;
+{
+    local $up->{btc_tx_num} = 2;
+    is(from_peer(), -1, "Another position of the stored upgrade from a peer");
+}
+{
+    local $up->{btc_block_height} = 2;
+    is(from_peer(), -1, "Another block height of the stored upgrade from a peer");
+}
+is(from_peer(), 0, "Stored upgrade from a peer");
+my @stored = QBitcoin::Coinbase->fetch(btc_tx_hash => $btc_tx->hash);
+is(scalar(@stored), 1, "One record of the upgrade");
+is($stored[0]->{btc_block_height} . ":" . $stored[0]->{btc_tx_num}, $btc_block[1]->height . ":" . $btc_tx_num, "Position of the record is not changed");
 
 done_testing();
