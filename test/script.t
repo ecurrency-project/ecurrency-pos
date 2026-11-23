@@ -33,6 +33,13 @@ my @scripts_ok = (
     [ op_notif_in_false => OP_1 . OP_0 . OP_IF . OP_NOTIF . OP_ELSE . OP_ENDIF . OP_ENDIF ],
     [ op_if_in_else => OP_1 . OP_1 . OP_IF . OP_ELSE . OP_IF . OP_ENDIF . OP_ENDIF ],
     [ op_if_in_true => OP_1 . OP_1 . OP_IF . OP_IF . OP_ENDIF . OP_ENDIF . OP_1 ],
+    # FALSE is the empty element whatever operation makes it
+    [ op_equal_false => OP_0 . OP_1 . OP_EQUAL . OP_0 . OP_EQUAL ],
+    [ op_not_false => OP_1 . OP_NOT . OP_0 . OP_EQUAL ],
+    [ op_checksig_false => OP_0 . op_pushdata("key") . OP_CHECKSIG . OP_0 . OP_EQUAL ],
+    [ op_checksig_notif => OP_0 . op_pushdata("key") . OP_CHECKSIG . OP_NOTIF . OP_1 . OP_ELSE . OP_0 . OP_ENDIF ],
+    # a number becomes a condition by OP_0NOTEQUAL
+    [ op_0notequal_if => OP_5 . OP_0NOTEQUAL . OP_IF . OP_1 . OP_ELSE . OP_0 . OP_ENDIF ],
 );
 
 my @scripts_fail = (
@@ -50,6 +57,11 @@ my @scripts_fail = (
     [ op_equal_stack => OP_1 . OP_EQUAL ],
     # was ok while OP_IF in a false branch consumed the stack
     [ op_if_in_false => OP_1 . OP_0 . OP_IF . OP_IF . OP_ENDIF . OP_ENDIF . OP_1 ],
+    # the condition is exactly TRUE or FALSE; both branches succeed here, so it is the condition which fails
+    [ op_if_number => OP_2 . OP_IF . OP_1 . OP_ELSE . OP_1 . OP_ENDIF ],
+    [ op_if_zero_byte => op_pushdata("\x00") . OP_IF . OP_1 . OP_ELSE . OP_1 . OP_ENDIF ],
+    [ op_notif_number => OP_2 . OP_NOTIF . OP_1 . OP_ELSE . OP_1 . OP_ENDIF ],
+    [ op_notif_zero_byte => op_pushdata("\x00") . OP_NOTIF . OP_1 . OP_ELSE . OP_1 . OP_ENDIF ],
 );
 
 foreach my $check_data (@scripts_ok) {
@@ -62,6 +74,14 @@ foreach my $check_data (@scripts_fail) {
     my ($name, $script, $tx_data) = @$check_data;
     my $res = script_eval([], $script, $tx_data // "", 0);
     ok(!$res, $name);
+}
+
+# A branch selector given in the siglist has one form for each branch
+my $select = OP_IF . OP_1 . OP_ELSE . OP_1 . OP_ENDIF;
+ok(script_eval(["\x01"], $select, "", 0), "selector of the IF branch");
+ok(script_eval([""], $select, "", 0), "selector of the ELSE branch");
+foreach my $selector ("\x00", "\x02", "\x80", "\x01\x00", "\x00\x00", "\x01\x01") {
+    ok(!script_eval([$selector], $select, "", 0), "selector " . unpack("H*", $selector) . " is not accepted");
 }
 
 my $pk_ecc = generate_keypair(CRYPT_ALGO_ECDSA);

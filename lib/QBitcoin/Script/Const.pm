@@ -4,8 +4,9 @@ use strict;
 
 use Exporter qw(import);
 
+# Each boolean has one form: FALSE is the empty element, the same as OP_0 and the number 0
 use constant {
-    FALSE => "\x00",
+    FALSE => "",
     TRUE  => "\x01",
 };
 

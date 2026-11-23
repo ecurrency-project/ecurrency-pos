@@ -87,6 +87,11 @@ ok(!script_eval([ $sig_owner, $owner->pubkey, SELECTOR_DELEGATE ], $script, $tx_
     "owner key rejected in the delegate branch");
 ok(!script_eval([ $sig_delegate, $owner->pubkey, SELECTOR_DELEGATE ], $script, $tx_stake, 0),
     "signature must match the pubkey");
+# The selector is not signed: it has one form for each branch, so it cannot be restated in a signed input
+ok(!script_eval([ $sig_owner, $owner->pubkey, "\x02" ], $script, $tx_spend, 0),
+    "owner branch is not selected by another true value");
+ok(!script_eval([ $sig_delegate, $delegate->pubkey, "\x00" ], $script, $tx_stake, 0),
+    "delegate branch is not selected by another false value");
 
 # Post-quantum delegate key: the script commits to hash256(pubkey), the full
 # pubkey travels in the siglist and funds its own signature check budget; a mixed

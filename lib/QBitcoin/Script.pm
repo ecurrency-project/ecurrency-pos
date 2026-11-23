@@ -240,6 +240,17 @@ sub cmd_return($) {
     return 0;
 }
 
+# The condition of OP_IF and OP_NOTIF is exactly TRUE or FALSE, any other value fails the script
+# (as in tapscript, BIP-342). A branch selector given in the siglist is not covered by the
+# signatures, so with a loose condition anybody could restate it and change the transaction hash
+sub if_condition($) {
+    my ($state) = @_;
+    my $stack = $state->stack;
+    @$stack or return undef;
+    my $cond = pop @$stack;
+    return $cond eq TRUE ? 1 : $cond eq FALSE ? 0 : undef;
+}
+
 # Inside a false branch the condition is not evaluated and stays on the stack (as in bitcoin),
 # the nested branch is just marked false
 sub cmd_if($) {
@@ -248,9 +259,7 @@ sub cmd_if($) {
         $state->push_if(0);
         return undef;
     }
-    my $stack = $state->stack;
-    @$stack or return 0;
-    $state->push_if(is_true(pop @$stack));
+    $state->push_if(if_condition($state) // return 0);
     return undef;
 }
 
@@ -260,9 +269,7 @@ sub cmd_notif($) {
         $state->push_if(0);
         return undef;
     }
-    my $stack = $state->stack;
-    @$stack or return 0;
-    $state->push_if(!is_true(pop @$stack));
+    $state->push_if(!(if_condition($state) // return 0));
     return undef;
 }
 

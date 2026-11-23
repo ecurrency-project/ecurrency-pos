@@ -55,9 +55,10 @@ $t = time;
 ok(!script_eval(\@self_siglist, $self_exec, "", 0), "self-replicating exec is stopped by the budget");
 linear_ok(time - $t, budget(\@self_siglist, $self_exec), "deep exec recursion is linear");
 # The leaf runs itself $m times with a counter decremented on each level: entry [leaf, n] -> exit [leaf, n]
+# (the counter is a number, OP_0NOTEQUAL makes the boolean OP_IF takes)
 my $counter_leaf = sub {
     my ($m) = @_;
-    return OP_1SUB . OP_DUP . OP_IF . ((OP_OVER . OP_EXEC) x $m) . OP_ENDIF . OP_1ADD;
+    return OP_1SUB . OP_DUP . OP_0NOTEQUAL . OP_IF . ((OP_OVER . OP_EXEC) x $m) . OP_ENDIF . OP_1ADD;
 };
 my $exec_redeem = OP_OVER . OP_EXEC . OP_2DROP . OP_DROP . OP_1;
 ok(script_eval(["\x00" x 1000, $counter_leaf->(1), pack_int(100)], $exec_redeem, "", 0), "exec chain of 100");
