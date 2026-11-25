@@ -1,6 +1,6 @@
 import {Link} from "react-router-dom";
 import { formatNumber } from "@/shared/utils";
-import { TokenValue } from '@/entities/Token';
+import { TokenPermissions, TokenValue } from '@/entities/Token';
 import type { Prevout, Vin, Vout } from '../model/types/ITransaction.ts';
 import { satToNativeString } from '@/shared/lib/fmtbtc';
 import { toBaseUnits } from '@/shared/lib/baseUnits';
@@ -26,6 +26,10 @@ export const formatOutAmount = (vout: Prevout | Vout, assetLabel: string) => {
             decimals={vout.token_decimals}
             link
         />
+    }
+
+    if (vout.token_permissions != null && vout.token_id && toBaseUnits(vout.value) === 0n) {
+        return <TokenPermissions tokenId={vout.token_id} permissions={vout.token_permissions} />
     }
 
     if (isNativeOut(vout)) {
